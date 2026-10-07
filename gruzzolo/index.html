@@ -1,0 +1,2275 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0c0e12">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Gruzzolo">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<!-- APP:START -->
+<title>Gruzzolo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Manrope:wght@400;500;600;700;800&display=swap">
+<style>
+/* Layout: one phone-width column. Sticky header, scrolling content, fixed tab bar with a raised add button. Bottom sheets for every detail and form. */
+:root {
+  --bg: #eef1f5;
+  --surface: #ffffff;
+  --surface-2: #e5e9f0;
+  --line: #d8dee7;
+  --grid: #e6e9ee;
+  --ink: #0d1117;
+  --ink-2: #465061;
+  --muted: #687180;
+  --accent: #f0b03a;
+  --accent-ink: #1c1405;
+  --accent-line: #b87a0e;
+  --accent-soft: rgba(240, 176, 58, .18);
+  --up: #0b8a4f;
+  --up-soft: rgba(11, 138, 79, .12);
+  --down: #c93636;
+  --down-soft: rgba(201, 54, 54, .11);
+  --c1: #2a78d6; --c2: #eb6834; --c3: #1baf7a; --c4: #eda100;
+  --c5: #e87ba4; --c6: #008300; --c7: #4a3aa7; --c8: #e34948; --c-other: #9aa1ad;
+  --scrim: rgba(8, 12, 20, .42);
+  --shadow: 0 18px 50px rgba(13, 20, 33, .18);
+  --font-ui: "Manrope", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Bricolage Grotesque", "Manrope", system-ui, -apple-system, sans-serif;
+  --radius: 18px;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0c0e12; --surface: #15181e; --surface-2: #1f242c; --line: #272d37; --grid: #1d2128;
+    --ink: #f2f4f7; --ink-2: #b4bcc8; --muted: #828b99;
+    --accent: #f2b63d; --accent-ink: #1c1405; --accent-line: #f2b63d; --accent-soft: rgba(242, 182, 61, .15);
+    --up: #3ccf86; --up-soft: rgba(60, 207, 134, .13); --down: #ff6b6b; --down-soft: rgba(255, 107, 107, .13);
+    --c1: #3987e5; --c2: #d95926; --c3: #199e70; --c4: #c98500;
+    --c5: #d55181; --c6: #008300; --c7: #9085e9; --c8: #e66767; --c-other: #5d6573;
+    --scrim: rgba(0, 0, 0, .62); --shadow: 0 18px 50px rgba(0, 0, 0, .55);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0c0e12; --surface: #15181e; --surface-2: #1f242c; --line: #272d37; --grid: #1d2128;
+  --ink: #f2f4f7; --ink-2: #b4bcc8; --muted: #828b99;
+  --accent: #f2b63d; --accent-ink: #1c1405; --accent-line: #f2b63d; --accent-soft: rgba(242, 182, 61, .15);
+  --up: #3ccf86; --up-soft: rgba(60, 207, 134, .13); --down: #ff6b6b; --down-soft: rgba(255, 107, 107, .13);
+  --c1: #3987e5; --c2: #d95926; --c3: #199e70; --c4: #c98500;
+  --c5: #d55181; --c6: #008300; --c7: #9085e9; --c8: #e66767; --c-other: #5d6573;
+  --scrim: rgba(0, 0, 0, .62); --shadow: 0 18px 50px rgba(0, 0, 0, .55);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html.locked, html.locked body { overflow: hidden; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent-line); outline-offset: 2px; border-radius: 8px; }
+.wrap { max-width: 560px; margin: 0 auto; padding-inline: 16px; }
+.muted { color: var(--muted); }
+.num { font-variant-numeric: tabular-nums; }
+.up { color: var(--up); }
+.down { color: var(--down); }
+.flat { color: var(--muted); }
+svg { display: block; }
+.ico { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Header */
+.top {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 15;
+  background: var(--bg);
+}
+.top::before {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 100%;
+  height: env(safe-area-inset-top, 0px); background: var(--bg);
+}
+.top-inner { display: flex; align-items: center; gap: 8px; padding-block: 10px; }
+.brand { display: flex; align-items: center; gap: 8px; font-family: var(--font-display); font-weight: 700; font-size: 19px; letter-spacing: -.01em; }
+.brand-mark { width: 26px; height: 26px; }
+.top-spacer { flex: 1; }
+.pill-btn {
+  display: inline-flex; align-items: center; gap: 4px; min-width: 0;
+  border: 1px solid var(--line); background: var(--surface); border-radius: 999px;
+  padding: 6px 10px 6px 12px; font-size: 13px; font-weight: 700;
+}
+.pill-btn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 150px; }
+.pill-btn .ico { width: 16px; height: 16px; }
+.icon-btn { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; border: 0; background: transparent; color: var(--ink-2); }
+.icon-btn:hover { background: var(--surface-2); }
+
+/* Page */
+main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
+.page-title { font-family: var(--font-display); font-size: 28px; font-weight: 700; letter-spacing: -.02em; margin: 6px 0 14px; text-wrap: balance; }
+.section { margin-top: 26px; }
+.sec-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.sec-head h2 { font-size: 17px; font-weight: 800; margin: 0; letter-spacing: -.01em; }
+.link-btn { border: 0; background: none; padding: 4px 0; font-size: 13px; font-weight: 700; color: var(--accent-line); }
+
+/* Hero */
+.hero { padding-top: 6px; }
+.eyebrow { font-size: 13px; font-weight: 600; color: var(--muted); }
+.hero-value { font-family: var(--font-display); font-weight: 700; font-size: 40px; line-height: 1.1; letter-spacing: -.025em; margin: 2px 0 6px; overflow-wrap: anywhere; }
+.hero-delta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 14px; min-height: 26px; }
+.delta { display: inline-flex; align-items: center; gap: 4px; font-weight: 800; border-radius: 8px; padding: 3px 8px; }
+.delta.up { background: var(--up-soft); }
+.delta.down { background: var(--down-soft); }
+.delta.flat { background: var(--surface-2); }
+.pill { display: inline-flex; align-items: center; gap: 3px; font-size: 12.5px; font-weight: 800; border-radius: 7px; padding: 2px 7px; font-variant-numeric: tabular-nums; }
+.pill.up { background: var(--up-soft); }
+.pill.down { background: var(--down-soft); }
+.pill.flat { background: var(--surface-2); }
+.tri { font-size: .72em; }
+
+/* Chart */
+.chart-wrap { margin-top: 14px; position: relative; }
+.chart-wrap svg { width: 100%; height: auto; overflow: visible; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+.axis-text { fill: var(--muted); font-size: 10.5px; font-family: var(--font-ui); font-variant-numeric: tabular-nums; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12.5px; color: var(--ink-2); margin-top: 6px; }
+.key { display: inline-flex; align-items: center; gap: 6px; }
+.key i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+.key i.dot { width: 10px; height: 10px; border-radius: 50%; }
+.readout { font-size: 13px; color: var(--ink-2); min-height: 20px; margin-top: 4px; font-variant-numeric: tabular-nums; }
+
+/* Segmented controls and chips */
+.controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; }
+.chips { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; max-width: 100%; }
+.chips::-webkit-scrollbar { display: none; }
+.chip { border: 0; background: transparent; color: var(--muted); font-size: 13px; font-weight: 700; border-radius: 999px; padding: 6px 11px; white-space: nowrap; }
+.chip[aria-pressed="true"] { background: var(--surface-2); color: var(--ink); }
+.seg { display: inline-flex; background: var(--surface-2); border-radius: 12px; padding: 3px; gap: 2px; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.seg::-webkit-scrollbar { display: none; }
+.seg button { border: 0; background: transparent; border-radius: 9px; padding: 6px 12px; font-size: 13px; font-weight: 700; color: var(--muted); white-space: nowrap; }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(0, 0, 0, .12); }
+.seg.full { display: flex; width: 100%; }
+.seg.full button { flex: 1; }
+.seg label { flex: 1; display: flex; }
+.seg-lbl { flex: 1; text-align: center; border-radius: 9px; padding: 7px 10px; font-size: 13.5px; font-weight: 700; color: var(--muted); cursor: pointer; white-space: nowrap; }
+.seg input:checked + .seg-lbl { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(0, 0, 0, .12); }
+.seg input:focus-visible + .seg-lbl { outline: 2px solid var(--accent-line); outline-offset: 1px; }
+
+/* KPI grid */
+.kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; margin: 22px 0 0; }
+.kpis > div { background: var(--surface); padding: 12px 14px; min-width: 0; }
+.kpis dt { font-size: 12.5px; color: var(--muted); font-weight: 600; }
+.kpis dd { margin: 2px 0 0; font-weight: 800; font-size: 16px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.kpis dd small { font-weight: 700; font-size: 12px; }
+
+/* Lists */
+.list { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.row {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  background: transparent; border: 0; padding: 12px 14px; border-top: 1px solid var(--line);
+}
+.row:first-child { border-top: 0; }
+button.row:hover { background: var(--surface-2); }
+.row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.row-title { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row-sub { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.row-end { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; text-align: right; flex-shrink: 0; }
+.row-value { font-weight: 800; font-variant-numeric: tabular-nums; }
+.avatar {
+  width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0;
+  display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 12.5px; letter-spacing: .02em;
+}
+.avatar.sm { width: 34px; height: 34px; font-size: 11px; }
+.avatar.l4 { font-size: 10.5px; letter-spacing: 0; }
+.avatar.sm.l4 { font-size: 9px; }
+.avatar.lg { width: 52px; height: 52px; font-size: 15px; }
+.tx-ico { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; flex-shrink: 0; background: var(--surface-2); color: var(--ink-2); }
+.tx-ico .ico { width: 19px; height: 19px; }
+.tx-ico.buy { background: var(--accent-soft); color: var(--accent-line); }
+.tx-ico.div { background: var(--up-soft); color: var(--up); }
+.group-label { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 18px 4px 8px; }
+.bar-track { height: 4px; border-radius: 2px; background: var(--surface-2); margin-top: 6px; overflow: hidden; }
+.bar-track i { display: block; height: 100%; border-radius: 2px; background: var(--accent); }
+
+/* Banner and empty state */
+.banner {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 4px 0 14px;
+  background: var(--accent-soft); border-radius: 14px; padding: 10px 12px; font-size: 13.5px;
+}
+.banner p { margin: 0; flex: 1 1 200px; }
+.banner strong { font-weight: 800; }
+.empty { text-align: center; padding: 36px 20px; background: var(--surface); border: 1px dashed var(--line); border-radius: var(--radius); margin-top: 18px; }
+.empty h2 { font-family: var(--font-display); font-size: 21px; margin: 8px 0 6px; letter-spacing: -.01em; text-wrap: balance; }
+.empty p { margin: 0 auto 16px; max-width: 34ch; color: var(--ink-2); }
+.empty .btns { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.empty-ill { width: 64px; height: 64px; margin: 0 auto; color: var(--accent-line); }
+.loading { padding: 70px 0; text-align: center; color: var(--muted); }
+
+/* Buttons */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+  border-radius: 12px; padding: 10px 16px; font-weight: 800; font-size: 14.5px;
+}
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.danger { color: var(--down); }
+.btn.danger.solid { background: var(--down); border-color: var(--down); color: #fff; }
+.btn.block { width: 100%; }
+.btn.sm { padding: 7px 12px; font-size: 13px; border-radius: 10px; }
+.btn .ico { width: 18px; height: 18px; }
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn-row > .btn { flex: 1 1 0; }
+
+/* Tab bar */
+.tabbar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+  background: var(--surface); border-top: 1px solid var(--line);
+  padding: 4px 8px calc(4px + env(safe-area-inset-bottom, 0px));
+}
+.tabbar-inner { max-width: 560px; margin: 0 auto; display: grid; grid-template-columns: repeat(5, 1fr); align-items: center; }
+.tab { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 11px; font-weight: 700; color: var(--muted); padding: 6px 0; background: none; border: 0; }
+.tab[aria-current="page"] { color: var(--ink); }
+.tab[aria-current="page"] .ico { stroke-width: 2.3; }
+.fab {
+  justify-self: center; width: 54px; height: 54px; border-radius: 50%; border: 4px solid var(--bg);
+  background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; margin-top: -22px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .18);
+}
+.fab .ico { width: 26px; height: 26px; stroke-width: 2.4; }
+
+/* Sheets */
+.sheet-layer { position: fixed; inset: 0; z-index: 40; display: flex; align-items: flex-end; justify-content: center; }
+.backdrop { position: absolute; inset: 0; background: var(--scrim); }
+.sheet {
+  position: relative; width: 100%; max-width: 560px; max-height: calc(100% - 28px - env(safe-area-inset-top, 0px));
+  background: var(--bg); border-radius: 22px 22px 0 0; box-shadow: var(--shadow);
+  display: flex; flex-direction: column; animation: rise .24s cubic-bezier(.2, .8, .2, 1);
+}
+@keyframes rise { from { transform: translateY(40px); opacity: .4; } to { transform: none; opacity: 1; } }
+.grab { width: 38px; height: 5px; border-radius: 3px; background: var(--line); margin: 8px auto 0; flex-shrink: 0; }
+.sheet-head { display: flex; align-items: center; gap: 6px; padding: 6px 10px 6px 16px; flex-shrink: 0; }
+.sheet-head h2 { flex: 1; margin: 0; font-size: 17px; font-weight: 800; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sheet-head .back { margin-left: -8px; }
+.sheet-body { overflow-y: auto; padding: 4px 16px calc(24px + env(safe-area-inset-bottom, 0px)); overscroll-behavior: contain; }
+
+/* Forms */
+.form { display: flex; flex-direction: column; gap: 14px; }
+.field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.field label, .field .label { font-size: 13px; font-weight: 700; color: var(--ink-2); }
+.field input, .field select, .field textarea {
+  width: 100%; min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  padding: 11px 12px; font-size: 16px; font-weight: 600;
+}
+.field input:focus, .field select:focus, .field textarea:focus { outline: 2px solid var(--accent-line); outline-offset: 0; border-color: transparent; }
+.field .hint { font-size: 12px; color: var(--muted); }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.fieldset { display: flex; flex-direction: column; gap: 12px; padding: 14px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); }
+.fieldset-title { font-size: 13px; font-weight: 800; }
+.form-error { color: var(--down); font-weight: 700; font-size: 13.5px; }
+.total-line { display: flex; justify-content: space-between; align-items: baseline; padding: 12px 14px; border-radius: 12px; background: var(--surface-2); font-weight: 700; }
+.total-line strong { font-size: 18px; font-variant-numeric: tabular-nums; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Detail blocks */
+.detail-head { display: flex; align-items: center; gap: 12px; margin: 4px 0 14px; }
+.detail-head h3 { margin: 0; font-family: var(--font-display); font-size: 22px; line-height: 1.15; letter-spacing: -.015em; }
+.tag { display: inline-block; font-size: 11.5px; font-weight: 800; background: var(--surface-2); color: var(--ink-2); border-radius: 6px; padding: 2px 7px; margin-right: 4px; }
+.price-big { font-family: var(--font-display); font-size: 30px; font-weight: 700; letter-spacing: -.02em; }
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 4px 14px; }
+.stat { display: flex; flex-direction: column; padding: 10px 0; border-top: 1px solid var(--line); min-width: 0; }
+.stat:nth-child(-n+2) { border-top: 0; }
+.stat span { font-size: 12.5px; color: var(--muted); font-weight: 600; }
+.stat b { font-weight: 800; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.inline-form { display: flex; gap: 8px; align-items: flex-end; margin-top: 10px; }
+.inline-form .field { flex: 1; }
+
+/* Donut */
+.donut-wrap { display: grid; grid-template-columns: minmax(0, 190px) minmax(0, 1fr); gap: 18px; align-items: center; }
+.donut-wrap svg { width: 100%; height: auto; }
+.donut-center-v { font-family: var(--font-display); font-weight: 700; fill: var(--ink); }
+.donut-center-l { fill: var(--muted); font-weight: 700; font-family: var(--font-ui); }
+.alloc-list { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.alloc-item { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: center; gap: 8px; border: 0; background: none; text-align: left; padding: 6px 6px; border-radius: 8px; font-size: 13.5px; }
+.alloc-item[aria-pressed="true"] { background: var(--surface-2); }
+.alloc-item i { width: 10px; height: 10px; border-radius: 50%; }
+.alloc-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.alloc-item b { font-variant-numeric: tabular-nums; }
+
+/* Toast */
+.toast {
+  position: fixed; left: 50%; bottom: calc(88px + env(safe-area-inset-bottom, 0px)); z-index: 60;
+  transform: translateX(-50%); background: var(--ink); color: var(--bg);
+  font-weight: 700; font-size: 14px; padding: 10px 16px; border-radius: 12px; box-shadow: var(--shadow);
+  max-width: calc(100% - 32px);
+}
+
+@media (max-width: 380px) {
+  .hero-value { font-size: 34px; }
+  .donut-wrap { grid-template-columns: 1fr; }
+  .donut-wrap svg { max-width: 220px; margin: 0 auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sheet { animation: none; }
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap top-inner">
+    <div class="brand" aria-label="Gruzzolo">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="15" fill="var(--accent)"/><path d="M21.2 11.2A6.6 6.6 0 1 0 21.2 20.8M8.6 14.4h9M8.6 17.6h9" fill="none" stroke="var(--accent-ink)" stroke-width="2.4" stroke-linecap="round"/></svg>
+      <span>Gruzzolo</span>
+    </div>
+    <div class="top-spacer"></div>
+    <button class="pill-btn" id="pf-btn" data-act="portfolio-picker" aria-label="Scegli portafoglio"></button>
+    <button class="icon-btn" id="hide-btn" data-act="toggle-hide"></button>
+    <button class="icon-btn" data-act="settings" aria-label="Impostazioni"></button>
+  </div>
+</header>
+
+<main class="wrap" id="view"><div class="loading">Carico il tuo portafoglio…</div></main>
+
+<nav class="tabbar" aria-label="Sezioni">
+  <div class="tabbar-inner" id="tabbar"></div>
+</nav>
+
+<div class="sheet-layer" id="sheet-layer" hidden>
+  <div class="backdrop" data-act="close-sheet"></div>
+  <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+    <div class="grab" aria-hidden="true"></div>
+    <div class="sheet-head">
+      <button class="icon-btn back" id="sheet-back" data-act="back-sheet" aria-label="Indietro" hidden></button>
+      <h2 id="sheet-title"></h2>
+      <button class="icon-btn" id="sheet-close" data-act="close-sheet" aria-label="Chiudi"></button>
+    </div>
+    <div class="sheet-body" id="sheet-body"></div>
+  </section>
+</div>
+
+<input type="file" id="import-file" accept="application/json,.json" hidden>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+'use strict';
+
+/* ============================================================
+   Utilities
+   ============================================================ */
+const $ = (sel, root = document) => root.querySelector(sel);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const newId = (prefix) => prefix + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-3);
+const clone = (o) => JSON.parse(JSON.stringify(o));
+const sum = (arr, fn) => arr.reduce((s, x) => s + fn(x), 0);
+
+function iso(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function parseISO(s) {
+  const [y, m, d] = s.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+const todayISO = () => iso(new Date());
+function addDays(s, n) {
+  const d = parseISO(s);
+  d.setDate(d.getDate() + n);
+  return iso(d);
+}
+function addMonths(s, n) {
+  const d = parseISO(s);
+  const day = d.getDate();
+  d.setDate(1);
+  d.setMonth(d.getMonth() + n);
+  const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  d.setDate(Math.min(day, last));
+  return iso(d);
+}
+const dayDiff = (a, b) => Math.round((parseISO(b) - parseISO(a)) / 864e5);
+
+const MONTHS = ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic'];
+const MONTHS_LONG = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
+function fmtDate(s, withYear = true) {
+  const d = parseISO(s);
+  return `${d.getDate()} ${MONTHS[d.getMonth()]}${withYear ? ' ' + d.getFullYear() : ''}`;
+}
+
+const EUR = new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' });
+const MASK = '•••••';
+const money = (v) => (S.ui.hide ? MASK + ' €' : EUR.format(v || 0));
+function moneySigned(v) {
+  if (S.ui.hide) return MASK + ' €';
+  const sign = v > 0.004 ? '+' : v < -0.004 ? '−' : '';
+  return sign + EUR.format(Math.abs(v));
+}
+function priceFmt(v) {
+  return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR', maximumFractionDigits: v !== 0 && Math.abs(v) < 1 ? 4 : 2 }).format(v);
+}
+function pct(v) {
+  const sign = v > 0.00005 ? '+' : v < -0.00005 ? '−' : '';
+  return sign + Math.abs(v * 100).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
+}
+const pctPlain = (v) => (v * 100).toLocaleString('it-IT', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
+const qtyFmt = (v) => (S.ui.hide ? '•••' : v.toLocaleString('it-IT', { maximumFractionDigits: 6 }));
+const tone = (v) => (v > 0.004 ? 'up' : v < -0.004 ? 'down' : 'flat');
+function compact(v) {
+  const a = Math.abs(v);
+  const f = (x, d) => x.toLocaleString('it-IT', { maximumFractionDigits: d });
+  if (a >= 1e6) return f(v / 1e6, 1) + ' Mln';
+  if (a >= 1e4) return f(v / 1e3, 0) + 'k';
+  if (a >= 1e3) return f(v / 1e3, 1) + 'k';
+  return f(v, a < 10 ? 2 : 0);
+}
+const pctShort = (v) => (v * 100).toLocaleString('it-IT', { maximumFractionDigits: Math.abs(v) < 0.1 ? 1 : 0 }) + '%';
+
+// Accepts "1.234,56", "1234,56" and "1234.56"
+function parseNum(s) {
+  let t = String(s ?? '').trim().replace(/[\s€]/g, '');
+  if (!t) return NaN;
+  if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.');
+  const n = Number(t);
+  return Number.isFinite(n) ? n : NaN;
+}
+const numInput = (v) => (v === undefined || v === null || v === '' ? '' : String(+v.toFixed(8)).replace('.', ','));
+
+function hashHue(str) {
+  let h = 0;
+  for (const c of String(str)) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return h % 360;
+}
+
+/* ============================================================
+   Domain constants
+   ============================================================ */
+const TYPE_KEYS = ['stock', 'etf', 'fund', 'bond', 'crypto', 'cash', 'realestate', 'other'];
+const TYPE_LABEL = { stock: 'Azione', etf: 'ETF', fund: 'Fondo', bond: 'Obbligazione', crypto: 'Crypto', cash: 'Liquidità', realestate: 'Immobile', other: 'Altro' };
+const TYPE_PLURAL = { stock: 'Azioni', etf: 'ETF', fund: 'Fondi', bond: 'Obbligazioni', crypto: 'Crypto', cash: 'Liquidità', realestate: 'Immobili', other: 'Altro' };
+const SECTORS = ['Tecnologia', 'Finanza', 'Sanità', 'Beni di consumo', 'Industria', 'Energia', 'Utility', 'Materiali', 'Immobiliare', 'Telecomunicazioni', 'Governativo', 'Diversificato', 'Altro'];
+const REGIONS = ['Italia', 'Europa', 'USA', 'Globale', 'Mercati emergenti', 'Asia', 'Altro'];
+const CURRENCIES = ['EUR', 'USD', 'GBP', 'CHF', 'JPY', 'Altro'];
+const RANGES = [['1S', '1S'], ['1M', '1M'], ['3M', '3M'], ['YTD', 'YTD'], ['1A', '1A'], ['3A', '3A'], ['MAX', 'Max']];
+const RANGE_TEXT = { '1S': 'ultima settimana', '1M': 'ultimo mese', '3M': 'ultimi 3 mesi', YTD: 'da inizio anno', '1A': 'ultimo anno', '3A': 'ultimi 3 anni', MAX: 'da sempre' };
+const SERIES = ['var(--c1)', 'var(--c2)', 'var(--c3)', 'var(--c4)', 'var(--c5)', 'var(--c6)', 'var(--c7)', 'var(--c8)'];
+
+/* ============================================================
+   Icons (inline SVG, stroke = currentColor)
+   ============================================================ */
+const P = {
+  chart: '<path d="M3 17l5-5 4 4 8-8"/><path d="M15 8h5v5"/>',
+  pie: '<path d="M12 3a9 9 0 1 0 9 9h-9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  coins: '<ellipse cx="9" cy="7" rx="6" ry="3"/><path d="M3 7v5c0 1.7 2.7 3 6 3s6-1.3 6-3V7"/><path d="M9 15v2c0 1.7 2.7 3 6 3s6-1.3 6-3v-5c0-1.6-2.4-2.9-5.5-3"/>',
+  star: '<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.8l-5.2 2.8 1-5.8L3.5 9.7l5.9-.9z"/>',
+  eye: '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/>',
+  eyeOff: '<path d="M4 4l16 16"/><path d="M9.9 5.8A9.6 9.6 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a17 17 0 0 1-2.6 3.4M6.3 7.4A16.4 16.4 0 0 0 2.5 12s3.5 6.5 9.5 6.5c1.6 0 3-.4 4.2-1"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>',
+  sliders: '<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>',
+  chevDown: '<path d="M6 9l6 6 6-6"/>',
+  chevLeft: '<path d="M15 5l-7 7 7 7"/>',
+  chevRight: '<path d="M9 5l7 7-7 7"/>',
+  close: '<path d="M6 6l12 12M18 6L6 18"/>',
+  refresh: '<path d="M20 11a8 8 0 0 0-14.7-4.3L4 8.5"/><path d="M4 4v4.5h4.5"/><path d="M4 13a8 8 0 0 0 14.7 4.3l1.3-1.8"/><path d="M20 20v-4.5h-4.5"/>',
+  down: '<path d="M12 4v14M6 12l6 6 6-6"/>',
+  upArrow: '<path d="M12 20V6M6 12l6-6 6 6"/>',
+  euro: '<path d="M17 6.5A7 7 0 1 0 17 17.5"/><path d="M4 10h9M4 14h9"/>',
+  trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12h10l1-12M9 7V4h6v3"/>',
+  edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
+  upload: '<path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v4h16v-4"/>',
+  download: '<path d="M12 4v12M7 11l5 5 5-5"/><path d="M4 16v4h16v-4"/>',
+  wallet: '<path d="M4 7h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a1 1 0 0 1-1-1z"/><path d="M4 7l11-3v3"/><circle cx="16" cy="13.5" r="1.3"/>',
+};
+const icon = (name, extra = '') => `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true" ${extra}>${P[name]}</svg>`;
+
+/* ============================================================
+   State
+   ============================================================ */
+function blankData() {
+  return { v: 1, settings: { started: false }, portfolios: [{ id: 'p1', name: 'Principale' }], assets: {}, txns: [], prices: {}, watch: [] };
+}
+const S = {
+  data: blankData(),
+  ver: 0,
+  loaded: false,
+  sheets: [],
+  ui: { tab: 'home', range: '1A', chartMode: 'value', portfolio: 'all', sort: 'value', showClosed: false, allocBy: 'class', allocSel: null, divYear: null, txFilter: 'all', hide: false },
+};
+const D = () => S.data;
+const asset = (aid) => D().assets[aid] || { id: aid, name: 'Titolo rimosso', ticker: '', type: 'other' };
+const isCash = (aid) => asset(aid).type === 'cash';
+const pfName = (pid) => (D().portfolios.find((p) => p.id === pid) || {}).name || 'Portafoglio';
+const hasDemo = () => D().txns.some((t) => t.demo) || Object.values(D().assets).some((a) => a.demo) || D().watch.some((w) => w.demo);
+
+const UI_KEY = 'gruzzolo:ui';
+function restoreUi() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(UI_KEY) || '{}');
+    for (const k of ['tab', 'range', 'chartMode', 'sort', 'allocBy', 'hide', 'portfolio']) if (k in saved) S.ui[k] = saved[k];
+    if (S.ui.tab === 'tx') S.ui.tab = 'home';
+  } catch { /* storage unavailable: keep defaults */ }
+}
+function saveUi() {
+  try {
+    const { tab, range, chartMode, sort, allocBy, hide, portfolio } = S.ui;
+    localStorage.setItem(UI_KEY, JSON.stringify({ tab, range, chartMode, sort, allocBy, hide, portfolio }));
+  } catch { /* ignore */ }
+}
+
+// Memoised computations, invalidated on every data change
+const memo = new Map();
+function cached(key, fn) {
+  const k = S.ver + '|' + key;
+  if (!memo.has(k)) memo.set(k, fn());
+  return memo.get(k);
+}
+
+function commit(message) {
+  S.ver++;
+  memo.clear();
+  if (S.data.txns.length || Object.keys(S.data.assets).length) S.data.settings.started = true;
+  store.save(S.data);
+  render();
+  if (message) toast(message);
+}
+
+/* ============================================================
+   Storage: Claude artifact private store when available, else this device
+   ============================================================ */
+let store = null;
+
+function localStore() {
+  const KEY = 'gruzzolo:data:v1';
+  return {
+    kind: 'local',
+    async load() {
+      try {
+        const raw = localStorage.getItem(KEY);
+        return raw ? JSON.parse(raw) : null;
+      } catch {
+        return null;
+      }
+    },
+    save(data) {
+      try {
+        localStorage.setItem(KEY, JSON.stringify(data));
+      } catch {
+        toast('Salvataggio non riuscito: memoria del browser piena o bloccata. Esporta un backup.');
+      }
+    },
+    flush() {},
+  };
+}
+
+// Splits the data into documents: one main doc, one per transaction year, one per asset price history
+function splitDocs(data) {
+  const docs = new Map();
+  const { txns, prices, ...rest } = data;
+  docs.set('app', rest);
+  const years = {};
+  for (const t of txns) (years['y' + t.date.slice(0, 4)] ||= []).push(t);
+  for (const [y, items] of Object.entries(years)) docs.set('tx/' + y, { items });
+  for (const [aid, points] of Object.entries(prices)) if (points.length) docs.set('px/' + aid, { points });
+  return docs;
+}
+
+function dbStore(db, userId) {
+  const root = db.doc(`data/users/${userId}/app`);
+  const last = new Map();
+  let queue = Promise.resolve();
+  let timer = null;
+  let pending = null;
+  const ref = (key) => {
+    if (key === 'app') return root;
+    const [col, id] = key.split('/');
+    return root.collection(col).doc(id);
+  };
+  async function write(data) {
+    const docs = splitDocs(data);
+    for (const [key, body] of docs) {
+      const json = JSON.stringify(body);
+      if (last.get(key) === json) continue;
+      await ref(key).set(body);
+      last.set(key, json);
+    }
+    for (const key of [...last.keys()]) {
+      if (!docs.has(key)) {
+        await ref(key).delete();
+        last.delete(key);
+      }
+    }
+  }
+  function flush() {
+    clearTimeout(timer);
+    if (!pending) return;
+    const data = clone(pending);
+    pending = null;
+    queue = queue.then(() => write(data)).catch((err) => {
+      const why = err && err.code === 'quota_exceeded' ? 'spazio esaurito' : 'connessione o permessi';
+      toast(`Salvataggio non riuscito (${why}). Esporta un backup dalle impostazioni.`);
+    });
+  }
+  return {
+    kind: 'db',
+    async load() {
+      const [main, tx, px] = await Promise.all([root.get(), root.collection('tx').get(), root.collection('px').get()]);
+      if (!main.exists && tx.empty && px.empty) return null;
+      const base = main.exists ? clone(main.data()) : {};
+      if (main.exists) last.set('app', JSON.stringify(main.data()));
+      const data = { ...blankData(), ...base, txns: [], prices: {} };
+      for (const d of tx.docs) {
+        data.txns.push(...clone(d.data().items || []));
+        last.set('tx/' + d.id, JSON.stringify(d.data()));
+      }
+      for (const d of px.docs) {
+        data.prices[d.id] = clone(d.data().points || []);
+        last.set('px/' + d.id, JSON.stringify(d.data()));
+      }
+      return data;
+    },
+    save(data) {
+      pending = data;
+      clearTimeout(timer);
+      timer = setTimeout(flush, 500);
+    },
+    flush,
+  };
+}
+
+async function pickStore() {
+  if (window.claude && typeof window.claude.use === 'function') {
+    try {
+      const db = await window.claude.use('db');
+      const user = db ? await window.claude.use('user') : null;
+      const userId = user ? await user.id() : null;
+      if (db && userId) return dbStore(db, userId);
+    } catch { /* fall back to device storage */ }
+  }
+  return localStore();
+}
+
+function migrate(data) {
+  const d = { ...blankData(), ...data };
+  d.settings = { ...blankData().settings, ...(data.settings || {}) };
+  if (!Array.isArray(d.portfolios) || !d.portfolios.length) d.portfolios = [{ id: 'p1', name: 'Principale' }];
+  d.assets = d.assets && typeof d.assets === 'object' ? d.assets : {};
+  d.txns = Array.isArray(d.txns) ? d.txns : [];
+  d.prices = d.prices && typeof d.prices === 'object' ? d.prices : {};
+  d.watch = Array.isArray(d.watch) ? d.watch : [];
+  return d;
+}
+
+/* ============================================================
+   Example data (clearly flagged, prices are invented)
+   ============================================================ */
+function mulberry32(seed) {
+  return () => {
+    seed |= 0;
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function demoData() {
+  const rnd = mulberry32(42);
+  const today = todayISO();
+  const M = 26;
+  const first = addMonths(today.slice(0, 8) + '01', -M);
+  const months = Array.from({ length: M + 1 }, (_, i) => addMonths(first, i));
+  const data = blankData();
+  data.portfolios = [{ id: 'p1', name: 'Conto titoli', demo: true }, { id: 'p2', name: 'Crypto', demo: true }];
+  const defs = [
+    { key: 'vwce', name: 'Vanguard FTSE All-World', ticker: 'VWCE', type: 'etf', sector: 'Diversificato', region: 'Globale', currency: 'EUR', p0: 104, p1: 139, vol: 0.03 },
+    { key: 'eimi', name: 'iShares Core MSCI EM IMI', ticker: 'EIMI', type: 'etf', sector: 'Diversificato', region: 'Mercati emergenti', currency: 'USD', p0: 29, p1: 34.2, vol: 0.04 },
+    { key: 'aapl', name: 'Apple', ticker: 'AAPL', type: 'stock', sector: 'Tecnologia', region: 'USA', currency: 'USD', p0: 165, p1: 221, vol: 0.06 },
+    { key: 'enel', name: 'Enel', ticker: 'ENEL', type: 'stock', sector: 'Utility', region: 'Italia', currency: 'EUR', p0: 6.1, p1: 7.55, vol: 0.04 },
+    { key: 'alv', name: 'Allianz', ticker: 'ALV', type: 'stock', sector: 'Finanza', region: 'Europa', currency: 'EUR', p0: 245, p1: 348, vol: 0.04 },
+    { key: 'btp', name: 'BTP 3,5% 2030', ticker: 'BTP30', type: 'bond', sector: 'Governativo', region: 'Italia', currency: 'EUR', p0: 97.4, p1: 101.3, vol: 0.006 },
+    { key: 'btc', name: 'Bitcoin', ticker: 'BTC', type: 'crypto', sector: 'Altro', region: 'Globale', currency: 'USD', p0: 38000, p1: 91500, vol: 0.13 },
+    { key: 'cash', name: 'Conto deposito', ticker: 'CASH', type: 'cash', sector: 'Altro', region: 'Italia', currency: 'EUR' },
+  ];
+  const ids = {};
+  const priceAt = {};
+  for (const def of defs) {
+    const id = 'a' + def.key + 'demo';
+    ids[def.key] = id;
+    data.assets[id] = { id, name: def.name, ticker: def.ticker, type: def.type, sector: def.sector, region: def.region, currency: def.currency, demo: true };
+    if (def.type === 'cash') continue;
+    let noise = 0;
+    const pts = months.map((d, i) => {
+      noise = noise * 0.6 + def.vol * (rnd() * 2 - 1);
+      const bridge = i === M ? 0 : noise;
+      const p = def.p0 * Math.pow(def.p1 / def.p0, i / M) * Math.exp(bridge);
+      return [d, +p.toFixed(p < 20 ? 3 : 2)];
+    });
+    pts.push([today, def.p1]);
+    data.prices[id] = pts;
+    priceAt[def.key] = (i) => pts[i][1];
+  }
+  const tx = (key, pid, type, mi, fields) => {
+    const date = addDays(months[mi], type === 'div' ? 14 : 2);
+    if (date > today) return;
+    data.txns.push({ id: newId('t'), pid, aid: ids[key], type, date, demo: true, ...fields });
+  };
+  for (let i = 0; i < M; i++) {
+    const p = priceAt.vwce(i);
+    tx('vwce', 'p1', 'buy', i, { qty: +(250 / p).toFixed(3), price: p, fee: 0 });
+  }
+  tx('cash', 'p1', 'buy', 0, { qty: 3000, price: 1, fee: 0 });
+  tx('enel', 'p1', 'buy', 0, { qty: 600, price: priceAt.enel(0), fee: 5 });
+  tx('aapl', 'p1', 'buy', 1, { qty: 12, price: priceAt.aapl(1), fee: 5 });
+  tx('eimi', 'p1', 'buy', 2, { qty: 80, price: priceAt.eimi(2), fee: 2.5 });
+  tx('alv', 'p1', 'buy', 3, { qty: 6, price: priceAt.alv(3), fee: 5 });
+  tx('btp', 'p1', 'buy', 4, { qty: 50, price: priceAt.btp(4), fee: 3 });
+  tx('btc', 'p2', 'buy', 5, { qty: 0.04, price: priceAt.btc(5), fee: 3 });
+  tx('aapl', 'p1', 'buy', 9, { qty: 6, price: priceAt.aapl(9), fee: 5 });
+  tx('eimi', 'p1', 'buy', 14, { qty: 40, price: priceAt.eimi(14), fee: 2.5 });
+  tx('btc', 'p2', 'buy', 15, { qty: 0.025, price: priceAt.btc(15), fee: 3 });
+  tx('aapl', 'p1', 'sell', 20, { qty: 5, price: priceAt.aapl(20), fee: 5, tax: 38.4 });
+  // Income: Enel Jan/Jul, Apple quarterly, Allianz May, BTP coupons Mar/Sep, deposit interest Dec
+  data.txns.sort((a, b) => (a.date < b.date ? -1 : 1));
+  const held = (key, date) => sum(data.txns.filter((t) => t.aid === ids[key] && t.date <= date && t.type !== 'div'), (t) => (t.type === 'buy' ? t.qty : -t.qty));
+  months.forEach((m, i) => {
+    const month = parseISO(m).getMonth();
+    const date = addDays(m, 14);
+    const q = (key) => held(key, date);
+    if ((month === 0 || month === 6) && q('enel') > 0) tx('enel', 'p1', 'div', i, { amount: +(q('enel') * 0.215 * 0.74).toFixed(2), tax: +(q('enel') * 0.215 * 0.26).toFixed(2) });
+    if ([1, 4, 7, 10].includes(month) && q('aapl') > 0) tx('aapl', 'p1', 'div', i, { amount: +(q('aapl') * 0.23 * 0.66).toFixed(2), tax: +(q('aapl') * 0.23 * 0.34).toFixed(2) });
+    if (month === 4 && q('alv') > 0) tx('alv', 'p1', 'div', i, { amount: +(q('alv') * 13.8 * 0.6).toFixed(2), tax: +(q('alv') * 13.8 * 0.4).toFixed(2) });
+    if ((month === 2 || month === 8) && q('btp') > 0) tx('btp', 'p1', 'div', i, { amount: +(q('btp') * 1.75 * 0.875).toFixed(2), tax: +(q('btp') * 1.75 * 0.125).toFixed(2) });
+    if (month === 11 && q('cash') > 0) tx('cash', 'p1', 'div', i, { amount: 54.3, tax: 19.1 });
+  });
+  data.watch = [
+    { id: 'wdemo1', name: 'ASML', ticker: 'ASML', price: 642, target: 600, note: 'Comprare sotto 600 €', demo: true },
+    { id: 'wdemo2', name: 'iShares Physical Gold', ticker: 'SGLN', price: 51.8, target: 55, note: 'Copertura', demo: true },
+    { id: 'wdemo3', name: 'Ferrari', ticker: 'RACE', price: 398, target: 360, note: '', demo: true },
+  ];
+  return data;
+}
+
+function removeDemo() {
+  const d = D();
+  d.txns = d.txns.filter((t) => !t.demo);
+  for (const [id, a] of Object.entries(d.assets)) {
+    if (!a.demo) continue;
+    if (d.txns.some((t) => t.aid === id)) delete a.demo;
+    else {
+      delete d.assets[id];
+      delete d.prices[id];
+    }
+  }
+  d.watch = d.watch.filter((w) => !w.demo);
+  d.portfolios = d.portfolios.filter((p) => !p.demo || d.txns.some((t) => t.pid === p.id));
+  for (const p of d.portfolios) delete p.demo;
+  if (!d.portfolios.length) d.portfolios = [{ id: newId('p'), name: 'Principale' }];
+  d.settings.started = true;
+  S.ui.portfolio = 'all';
+}
+
+/* ============================================================
+   Calculations
+   ============================================================ */
+const TYPE_ORDER = { buy: 0, div: 1, sell: 2 };
+function sortTx(txns) {
+  return [...txns].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : TYPE_ORDER[a.type] - TYPE_ORDER[b.type]));
+}
+const txView = () => cached('tx:' + S.ui.portfolio, () => (S.ui.portfolio === 'all' ? D().txns : D().txns.filter((t) => t.pid === S.ui.portfolio)));
+
+// Price points of an asset: trade prices plus manual updates (manual wins on the same day)
+function priceSeries(aid) {
+  return cached('px:' + aid, () => {
+    if (isCash(aid)) return [['0000-01-01', 1]];
+    const map = new Map();
+    for (const t of D().txns) if (t.aid === aid && t.type !== 'div' && t.price > 0 && !map.has(t.date)) map.set(t.date, t.price);
+    for (const [d, p] of D().prices[aid] || []) map.set(d, p);
+    return [...map.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1));
+  });
+}
+function currentPrice(aid) {
+  const s = priceSeries(aid);
+  if (!s.length) return null;
+  const [date, price] = s[s.length - 1];
+  return { date: isCash(aid) ? null : date, price };
+}
+
+// Average-cost positions (the method Italian brokers report)
+// Always called with txView(), so the portfolio filter is the cache key
+function getPositions(txns) {
+  return cached('pos:' + S.ui.portfolio, () => computePositions(txns));
+}
+function computePositions(txns) {
+  const by = {};
+  for (const t of sortTx(txns)) {
+    const p = (by[t.aid] ||= { aid: t.aid, qty: 0, cost: 0, realized: 0, divs: 0, fees: 0, taxes: 0, bought: 0, txCount: 0 });
+    const fee = +t.fee || 0;
+    const tax = +t.tax || 0;
+    p.txCount++;
+    p.fees += fee;
+    p.taxes += tax;
+    if (t.type === 'buy') {
+      p.qty += t.qty;
+      p.cost += t.qty * t.price + fee;
+      p.bought += t.qty * t.price + fee;
+    } else if (t.type === 'sell') {
+      const q = Math.min(t.qty, p.qty);
+      const avg = p.qty > 0 ? p.cost / p.qty : 0;
+      p.realized += t.qty * t.price - fee - tax - avg * q;
+      p.qty -= q;
+      p.cost -= avg * q;
+      if (p.qty < 1e-9) {
+        p.qty = 0;
+        p.cost = 0;
+      }
+    } else if (t.type === 'div') {
+      p.divs += +t.amount || 0;
+    }
+  }
+  for (const p of Object.values(by)) {
+    const cp = currentPrice(p.aid);
+    p.price = cp ? cp.price : p.qty ? p.cost / p.qty : 0;
+    p.priceDate = cp ? cp.date : null;
+    p.value = p.qty * p.price;
+    p.avg = p.qty > 0 ? p.cost / p.qty : 0;
+    p.unreal = p.value - p.cost;
+    p.unrealPct = p.cost > 0 ? p.unreal / p.cost : 0;
+    p.total = p.unreal + p.realized + p.divs;
+  }
+  return by;
+}
+function qtyAt(txns, aid, date) {
+  return sum(txns.filter((t) => t.aid === aid && t.date <= date && t.type !== 'div'), (t) => (t.type === 'buy' ? t.qty : -t.qty));
+}
+
+// Daily series from the first transaction to today: value, cost basis and cash flows
+function getHistory(txns) {
+  return cached('hist:' + S.ui.portfolio, () => {
+    const sorted = sortTx(txns);
+    const today = todayISO();
+    const start = sorted[0].date;
+    const end = sorted[sorted.length - 1].date > today ? sorted[sorted.length - 1].date : today;
+    const n = dayDiff(start, end) + 1;
+    const aids = [...new Set(sorted.map((t) => t.aid))];
+    const idx = new Map(aids.map((a, i) => [a, i]));
+    const series = aids.map((a) => priceSeries(a));
+    const ptr = aids.map(() => -1);
+    const qty = aids.map(() => 0);
+    const cost = aids.map(() => 0);
+    const H = { dates: [], V: [], I: [], B: [], S: [], Dv: [] };
+    let ti = 0;
+    let d = start;
+    for (let k = 0; k < n; k++) {
+      let b = 0;
+      let s = 0;
+      let dv = 0;
+      while (ti < sorted.length && sorted[ti].date <= d) {
+        const t = sorted[ti++];
+        const i = idx.get(t.aid);
+        const fee = +t.fee || 0;
+        if (t.type === 'buy') {
+          qty[i] += t.qty;
+          cost[i] += t.qty * t.price + fee;
+          b += t.qty * t.price + fee;
+        } else if (t.type === 'sell') {
+          const q = Math.min(t.qty, qty[i]);
+          const avg = qty[i] > 0 ? cost[i] / qty[i] : 0;
+          qty[i] -= q;
+          cost[i] -= avg * q;
+          if (qty[i] < 1e-9) {
+            qty[i] = 0;
+            cost[i] = 0;
+          }
+          s += t.qty * t.price - fee - (+t.tax || 0);
+        } else {
+          dv += +t.amount || 0;
+        }
+      }
+      let v = 0;
+      let inv = 0;
+      for (let i = 0; i < aids.length; i++) {
+        const ser = series[i];
+        while (ptr[i] + 1 < ser.length && ser[ptr[i] + 1][0] <= d) ptr[i]++;
+        if (qty[i] > 0) v += qty[i] * (ptr[i] >= 0 ? ser[ptr[i]][1] : cost[i] / qty[i]);
+        inv += cost[i];
+      }
+      H.dates.push(d);
+      H.V.push(v);
+      H.I.push(inv);
+      H.B.push(b);
+      H.S.push(s);
+      H.Dv.push(dv);
+      d = addDays(d, 1);
+    }
+    return H;
+  });
+}
+
+function rangeStartDate(range) {
+  const today = todayISO();
+  switch (range) {
+    case '1S': return addDays(today, -7);
+    case '1M': return addMonths(today, -1);
+    case '3M': return addMonths(today, -3);
+    case 'YTD': return `${+today.slice(0, 4) - 1}-12-31`;
+    case '1A': return addMonths(today, -12);
+    case '3A': return addMonths(today, -36);
+    default: return null;
+  }
+}
+
+// Gain = value change minus net deposits. Performance = time-weighted return (buys at day start, sells and income at day end)
+function getRange(H, range) {
+  return cached('range:' + S.ui.portfolio + ':' + range, () => {
+    const s = rangeStartDate(range);
+    const base = !s || s <= H.dates[0] ? -1 : Math.min(dayDiff(H.dates[0], s), H.dates.length - 1);
+    const pts = [];
+    let twr = 1;
+    let gain = 0;
+    let prev = base >= 0 ? H.V[base] : 0;
+    if (base >= 0) pts.push({ d: H.dates[base], v: H.V[base], inv: H.I[base], gain: 0, perf: 0 });
+    for (let k = base + 1; k < H.dates.length; k++) {
+      const denom = prev + H.B[k];
+      const r = denom > 1e-9 ? (H.V[k] + H.S[k] + H.Dv[k]) / denom - 1 : 0;
+      twr *= 1 + r;
+      gain += H.V[k] - prev - H.B[k] + H.S[k] + H.Dv[k];
+      prev = H.V[k];
+      pts.push({ d: H.dates[k], v: H.V[k], inv: H.I[k], gain, perf: twr - 1 });
+    }
+    if (pts.length === 1) pts.unshift({ ...pts[0] });
+    return { pts: downsample(pts, 220), last: pts[pts.length - 1] };
+  });
+}
+function downsample(pts, max) {
+  if (pts.length <= max) return pts;
+  const step = (pts.length - 1) / (max - 1);
+  const out = [];
+  for (let i = 0; i < max; i++) out.push(pts[Math.round(i * step)]);
+  return out;
+}
+
+function dividendInfo(txns) {
+  return cached('div:' + S.ui.portfolio, () => {
+    const today = todayISO();
+    const yearAgo = addDays(today, -365);
+    const pos = getPositions(txns);
+    const divs = txns.filter((t) => t.type === 'div');
+    const projected = [];
+    for (const t of divs) {
+      if (t.date <= yearAgo || t.date > today) continue;
+      const q = qtyAt(txns, t.aid, t.date);
+      const cur = (pos[t.aid] || {}).qty || 0;
+      if (q > 0 && cur > 0) projected.push({ aid: t.aid, month: +t.date.slice(5, 7) - 1, amount: (t.amount / q) * cur });
+    }
+    const open = Object.values(pos).filter((p) => p.qty > 0);
+    const years = [...new Set([+today.slice(0, 4), ...divs.map((t) => +t.date.slice(0, 4))])].sort((a, b) => b - a);
+    return {
+      divs,
+      years,
+      projected,
+      forecast: sum(projected, (p) => p.amount),
+      last12: sum(divs.filter((t) => t.date > yearAgo && t.date <= today), (t) => t.amount),
+      cost: sum(open, (p) => p.cost),
+      value: sum(open, (p) => p.value),
+    };
+  });
+}
+
+/* ============================================================
+   Charts (inline SVG drawn to scale)
+   ============================================================ */
+const CH = {};
+
+function niceScale(min, max, count = 4) {
+  if (max - min < 1e-9) {
+    const pad = Math.abs(max) * 0.05 || 1;
+    min -= pad;
+    max += pad;
+  }
+  const raw = (max - min) / count;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const err = raw / mag;
+  const step = (err >= 7.5 ? 10 : err >= 3.5 ? 5 : err >= 1.5 ? 2 : 1) * mag;
+  const lo = Math.floor(min / step) * step;
+  const hi = Math.ceil(max / step) * step;
+  const ticks = [];
+  for (let v = lo; v <= hi + step / 2; v += step) ticks.push(+v.toFixed(10));
+  return { lo, hi, ticks };
+}
+
+function contentWidth() {
+  const w = Math.min(560, document.documentElement.clientWidth || 390) - 32;
+  return Math.max(260, Math.round(w));
+}
+
+/* Line chart with optional second series, area wash, faint grid, end dot and scrub crosshair */
+function lineChart(id, pts, opt) {
+  const w = opt.w;
+  const h = opt.h || 190;
+  const pad = { t: 10, r: 46, b: 22, l: 0 };
+  const key = opt.key;
+  const key2 = opt.key2;
+  let vals = pts.map((p) => p[key]);
+  if (key2) vals = vals.concat(pts.map((p) => p[key2]));
+  let min = Math.min(...vals);
+  let max = Math.max(...vals);
+  if (opt.zero) {
+    min = Math.min(min, 0);
+    max = Math.max(max, 0);
+  }
+  const sc = niceScale(min, max, 3);
+  const iw = w - pad.l - pad.r;
+  const ih = h - pad.t - pad.b;
+  const X = (i) => pad.l + (pts.length === 1 ? iw : (i / (pts.length - 1)) * iw);
+  const Y = (v) => pad.t + ih - ((v - sc.lo) / (sc.hi - sc.lo)) * ih;
+  const xs = pts.map((_, i) => X(i));
+  const ys = pts.map((p) => Y(p[key]));
+  const line = (arr) => arr.map((y, i) => `${i ? 'L' : 'M'}${xs[i].toFixed(1)},${y.toFixed(1)}`).join('');
+  const color = opt.color || 'var(--accent-line)';
+  const base = opt.zero ? Y(0) : pad.t + ih;
+  const area = `${line(ys)}L${xs[xs.length - 1].toFixed(1)},${base.toFixed(1)}L${xs[0].toFixed(1)},${base.toFixed(1)}Z`;
+  const grid = sc.ticks.map((t) => `<line x1="${pad.l}" x2="${pad.l + iw}" y1="${Y(t).toFixed(1)}" y2="${Y(t).toFixed(1)}" stroke="${t === 0 && opt.zero ? 'var(--muted)' : 'var(--grid)'}" stroke-width="1"/>
+    <text class="axis-text" x="${w - 2}" y="${(Y(t) + 3.5).toFixed(1)}" text-anchor="end">${S.ui.hide && !opt.zero ? '' : esc(opt.fmt(t))}</text>`).join('');
+  const second = key2 ? `<path d="${line(pts.map((p) => Y(p[key2])))}" fill="none" stroke="var(--muted)" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" opacity=".8"/>` : '';
+  const xl = `<text class="axis-text" x="${pad.l}" y="${h - 4}">${esc(fmtDate(pts[0].d))}</text><text class="axis-text" x="${pad.l + iw}" y="${h - 4}" text-anchor="end">${esc(fmtDate(pts[pts.length - 1].d))}</text>`;
+  const ex = xs[xs.length - 1];
+  const ey = ys[ys.length - 1];
+  CH[id] = { xs, w, pts, ys };
+  return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" data-chart="${id}" role="img" aria-label="${esc(opt.label || 'Grafico')}">
+    ${grid}
+    <path d="${area}" fill="${color}" opacity=".1"/>
+    ${second}
+    <path d="${line(ys)}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    <circle cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="4.5" fill="${color}" stroke="var(--bg)" stroke-width="2" id="${id}-end"/>
+    ${xl}
+    <g id="${id}-cross" visibility="hidden">
+      <line id="${id}-x" x1="0" x2="0" y1="${pad.t}" y2="${pad.t + ih}" stroke="var(--ink-2)" stroke-width="1"/>
+      <circle id="${id}-dot" r="5" cx="0" cy="0" fill="${color}" stroke="var(--bg)" stroke-width="2"/>
+    </g>
+    <rect x="0" y="0" width="${w}" height="${h}" fill="transparent"/>
+  </svg>`;
+}
+
+function scrubAt(svg, clientX) {
+  const id = svg.dataset.chart;
+  const c = CH[id];
+  if (!c) return;
+  const rect = svg.getBoundingClientRect();
+  const x = ((clientX - rect.left) / rect.width) * c.w;
+  let best = 0;
+  for (let i = 1; i < c.xs.length; i++) if (Math.abs(c.xs[i] - x) < Math.abs(c.xs[best] - x)) best = i;
+  const g = document.getElementById(id + '-cross');
+  if (!g) return;
+  g.setAttribute('visibility', 'visible');
+  const l = document.getElementById(id + '-x');
+  l.setAttribute('x1', c.xs[best]);
+  l.setAttribute('x2', c.xs[best]);
+  const dot = document.getElementById(id + '-dot');
+  dot.setAttribute('cx', c.xs[best]);
+  dot.setAttribute('cy', c.ys[best]);
+  if (c.onScrub) c.onScrub(best);
+}
+function scrubEnd(svg) {
+  const id = svg.dataset.chart;
+  const g = document.getElementById(id + '-cross');
+  if (g) g.setAttribute('visibility', 'hidden');
+  if (CH[id] && CH[id].onEnd) CH[id].onEnd();
+}
+
+/* Donut with 2px surface gaps between segments */
+function donutChart(groups, total, sel) {
+  const size = 200;
+  const r = 78;
+  const sw = 24;
+  const C = 2 * Math.PI * r;
+  const gap = groups.length > 1 ? 2 : 0;
+  let off = 0;
+  const segs = groups.map((g) => {
+    const len = (g.value / total) * C;
+    const dash = Math.max(len - gap, 0.6);
+    const dim = sel && sel !== g.key ? ' opacity=".28"' : '';
+    const s = `<circle cx="100" cy="100" r="${r}" fill="none" stroke="${g.color}" stroke-width="${sw}" stroke-dasharray="${dash.toFixed(2)} ${(C - dash).toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" transform="rotate(-90 100 100)" data-act="alloc-sel" data-key="${esc(g.key)}" style="cursor:pointer"${dim}/>`;
+    off += len;
+    return s;
+  }).join('');
+  const chosen = groups.find((g) => g.key === sel);
+  const cv = chosen ? pctPlain(chosen.value / total) : money(total);
+  const cl = chosen ? chosen.label : 'Totale';
+  const fs = cv.length > 12 ? 17 : cv.length > 9 ? 20 : 24;
+  return `<svg viewBox="0 0 ${size} ${size}" role="img" aria-label="Ripartizione del portafoglio">
+    <circle cx="100" cy="100" r="${r}" fill="none" stroke="var(--surface-2)" stroke-width="${sw}"/>
+    ${segs}
+    <text x="100" y="${100 + fs * 0.32}" text-anchor="middle" class="donut-center-v" font-size="${fs}">${esc(cv)}</text>
+    <text x="100" y="${100 + fs * 0.32 + 20}" text-anchor="middle" class="donut-center-l" font-size="12">${esc(cl.length > 20 ? cl.slice(0, 19) + '…' : cl)}</text>
+  </svg>`;
+}
+
+/* Monthly columns: received (accent) and forecast (muted, lighter) */
+function barChart(id, months, w) {
+  const h = 170;
+  const pad = { t: 12, r: 42, b: 22, l: 0 };
+  const iw = w - pad.l - pad.r;
+  const ih = h - pad.t - pad.b;
+  const max = Math.max(...months.map((m) => Math.max(m.got, m.fc)), 1);
+  const sc = niceScale(0, max, 3);
+  const slot = iw / 12;
+  const bw = Math.min(22, slot * 0.62);
+  const Y = (v) => pad.t + ih - (v / sc.hi) * ih;
+  const colPath = (x, y, bwid, bh) => {
+    const rr = Math.min(4, bh, bwid / 2);
+    const b = y + bh;
+    return `M${x},${b}V${y + rr}Q${x},${y} ${x + rr},${y}H${x + bwid - rr}Q${x + bwid},${y} ${x + bwid},${y + rr}V${b}Z`;
+  };
+  const grid = sc.ticks.map((t) => `<line x1="0" x2="${iw}" y1="${Y(t).toFixed(1)}" y2="${Y(t).toFixed(1)}" stroke="${t === 0 ? 'var(--line)' : 'var(--grid)'}"/>
+    <text class="axis-text" x="${w - 2}" y="${(Y(t) + 3.5).toFixed(1)}" text-anchor="end">${S.ui.hide ? '' : esc(compact(t))}</text>`).join('');
+  const cols = months.map((m, i) => {
+    const x = pad.l + i * slot + (slot - bw) / 2;
+    const v = m.got > 0 ? m.got : m.fc;
+    const isFc = !(m.got > 0) && m.fc > 0;
+    let mark = '';
+    if (v > 0) {
+      const y = Y(v);
+      const bh = Math.max(pad.t + ih - y, 2);
+      mark = `<path d="${colPath(x, pad.t + ih - bh, bw, bh)}" fill="${isFc ? 'var(--c-other)' : 'var(--accent)'}"${isFc ? ' opacity=".55"' : ''}/>`;
+    }
+    const label = `<text class="axis-text" x="${(x + bw / 2).toFixed(1)}" y="${h - 5}" text-anchor="middle">${MONTHS[i].charAt(0).toUpperCase()}</text>`;
+    return `<g data-act="bar-sel" data-i="${i}" style="cursor:pointer"><rect x="${(pad.l + i * slot).toFixed(1)}" y="0" width="${slot.toFixed(1)}" height="${h}" fill="transparent"/>${mark}${label}</g>`;
+  }).join('');
+  CH[id] = { months };
+  return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img" aria-label="Dividendi per mese">${grid}${cols}</svg>`;
+}
+
+/* ============================================================
+   Shared fragments
+   ============================================================ */
+function avatar(a, size = '') {
+  const txt = (a.ticker || a.name || '?').replace(/[^A-Za-z0-9]/g, '').slice(0, a.ticker && a.ticker.length <= 4 ? 4 : 3).toUpperCase() || '?';
+  const bg = a.type === 'cash' ? 'var(--c-other)' : `hsl(${hashHue(a.ticker || a.name)} 42% 44%)`;
+  return `<span class="avatar ${size}${txt.length > 3 && size !== 'lg' ? ' l4' : ''}" style="background:${bg}" aria-hidden="true">${a.type === 'cash' ? icon('wallet') : esc(txt)}</span>`;
+}
+function deltaChip(g, r, extra = '') {
+  const t = tone(g);
+  const tri = t === 'up' ? '▲' : t === 'down' ? '▼' : '•';
+  return `<span class="delta ${t}"><span class="tri" aria-hidden="true">${tri}</span>${moneySigned(g)} (${pct(r)})</span>${extra}`;
+}
+function pctPill(r) {
+  const t = r > 0.00005 ? 'up' : r < -0.00005 ? 'down' : 'flat';
+  const tri = t === 'up' ? '▲' : t === 'down' ? '▼' : '';
+  return `<span class="pill ${t}"><span class="tri" aria-hidden="true">${tri}</span>${pct(r).replace(/^[+−]/, '')}</span>`;
+}
+function unitFor(a) {
+  if (a.type === 'crypto') return a.ticker || '';
+  return { stock: 'az.', etf: 'quote', fund: 'quote', bond: 'titoli', realestate: '', other: 'pz.' }[a.type] || '';
+}
+function txLabel(t) {
+  const a = asset(t.aid);
+  if (t.type === 'buy') return a.type === 'cash' ? 'Deposito' : 'Acquisto';
+  if (t.type === 'sell') return a.type === 'cash' ? 'Prelievo' : 'Vendita';
+  return a.type === 'bond' ? 'Cedola' : a.type === 'cash' ? 'Interessi' : 'Dividendo';
+}
+function txAmount(t) {
+  if (t.type === 'buy') return t.qty * t.price + (+t.fee || 0);
+  if (t.type === 'sell') return t.qty * t.price - (+t.fee || 0) - (+t.tax || 0);
+  return +t.amount || 0;
+}
+function txRow(t, showAsset = true) {
+  const a = asset(t.aid);
+  const ic = t.type === 'buy' ? 'down' : t.type === 'sell' ? 'upArrow' : 'euro';
+  const sub = t.type === 'div' || a.type === 'cash'
+    ? fmtDate(t.date)
+    : `${qtyFmt(t.qty)} × ${priceFmt(t.price)} · ${fmtDate(t.date)}`;
+  const amt = txAmount(t);
+  const end = t.type === 'buy' ? `<span class="row-value">${money(amt)}</span>` : `<span class="row-value up">${moneySigned(amt)}</span>`;
+  return `<button class="row" data-act="open-tx" data-id="${esc(t.id)}">
+    <span class="tx-ico ${t.type}">${icon(ic)}</span>
+    <span class="row-main"><span class="row-title">${showAsset ? esc(a.name) : txLabel(t)}</span><span class="row-sub">${showAsset ? txLabel(t) + ' · ' : ''}${sub}</span></span>
+    <span class="row-end">${end}${S.ui.portfolio === 'all' && D().portfolios.length > 1 ? `<span class="row-sub">${esc(pfName(t.pid))}</span>` : ''}</span>
+  </button>`;
+}
+function demoBanner() {
+  if (!hasDemo()) return '';
+  return `<div class="banner"><p><strong>Dati di esempio.</strong> Prezzi e operazioni sono inventati per mostrarti l'app. Quando vuoi, parti dal tuo portafoglio.</p>
+    <button class="btn sm primary" data-act="demo-remove">Inizia da zero</button></div>`;
+}
+
+/* ============================================================
+   Views
+   ============================================================ */
+function viewHome() {
+  const txns = txView();
+  if (!txns.length) {
+    return demoBanner() + `<div class="empty">
+      <svg class="empty-ill" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="28" fill="var(--accent-soft)"/><path d="M18 40l9-9 7 7 12-14" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <h2>${D().portfolios.length > 1 && S.ui.portfolio !== 'all' ? 'Questo portafoglio è vuoto' : 'Il tuo portafoglio è vuoto'}</h2>
+      <p>Registra un acquisto di azioni, ETF, crypto, obbligazioni o un deposito di liquidità. Valore, grafici e dividendi si calcolano da soli.</p>
+      <div class="btns"><button class="btn primary" data-act="add-tx">${icon('plus')}Aggiungi transazione</button>
+      ${D().txns.length ? '' : '<button class="btn" data-act="demo-load">Mostra un esempio</button>'}</div>
+    </div>`;
+  }
+  const H = getHistory(txns);
+  const R = getRange(H, S.ui.range);
+  const pos = Object.values(getPositions(txns));
+  const open = pos.filter((p) => p.qty > 0);
+  const closed = pos.filter((p) => p.qty <= 0);
+  const total = sum(open, (p) => p.value);
+  const cost = sum(open, (p) => p.cost);
+  const unreal = total - cost;
+  const realized = sum(pos, (p) => p.realized);
+  const divs = sum(pos, (p) => p.divs);
+  const w = contentWidth();
+  const isValue = S.ui.chartMode === 'value';
+  const chart = isValue
+    ? lineChart('home', R.pts, { w, key: 'v', key2: 'inv', fmt: compact, label: 'Valore del portafoglio nel tempo' })
+    : lineChart('home', R.pts, { w, key: 'perf', zero: true, fmt: pctShort, label: 'Rendimento nel tempo' });
+  const heroDefault = () => {
+    $('#hero-label').textContent = 'Valore del portafoglio';
+    $('#hero-value').textContent = money(total);
+    $('#hero-delta').innerHTML = deltaChip(R.last.gain, R.last.perf, `<span class="muted">${RANGE_TEXT[S.ui.range]}</span>`);
+  };
+  CH.home.onScrub = (i) => {
+    const p = R.pts[i];
+    $('#hero-label').textContent = fmtDate(p.d);
+    $('#hero-value').textContent = money(p.v);
+    $('#hero-delta').innerHTML = deltaChip(p.gain, p.perf, isValue ? `<span class="muted">investito ${money(p.inv)}</span>` : '');
+  };
+  CH.home.onEnd = heroDefault;
+
+  const sorters = {
+    value: (a, b) => b.value - a.value,
+    perf: (a, b) => b.unrealPct - a.unrealPct,
+    name: (a, b) => asset(a.aid).name.localeCompare(asset(b.aid).name, 'it'),
+  };
+  const rows = [...open].sort(sorters[S.ui.sort]).map((p) => posRow(p, total)).join('');
+  const closedRows = S.ui.showClosed ? closed.map((p) => posRow(p, total)).join('') : '';
+  const stale = open.filter((p) => !isCash(p.aid) && p.priceDate && dayDiff(p.priceDate, todayISO()) > 7).length;
+  const recent = sortTx(txns).reverse().slice(0, 3).map((t) => txRow(t)).join('');
+
+  return `${demoBanner()}
+  <section class="hero" aria-live="polite">
+    <div class="eyebrow" id="hero-label">Valore del portafoglio</div>
+    <div class="hero-value" id="hero-value">${money(total)}</div>
+    <div class="hero-delta" id="hero-delta">${deltaChip(R.last.gain, R.last.perf, `<span class="muted">${RANGE_TEXT[S.ui.range]}</span>`)}</div>
+  </section>
+  <div class="chart-wrap">${chart}
+    ${isValue ? '<div class="legend"><span class="key"><i style="background:var(--accent-line)"></i>Valore</span><span class="key"><i style="background:var(--muted)"></i>Capitale investito</span></div>' : ''}
+  </div>
+  <div class="controls">
+    <div class="chips" role="group" aria-label="Periodo">${RANGES.map(([k, l]) => `<button class="chip" data-act="range" data-range="${k}" aria-pressed="${S.ui.range === k}">${l}</button>`).join('')}</div>
+    <div class="seg" role="group" aria-label="Tipo di grafico">
+      <button data-act="chart-mode" data-mode="value" aria-pressed="${isValue}">Valore</button>
+      <button data-act="chart-mode" data-mode="perf" aria-pressed="${!isValue}">Rendimento</button>
+    </div>
+  </div>
+  <dl class="kpis">
+    <div><dt>Capitale investito</dt><dd>${money(cost)}</dd></div>
+    <div><dt>Plus/minus latente</dt><dd class="${tone(unreal)}">${moneySigned(unreal)} <small>${cost > 0 ? pct(unreal / cost) : ''}</small></dd></div>
+    <div><dt>Plus/minus realizzata</dt><dd class="${tone(realized)}">${moneySigned(realized)}</dd></div>
+    <div><dt>Dividendi e cedole</dt><dd>${money(divs)}</dd></div>
+  </dl>
+  <section class="section">
+    <div class="sec-head"><h2>Posizioni <span class="muted">${open.length}</span></h2><button class="link-btn" data-act="prices">Aggiorna prezzi</button></div>
+    ${stale ? `<p class="muted" style="margin:0 0 8px;font-size:13px">${stale === 1 ? '1 titolo ha' : stale + ' titoli hanno'} il prezzo fermo da più di 7 giorni.</p>` : ''}
+    <div class="chips" style="margin-bottom:8px" role="group" aria-label="Ordina posizioni">
+      <button class="chip" data-act="sort" data-sort="value" aria-pressed="${S.ui.sort === 'value'}">Valore</button>
+      <button class="chip" data-act="sort" data-sort="perf" aria-pressed="${S.ui.sort === 'perf'}">Rendimento</button>
+      <button class="chip" data-act="sort" data-sort="name" aria-pressed="${S.ui.sort === 'name'}">A–Z</button>
+    </div>
+    <div class="list">${rows || '<div class="row muted">Nessuna posizione aperta.</div>'}${closedRows}</div>
+    ${closed.length ? `<button class="link-btn" style="margin-top:8px" data-act="toggle-closed">${S.ui.showClosed ? 'Nascondi' : 'Mostra'} posizioni chiuse (${closed.length})</button>` : ''}
+  </section>
+  <section class="section">
+    <div class="sec-head"><h2>Attività recenti</h2><button class="link-btn" data-act="go-tx">Vedi tutte</button></div>
+    <div class="list">${recent}</div>
+  </section>`;
+}
+
+function posRow(p, total) {
+  const a = asset(p.aid);
+  const w = total > 0 ? p.value / total : 0;
+  const closed = p.qty <= 0;
+  const unit = unitFor(a);
+  const sub = closed
+    ? 'Posizione chiusa'
+    : a.type === 'cash' || a.type === 'realestate'
+      ? `${TYPE_LABEL[a.type]} · ${pctPlain(w)}`
+      : `${qtyFmt(p.qty)}${unit ? ' ' + esc(unit) : ''} · ${pctPlain(w)}`;
+  const end = closed
+    ? `<span class="row-value ${tone(p.total)}">${moneySigned(p.total)}</span><span class="row-sub">risultato</span>`
+    : `<span class="row-value">${money(p.value)}</span>${a.type === 'cash' ? '' : pctPill(p.unrealPct)}`;
+  return `<button class="row" data-act="open-asset" data-aid="${esc(p.aid)}">
+    ${avatar(a)}
+    <span class="row-main"><span class="row-title">${esc(a.name)}</span><span class="row-sub">${sub}</span></span>
+    <span class="row-end">${end}</span>
+  </button>`;
+}
+
+function viewTransactions() {
+  const f = S.ui.txFilter;
+  const list = sortTx(txView()).reverse().filter((t) => f === 'all' || t.type === f);
+  const groups = {};
+  for (const t of list) (groups[t.date.slice(0, 7)] ||= []).push(t);
+  const body = Object.entries(groups).map(([ym, items]) => {
+    const [y, m] = ym.split('-');
+    return `<div class="group-label">${MONTHS_LONG[+m - 1]} ${y}</div><div class="list">${items.map((t) => txRow(t)).join('')}</div>`;
+  }).join('');
+  const chip = (k, l) => `<button class="chip" data-act="tx-filter" data-f="${k}" aria-pressed="${f === k}">${l}</button>`;
+  return `<div class="sec-head" style="margin-top:6px"><button class="link-btn" data-act="tab" data-tab="home">${icon('chevLeft', 'style="width:16px;height:16px;display:inline;vertical-align:-3px"')} Portafoglio</button></div>
+    <h1 class="page-title">Transazioni</h1>
+    <div class="chips" role="group" aria-label="Filtra">${chip('all', 'Tutte')}${chip('buy', 'Acquisti')}${chip('sell', 'Vendite')}${chip('div', 'Dividendi')}</div>
+    ${body || '<div class="empty"><p>Nessuna transazione in questo filtro.</p><button class="btn primary" data-act="add-tx">Aggiungi transazione</button></div>'}`;
+}
+
+function allocationGroups(open, by) {
+  const map = new Map();
+  for (const p of open) {
+    if (p.value <= 0) continue;
+    const a = asset(p.aid);
+    let key;
+    let label;
+    if (by === 'class') {
+      key = a.type;
+      label = TYPE_PLURAL[a.type] || 'Altro';
+    } else if (by === 'asset') {
+      key = p.aid;
+      label = a.name;
+    } else {
+      key = a[by] || '—';
+      label = a[by] || 'Non specificato';
+    }
+    const g = map.get(key) || { key, label, value: 0 };
+    g.value += p.value;
+    map.set(key, g);
+  }
+  let groups = [...map.values()].sort((a, b) => b.value - a.value);
+  // Color follows the entity where the list is fixed; ranked lists fold after 7
+  const fixed = { class: TYPE_KEYS, region: REGIONS, currency: CURRENCIES }[by];
+  if (groups.length > 8) {
+    const rest = groups.slice(7);
+    groups = groups.slice(0, 7).concat([{ key: '__other', label: 'Altro', value: sum(rest, (g) => g.value), other: true }]);
+  }
+  groups.forEach((g, i) => {
+    if (g.other) g.color = 'var(--c-other)';
+    else if (fixed && fixed.indexOf(g.key) >= 0 && fixed.indexOf(g.key) < 8) g.color = SERIES[fixed.indexOf(g.key)];
+    else g.color = SERIES[i % 8];
+  });
+  return groups;
+}
+
+function viewAnalysis() {
+  const txns = txView();
+  if (!txns.length) return '<h1 class="page-title">Analisi</h1>' + demoBanner() + '<div class="empty"><h2>Niente da analizzare</h2><p>Aggiungi qualche transazione e qui vedrai ripartizione, diversificazione e costi.</p><button class="btn primary" data-act="add-tx">Aggiungi transazione</button></div>';
+  const pos = Object.values(getPositions(txns));
+  const open = pos.filter((p) => p.qty > 0);
+  const total = sum(open, (p) => p.value);
+  const by = S.ui.allocBy;
+  const groups = allocationGroups(open, by);
+  const sel = groups.some((g) => g.key === S.ui.allocSel) ? S.ui.allocSel : null;
+  const tabs = [['class', 'Classe'], ['asset', 'Titoli'], ['sector', 'Settore'], ['region', 'Regione'], ['currency', 'Valuta']];
+  const legend = groups.map((g) => `<button class="alloc-item" data-act="alloc-sel" data-key="${esc(g.key)}" aria-pressed="${sel === g.key}"><i style="background:${g.color}"></i><span>${esc(g.label)}</span><b>${pctPlain(total ? g.value / total : 0)}</b></button>`).join('');
+
+  const weights = open.filter((p) => p.value > 0).map((p) => p.value / total);
+  const hhi = sum(weights, (w) => w * w);
+  const effective = hhi > 0 ? 1 / hhi : 0;
+  const top = open.reduce((m, p) => (p.value > (m ? m.value : -1) ? p : m), null);
+  const ranked = open.filter((p) => !isCash(p.aid) && p.cost > 0).sort((a, b) => b.unrealPct - a.unrealPct);
+  const best = ranked.slice(0, 3);
+  const worst = ranked.slice(-3).reverse().filter((p) => !best.includes(p));
+  const fees = sum(pos, (p) => p.fees);
+  const taxes = sum(pos, (p) => p.taxes);
+  const bought = sum(pos, (p) => p.bought);
+  const perfRow = (p) => `<button class="row" data-act="open-asset" data-aid="${esc(p.aid)}">${avatar(asset(p.aid), 'sm')}<span class="row-main"><span class="row-title">${esc(asset(p.aid).name)}</span><span class="row-sub">${moneySigned(p.unreal)}</span></span><span class="row-end">${pctPill(p.unrealPct)}</span></button>`;
+  const divInfo = dividendInfo(txns);
+
+  return `<h1 class="page-title">Analisi</h1>${demoBanner()}
+  <div class="seg full" role="group" aria-label="Ripartisci per">${tabs.map(([k, l]) => `<button data-act="alloc-by" data-by="${k}" aria-pressed="${by === k}">${l}</button>`).join('')}</div>
+  <div class="donut-wrap" style="margin-top:16px">${donutChart(groups, total || 1, sel)}<div class="alloc-list">${legend}</div></div>
+  ${sel ? `<p class="readout">${esc(groups.find((g) => g.key === sel).label)}: ${money(groups.find((g) => g.key === sel).value)}</p>` : '<p class="readout muted">Tocca una voce per vedere il dettaglio.</p>'}
+
+  <section class="section">
+    <div class="sec-head"><h2>Diversificazione</h2></div>
+    <dl class="kpis" style="margin-top:0">
+      <div><dt>Posizioni aperte</dt><dd>${open.length}</dd></div>
+      <div><dt>Posizioni effettive</dt><dd>${effective.toLocaleString('it-IT', { maximumFractionDigits: 1 })}</dd></div>
+      <div><dt>Posizione maggiore</dt><dd>${top ? pctPlain(top.value / total) : '—'}</dd></div>
+      <div><dt>Rendimento da dividendi</dt><dd>${divInfo.value > 0 ? pctPlain(divInfo.forecast / divInfo.value) : '—'}</dd></div>
+    </dl>
+    <p class="muted" style="font-size:12.5px;margin:8px 2px 0">Posizioni effettive: quante posizioni di peso uguale avrebbero la stessa concentrazione. Più è vicino al numero di posizioni, più il portafoglio è bilanciato.</p>
+  </section>
+
+  ${best.length ? `<section class="section"><div class="sec-head"><h2>Migliori</h2></div><div class="list">${best.map(perfRow).join('')}</div></section>` : ''}
+  ${worst.length ? `<section class="section"><div class="sec-head"><h2>Peggiori</h2></div><div class="list">${worst.map(perfRow).join('')}</div></section>` : ''}
+
+  <section class="section">
+    <div class="sec-head"><h2>Costi</h2></div>
+    <dl class="kpis" style="margin-top:0">
+      <div><dt>Commissioni pagate</dt><dd>${money(fees)}</dd></div>
+      <div><dt>Su capitale acquistato</dt><dd>${bought > 0 ? pct(fees / bought).replace('+', '') : '—'}</dd></div>
+      <div><dt>Tasse pagate</dt><dd>${money(taxes)}</dd></div>
+      <div><dt>Operazioni</dt><dd>${txns.length}</dd></div>
+    </dl>
+  </section>`;
+}
+
+function viewDividends() {
+  const txns = txView();
+  const info = dividendInfo(txns);
+  const today = todayISO();
+  const curYear = +today.slice(0, 4);
+  const curMonth = +today.slice(5, 7) - 1;
+  const year = info.years.includes(S.ui.divYear) ? S.ui.divYear : curYear;
+  const inYear = info.divs.filter((t) => +t.date.slice(0, 4) === year);
+  const months = Array.from({ length: 12 }, (_, m) => ({
+    got: sum(inYear.filter((t) => +t.date.slice(5, 7) - 1 === m), (t) => t.amount),
+    fc: year === curYear && m > curMonth ? sum(info.projected.filter((p) => p.month === m), (p) => p.amount) : 0,
+  }));
+  const received = sum(months, (m) => m.got);
+  const expectedRest = sum(months, (m) => m.fc);
+  const hasFc = expectedRest > 0;
+  const perAsset = {};
+  for (const t of inYear) perAsset[t.aid] = (perAsset[t.aid] || 0) + t.amount;
+  const payers = Object.entries(perAsset).sort((a, b) => b[1] - a[1]);
+  const payersHtml = payers.map(([aid, v]) => `<button class="row" data-act="open-asset" data-aid="${esc(aid)}">${avatar(asset(aid), 'sm')}<span class="row-main"><span class="row-title">${esc(asset(aid).name)}</span><span class="bar-track"><i style="width:${((v / payers[0][1]) * 100).toFixed(1)}%"></i></span></span><span class="row-end"><span class="row-value">${money(v)}</span><span class="row-sub">${pctPlain(received ? v / received : 0)}</span></span></button>`).join('');
+  const payments = sortTx(inYear).reverse().map((t) => txRow(t)).join('');
+  const w = contentWidth();
+  const chart = barChart('div', months, w);
+  CH.div.year = year;
+
+  return `<h1 class="page-title">Dividendi</h1>${demoBanner()}
+  <div class="chips" role="group" aria-label="Anno">${info.years.map((y) => `<button class="chip" data-act="div-year" data-year="${y}" aria-pressed="${y === year}">${y}</button>`).join('')}</div>
+  <section class="hero" style="margin-top:10px">
+    <div class="eyebrow">Ricevuti nel ${year}</div>
+    <div class="hero-value">${money(received)}</div>
+    ${year === curYear && hasFc ? `<div class="hero-delta"><span class="muted">altri ${money(expectedRest)} previsti entro dicembre</span></div>` : ''}
+  </section>
+  <div class="chart-wrap">${chart}
+    ${hasFc ? '<div class="legend"><span class="key"><i class="dot" style="background:var(--accent)"></i>Ricevuti</span><span class="key"><i class="dot" style="background:var(--c-other);opacity:.55"></i>Previsti</span></div>' : ''}
+    <p class="readout" id="div-readout">Tocca un mese per il dettaglio.</p>
+  </div>
+  <dl class="kpis">
+    <div><dt>Ultimi 12 mesi</dt><dd>${money(info.last12)}</dd></div>
+    <div><dt>Previsione annua</dt><dd>${money(info.forecast)}</dd></div>
+    <div><dt>Rendimento attuale</dt><dd>${info.value > 0 ? pctPlain(info.forecast / info.value) : '—'}</dd></div>
+    <div><dt>Rendimento sul costo</dt><dd>${info.cost > 0 ? pctPlain(info.forecast / info.cost) : '—'}</dd></div>
+  </dl>
+  <p class="muted" style="font-size:12.5px;margin:8px 2px 0">La previsione ripete i pagamenti degli ultimi 12 mesi sulle quantità che possiedi oggi. Importi netti.</p>
+  ${payers.length ? `<section class="section"><div class="sec-head"><h2>Per titolo</h2></div><div class="list">${payersHtml}</div></section>` : ''}
+  <section class="section">
+    <div class="sec-head"><h2>Pagamenti</h2><button class="link-btn" data-act="add-tx" data-type="div">Registra dividendo</button></div>
+    ${payments ? `<div class="list">${payments}</div>` : `<div class="empty" style="margin-top:0"><p>Nessun dividendo registrato nel ${year}.</p></div>`}
+  </section>`;
+}
+
+function viewWatch() {
+  const items = D().watch;
+  const rows = items.map((w) => {
+    const a = { name: w.name, ticker: w.ticker, type: 'stock' };
+    let end = `<span class="row-value">${w.price > 0 ? priceFmt(w.price) : '—'}</span>`;
+    if (w.price > 0 && w.target > 0) {
+      const dist = w.price / w.target - 1;
+      end += dist <= 0
+        ? '<span class="pill up"><span aria-hidden="true">✓</span> sotto obiettivo</span>'
+        : `<span class="row-sub">${pctPlain(dist)} sopra ${priceFmt(w.target)}</span>`;
+    }
+    return `<button class="row" data-act="watch-open" data-id="${esc(w.id)}">${avatar(a)}<span class="row-main"><span class="row-title">${esc(w.name)}</span><span class="row-sub">${esc([w.ticker, w.note].filter(Boolean).join(' · '))}</span></span><span class="row-end">${end}</span></button>`;
+  }).join('');
+  return `<div class="sec-head" style="align-items:center"><h1 class="page-title">Watchlist</h1><button class="btn sm" data-act="watch-add">${icon('plus')}Aggiungi</button></div>${demoBanner()}
+    ${rows ? `<div class="list">${rows}</div><p class="muted" style="font-size:12.5px;margin:8px 2px 0">Imposta un prezzo obiettivo: quando il prezzo che inserisci scende sotto, il titolo viene segnato in verde.</p>` : '<div class="empty"><h2>Nessun titolo osservato</h2><p>Aggiungi i titoli che vuoi tenere d\'occhio con un prezzo obiettivo di acquisto.</p><button class="btn primary" data-act="watch-add">Aggiungi alla watchlist</button></div>'}`;
+}
+
+const VIEWS = { home: viewHome, tx: viewTransactions, analysis: viewAnalysis, dividends: viewDividends, watch: viewWatch };
+
+/* ============================================================
+   Sheets
+   ============================================================ */
+const SHEETS = {};
+const FORM_SHEETS = new Set(['txForm', 'prices', 'assetForm', 'watchForm']);
+
+SHEETS.asset = ({ aid }) => {
+  const a = asset(aid);
+  const txns = txView();
+  const pos = getPositions(txns)[aid] || computePositions(D().txns.filter((t) => t.aid === aid))[aid] || null;
+  const open = Object.values(getPositions(txns)).filter((p) => p.qty > 0);
+  const total = sum(open, (p) => p.value);
+  const cp = currentPrice(aid);
+  const own = sortTx(txns.filter((t) => t.aid === aid)).reverse();
+  const cash = a.type === 'cash';
+  const ps = priceSeries(aid);
+  let chart = '';
+  if (!cash && ps.length >= 2) {
+    const pts = ps.map(([d, v]) => ({ d, v }));
+    chart = `<div class="chart-wrap">${lineChart('asset', pts, { w: Math.min(contentWidth(), 528), h: 150, key: 'v', fmt: compact, label: 'Storico prezzi inseriti' })}<p class="readout" id="asset-readout">${ps.length} prezzi registrati</p></div>`;
+    CH.asset.onScrub = (i) => { $('#asset-readout').textContent = `${fmtDate(pts[i].d)}: ${priceFmt(pts[i].v)}`; };
+    CH.asset.onEnd = () => { $('#asset-readout').textContent = `${ps.length} prezzi registrati`; };
+  }
+  const stat = (l, v, cls = '') => `<div class="stat"><span>${l}</span><b class="${cls}">${v}</b></div>`;
+  const stats = pos ? (cash
+    ? stat('Saldo', money(pos.value)) + stat('Peso', pctPlain(total ? pos.value / total : 0)) + stat('Interessi ricevuti', money(pos.divs)) + stat('Movimenti', pos.txCount)
+    : stat('Quantità', qtyFmt(pos.qty)) + stat('Prezzo medio', S.ui.hide ? MASK : priceFmt(pos.avg))
+      + stat('Capitale investito', money(pos.cost)) + stat('Valore', money(pos.value))
+      + stat('Plus/minus latente', `${moneySigned(pos.unreal)} (${pct(pos.unrealPct)})`, tone(pos.unreal)) + stat('Plus/minus realizzata', moneySigned(pos.realized), tone(pos.realized))
+      + stat(a.type === 'bond' ? 'Cedole' : 'Dividendi', money(pos.divs)) + stat('Peso nel portafoglio', pctPlain(total ? pos.value / total : 0))
+      + stat('Risultato totale', moneySigned(pos.total), tone(pos.total)) + stat('Commissioni', money(pos.fees))) : '';
+  const tags = [TYPE_LABEL[a.type], a.ticker, a.sector, a.region, a.currency].filter(Boolean).map((t) => `<span class="tag">${esc(t)}</span>`).join('');
+  return {
+    title: TYPE_LABEL[a.type] || 'Titolo',
+    body: `<div class="detail-head">${avatar(a, 'lg')}<div style="min-width:0"><h3>${esc(a.name)}</h3><div style="margin-top:4px">${tags}</div></div></div>
+    ${cash ? '' : `<div class="price-big">${cp ? priceFmt(cp.price) : '—'}</div>
+      <div class="muted" style="font-size:13px">${cp && cp.date ? 'Prezzo del ' + fmtDate(cp.date) : 'Nessun prezzo'}</div>
+      <form class="inline-form" data-form="price-one" data-aid="${esc(aid)}">
+        <div class="field"><label for="po-price">Nuovo prezzo (€)</label><input id="po-price" name="price" inputmode="decimal" autocomplete="off" placeholder="${cp ? numInput(cp.price) : '0,00'}"></div>
+        <button class="btn primary" type="submit">${icon('refresh')}Aggiorna</button>
+      </form>`}
+    ${chart}
+    ${pos ? `<div class="stats" style="margin-top:16px">${stats}</div>` : ''}
+    <div class="btn-row" style="margin-top:14px">
+      <button class="btn" data-act="add-tx" data-aid="${esc(aid)}" data-type="buy">${cash ? 'Deposita' : 'Compra'}</button>
+      ${pos && pos.qty > 0 ? `<button class="btn" data-act="add-tx" data-aid="${esc(aid)}" data-type="sell">${cash ? 'Preleva' : 'Vendi'}</button>` : ''}
+      <button class="btn" data-act="add-tx" data-aid="${esc(aid)}" data-type="div">${cash ? 'Interessi' : a.type === 'bond' ? 'Cedola' : 'Dividendo'}</button>
+    </div>
+    <div class="group-label">Transazioni</div>
+    <div class="list">${own.map((t) => txRow(t, false)).join('') || '<div class="row muted">Nessuna transazione in questo portafoglio.</div>'}</div>
+    <div class="btn-row" style="margin-top:18px">
+      <button class="btn" data-act="edit-asset" data-aid="${esc(aid)}">${icon('edit')}Modifica dati</button>
+      <button class="btn danger" data-act="delete-asset" data-aid="${esc(aid)}">${icon('trash')}Elimina</button>
+    </div>`,
+  };
+};
+
+SHEETS.tx = ({ id }) => {
+  const t = D().txns.find((x) => x.id === id);
+  if (!t) return { title: 'Transazione', body: '<p class="muted">Transazione non trovata.</p>' };
+  const a = asset(t.aid);
+  const stat = (l, v) => `<div class="stat"><span>${l}</span><b>${v}</b></div>`;
+  const fields = t.type === 'div'
+    ? stat('Importo netto', money(t.amount)) + stat('Tasse trattenute', money(+t.tax || 0))
+    : stat(a.type === 'cash' ? 'Importo' : 'Quantità', a.type === 'cash' ? money(t.qty) : qtyFmt(t.qty)) + (a.type === 'cash' ? '' : stat('Prezzo', priceFmt(t.price)))
+      + stat('Commissioni', money(+t.fee || 0)) + (t.type === 'sell' ? stat('Tasse', money(+t.tax || 0)) : '')
+      + stat(t.type === 'buy' ? 'Totale pagato' : 'Totale incassato', money(txAmount(t)));
+  return {
+    title: txLabel(t),
+    body: `<button class="row" style="padding-inline:0" data-act="open-asset" data-aid="${esc(t.aid)}">${avatar(a)}<span class="row-main"><span class="row-title">${esc(a.name)}</span><span class="row-sub">${fmtDate(t.date)} · ${esc(pfName(t.pid))}</span></span>${icon('chevRight')}</button>
+      <div class="stats" style="margin-top:10px">${stat('Data', fmtDate(t.date))}${stat('Portafoglio', esc(pfName(t.pid)))}${fields}</div>
+      ${t.note ? `<p style="margin:12px 2px">${esc(t.note)}</p>` : ''}
+      <div class="btn-row" style="margin-top:16px">
+        <button class="btn" data-act="edit-tx" data-id="${esc(t.id)}">${icon('edit')}Modifica</button>
+        <button class="btn danger" data-act="delete-tx" data-id="${esc(t.id)}">${icon('trash')}Elimina</button>
+      </div>`,
+  };
+};
+
+const opt = (v, l, sel) => `<option value="${esc(v)}"${sel ? ' selected' : ''}>${esc(l)}</option>`;
+
+SHEETS.txForm = (args) => {
+  const editing = args.id ? D().txns.find((t) => t.id === args.id) : null;
+  const t = editing || {};
+  const type = t.type || args.type || 'buy';
+  const aid = t.aid || args.aid || '';
+  const assets = Object.values(D().assets).sort((a, b) => a.name.localeCompare(b.name, 'it'));
+  const pid = t.pid || (S.ui.portfolio !== 'all' ? S.ui.portfolio : D().portfolios[0].id);
+  const pre = args.prefill || {};
+  const typeBtn = (k, l) => `<label style="flex:1"><input class="sr-only" type="radio" name="type" value="${k}"${type === k ? ' checked' : ''}><span class="seg-lbl" data-type="${k}">${l}</span></label>`;
+  return {
+    title: editing ? 'Modifica transazione' : 'Nuova transazione',
+    body: `<form class="form" data-form="tx" data-id="${esc(t.id || '')}" novalidate>
+      <div class="seg full" id="tx-type">${typeBtn('buy', 'Acquisto')}${typeBtn('sell', 'Vendita')}${typeBtn('div', 'Dividendo')}</div>
+      <div class="field"><label for="tx-aid">Titolo</label>
+        <select id="tx-aid" name="aid">
+          ${assets.length && !aid && !pre.name ? opt('', 'Scegli un titolo…', true) : ''}
+          ${assets.map((a) => opt(a.id, a.name + (a.ticker ? ' · ' + a.ticker : ''), a.id === aid)).join('')}
+          ${opt('__new', '+ Nuovo titolo…', !assets.length || Boolean(pre.name))}
+        </select>
+      </div>
+      <div class="fieldset" id="tx-new" hidden>
+        <div class="fieldset-title">Nuovo titolo</div>
+        <div class="field"><label for="na-name">Nome</label><input id="na-name" name="na_name" autocomplete="off" placeholder="Es. Vanguard FTSE All-World" value="${esc(pre.name || '')}"></div>
+        <div class="grid2">
+          <div class="field"><label for="na-ticker">Ticker o ISIN</label><input id="na-ticker" name="na_ticker" autocomplete="off" autocapitalize="characters" placeholder="VWCE" value="${esc(pre.ticker || '')}"></div>
+          <div class="field"><label for="na-type">Tipo</label><select id="na-type" name="na_type">${TYPE_KEYS.map((k) => opt(k, TYPE_LABEL[k], k === (pre.type || 'etf'))).join('')}</select></div>
+        </div>
+        <div class="grid2">
+          <div class="field"><label for="na-sector">Settore</label><select id="na-sector" name="na_sector">${opt('', '—', true)}${SECTORS.map((s) => opt(s, s)).join('')}</select></div>
+          <div class="field"><label for="na-region">Regione</label><select id="na-region" name="na_region">${opt('', '—', true)}${REGIONS.map((s) => opt(s, s)).join('')}</select></div>
+        </div>
+        <div class="field"><label for="na-currency">Valuta del titolo</label><select id="na-currency" name="na_currency">${CURRENCIES.map((c) => opt(c, c, c === 'EUR')).join('')}</select><span class="hint">Serve solo per l'analisi per valuta: i prezzi si inseriscono sempre in euro.</span></div>
+      </div>
+      ${D().portfolios.length > 1 ? `<div class="field"><label for="tx-pid">Portafoglio</label><select id="tx-pid" name="pid">${D().portfolios.map((p) => opt(p.id, p.name, p.id === pid)).join('')}</select></div>` : `<input type="hidden" name="pid" value="${esc(pid)}">`}
+      <div class="field"><label for="tx-date">Data</label><input id="tx-date" type="date" name="date" value="${esc(t.date || todayISO())}" max="${addDays(todayISO(), 365)}"></div>
+      <div id="tx-trade">
+        <div class="grid2">
+          <div class="field"><label for="tx-qty" id="tx-qty-l">Quantità</label><input id="tx-qty" name="qty" inputmode="decimal" autocomplete="off" placeholder="0" value="${esc(numInput(t.qty))}"></div>
+          <div class="field" id="tx-price-f"><label for="tx-price">Prezzo unitario (€)</label><input id="tx-price" name="price" inputmode="decimal" autocomplete="off" placeholder="0,00" value="${esc(numInput(t.price ?? pre.price))}"></div>
+        </div>
+        <div class="grid2" style="margin-top:12px">
+          <div class="field"><label for="tx-fee">Commissioni (€)</label><input id="tx-fee" name="fee" inputmode="decimal" autocomplete="off" placeholder="0,00" value="${esc(numInput(t.fee || ''))}"></div>
+          <div class="field" id="tx-tax-f"><label for="tx-tax">Tasse (€)</label><input id="tx-tax" name="tax" inputmode="decimal" autocomplete="off" placeholder="0,00" value="${esc(type === 'sell' ? numInput(t.tax || '') : '')}"></div>
+        </div>
+      </div>
+      <div id="tx-div" class="grid2">
+        <div class="field"><label for="tx-amount">Importo netto ricevuto (€)</label><input id="tx-amount" name="amount" inputmode="decimal" autocomplete="off" placeholder="0,00" value="${esc(numInput(t.amount))}"></div>
+        <div class="field"><label for="tx-dtax">Tasse trattenute (€)</label><input id="tx-dtax" name="dtax" inputmode="decimal" autocomplete="off" placeholder="0,00" value="${esc(type === 'div' ? numInput(t.tax || '') : '')}"></div>
+      </div>
+      <div class="field"><label for="tx-note">Nota</label><input id="tx-note" name="note" autocomplete="off" placeholder="Facoltativa" value="${esc(t.note || '')}"></div>
+      <div class="total-line"><span id="tx-total-l">Totale</span><strong id="tx-total">—</strong></div>
+      <p class="form-error" id="tx-error" hidden></p>
+      <button class="btn primary block" type="submit">${editing ? 'Salva modifiche' : 'Salva transazione'}</button>
+    </form>`,
+    after: syncTxForm,
+  };
+};
+
+// Show the right fields for the chosen type/asset and keep the total live
+function syncTxForm() {
+  const f = $('form[data-form="tx"]');
+  if (!f) return;
+  const type = f.elements.type.value;
+  const aidSel = f.elements.aid.value;
+  const isNew = aidSel === '__new';
+  $('#tx-new').hidden = !isNew;
+  const aType = isNew ? f.elements.na_type.value : (D().assets[aidSel] || {}).type;
+  const cash = aType === 'cash';
+  for (const lbl of f.querySelectorAll('.seg-lbl')) {
+    const k = lbl.dataset.type;
+    lbl.textContent = { buy: cash ? 'Deposito' : 'Acquisto', sell: cash ? 'Prelievo' : 'Vendita', div: cash ? 'Interessi' : aType === 'bond' ? 'Cedola' : 'Dividendo' }[k];
+    lbl.parentElement.querySelector('input').checked = k === type;
+    lbl.setAttribute('aria-pressed', k === type);
+  }
+  $('#tx-trade').hidden = type === 'div';
+  $('#tx-div').hidden = type !== 'div';
+  $('#tx-price-f').hidden = cash;
+  $('#tx-tax-f').hidden = type !== 'sell';
+  $('#tx-qty-l').textContent = cash ? 'Importo (€)' : 'Quantità';
+  let total = NaN;
+  if (type === 'div') total = parseNum(f.elements.amount.value);
+  else {
+    const q = parseNum(f.elements.qty.value);
+    const p = cash ? 1 : parseNum(f.elements.price.value);
+    const fee = parseNum(f.elements.fee.value) || 0;
+    const tax = type === 'sell' ? parseNum(f.elements.tax.value) || 0 : 0;
+    if (q > 0 && p >= 0) total = type === 'buy' ? q * p + fee : q * p - fee - tax;
+  }
+  $('#tx-total-l').textContent = type === 'buy' ? 'Totale pagato' : type === 'sell' ? 'Totale incassato' : 'Totale ricevuto';
+  $('#tx-total').textContent = Number.isFinite(total) ? EUR.format(total) : '—';
+}
+
+function submitTx(f) {
+  const err = (msg) => {
+    const e = $('#tx-error');
+    e.textContent = msg;
+    e.hidden = false;
+  };
+  const el = f.elements;
+  const type = el.type.value;
+  const date = el.date.value;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return err('Inserisci una data valida.');
+  let aid = el.aid.value;
+  let newAsset = null;
+  if (!aid) return err('Scegli un titolo o creane uno nuovo.');
+  if (aid === '__new') {
+    const name = el.na_name.value.trim();
+    if (!name) return err('Dai un nome al nuovo titolo.');
+    const ticker = el.na_ticker.value.trim().toUpperCase();
+    const existing = Object.values(D().assets).find((a) => (ticker && a.ticker === ticker) || a.name.toLowerCase() === name.toLowerCase());
+    if (existing) aid = existing.id;
+    else {
+      newAsset = { id: newId('a'), name, ticker, type: el.na_type.value, sector: el.na_sector.value, region: el.na_region.value, currency: el.na_currency.value };
+      aid = newAsset.id;
+    }
+  }
+  const aType = newAsset ? newAsset.type : asset(aid).type;
+  const cash = aType === 'cash';
+  const id = f.dataset.id || newId('t');
+  const tx = { id, pid: el.pid.value, aid, type, date };
+  if (el.note.value.trim()) tx.note = el.note.value.trim();
+  if (type === 'div') {
+    const amount = parseNum(el.amount.value);
+    if (!(amount > 0)) return err("Inserisci l'importo netto ricevuto, maggiore di zero.");
+    tx.amount = amount;
+    const tax = parseNum(el.dtax.value);
+    if (tax > 0) tx.tax = tax;
+  } else {
+    const qty = parseNum(el.qty.value);
+    const price = cash ? 1 : parseNum(el.price.value);
+    if (!(qty > 0)) return err(cash ? "Inserisci l'importo, maggiore di zero." : 'Inserisci la quantità, maggiore di zero.');
+    if (!(price >= 0) || Number.isNaN(price)) return err('Inserisci il prezzo unitario in euro.');
+    tx.qty = qty;
+    tx.price = price;
+    const fee = parseNum(el.fee.value);
+    if (fee > 0) tx.fee = fee;
+    if (type === 'sell') {
+      const tax = parseNum(el.tax.value);
+      if (tax > 0) tx.tax = tax;
+      const others = D().txns.filter((t) => t.id !== id && t.pid === tx.pid);
+      const held = qtyAt(others, aid, date);
+      if (qty > held + 1e-9) return err(`Alla data scelta possiedi ${held.toLocaleString('it-IT', { maximumFractionDigits: 6 })} in questo portafoglio: non puoi venderne di più.`);
+    }
+  }
+  if (newAsset) D().assets[newAsset.id] = newAsset;
+  const i = D().txns.findIndex((t) => t.id === id);
+  if (i >= 0) D().txns[i] = tx;
+  else D().txns.push(tx);
+  popSheet();
+  commit(i >= 0 ? 'Transazione aggiornata' : 'Transazione salvata');
+}
+
+SHEETS.prices = () => {
+  const open = Object.values(computePositions(D().txns)).filter((p) => p.qty > 0 && !isCash(p.aid));
+  open.sort((a, b) => b.value - a.value);
+  const rows = open.map((p) => {
+    const a = asset(p.aid);
+    const cp = currentPrice(p.aid);
+    return `<div class="row" style="padding-inline:12px">${avatar(a, 'sm')}
+      <span class="row-main"><label class="row-title" for="pr-${esc(p.aid)}">${esc(a.name)}</label><span class="row-sub">${cp ? priceFmt(cp.price) + ' · ' + fmtDate(cp.date) : 'nessun prezzo'}</span></span>
+      <input id="pr-${esc(p.aid)}" name="${esc(p.aid)}" inputmode="decimal" autocomplete="off" placeholder="${cp ? numInput(cp.price) : '0,00'}" style="width:110px;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:9px 10px;font-weight:700;font-size:16px;text-align:right">
+    </div>`;
+  }).join('');
+  return {
+    title: 'Aggiorna prezzi',
+    body: `<form class="form" data-form="prices" novalidate>
+      <p class="muted" style="margin:0">Scrivi solo i prezzi che sono cambiati. Valgono per tutti i portafogli.</p>
+      <div class="field"><label for="pr-date">Prezzi del giorno</label><input id="pr-date" type="date" name="__date" value="${todayISO()}"></div>
+      ${rows ? `<div class="list">${rows}</div>` : '<p class="muted">Non hai posizioni aperte da aggiornare.</p>'}
+      <p class="form-error" id="pr-error" hidden></p>
+      ${rows ? '<button class="btn primary block" type="submit">Salva prezzi</button>' : ''}
+    </form>`,
+  };
+};
+
+function setPrice(aid, date, price) {
+  const arr = (D().prices[aid] ||= []);
+  const i = arr.findIndex((p) => p[0] === date);
+  if (i >= 0) arr[i] = [date, price];
+  else {
+    arr.push([date, price]);
+    arr.sort((a, b) => (a[0] < b[0] ? -1 : 1));
+  }
+}
+
+SHEETS.assetForm = ({ aid }) => {
+  const a = asset(aid);
+  return {
+    title: 'Modifica titolo',
+    body: `<form class="form" data-form="asset" data-aid="${esc(aid)}" novalidate>
+      <div class="field"><label for="ea-name">Nome</label><input id="ea-name" name="name" value="${esc(a.name)}" autocomplete="off"></div>
+      <div class="grid2">
+        <div class="field"><label for="ea-ticker">Ticker o ISIN</label><input id="ea-ticker" name="ticker" value="${esc(a.ticker || '')}" autocomplete="off"></div>
+        <div class="field"><label for="ea-type">Tipo</label><select id="ea-type" name="type">${TYPE_KEYS.map((k) => opt(k, TYPE_LABEL[k], k === a.type)).join('')}</select></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label for="ea-sector">Settore</label><select id="ea-sector" name="sector">${opt('', '—', !a.sector)}${SECTORS.map((s) => opt(s, s, s === a.sector)).join('')}</select></div>
+        <div class="field"><label for="ea-region">Regione</label><select id="ea-region" name="region">${opt('', '—', !a.region)}${REGIONS.map((s) => opt(s, s, s === a.region)).join('')}</select></div>
+      </div>
+      <div class="field"><label for="ea-currency">Valuta del titolo</label><select id="ea-currency" name="currency">${CURRENCIES.map((c) => opt(c, c, c === (a.currency || 'EUR'))).join('')}</select></div>
+      <p class="form-error" id="ea-error" hidden></p>
+      <button class="btn primary block" type="submit">Salva</button>
+    </form>`,
+  };
+};
+
+SHEETS.watchForm = ({ id }) => {
+  const w = D().watch.find((x) => x.id === id) || {};
+  return {
+    title: id ? w.name : 'Aggiungi alla watchlist',
+    body: `<form class="form" data-form="watch" data-id="${esc(id || '')}" novalidate>
+      <div class="field"><label for="w-name">Nome</label><input id="w-name" name="name" value="${esc(w.name || '')}" autocomplete="off" placeholder="Es. ASML"></div>
+      <div class="field"><label for="w-ticker">Ticker o ISIN</label><input id="w-ticker" name="ticker" value="${esc(w.ticker || '')}" autocomplete="off" autocapitalize="characters"></div>
+      <div class="grid2">
+        <div class="field"><label for="w-price">Prezzo attuale (€)</label><input id="w-price" name="price" inputmode="decimal" value="${esc(numInput(w.price))}" autocomplete="off" placeholder="0,00"></div>
+        <div class="field"><label for="w-target">Prezzo obiettivo (€)</label><input id="w-target" name="target" inputmode="decimal" value="${esc(numInput(w.target))}" autocomplete="off" placeholder="0,00"></div>
+      </div>
+      <div class="field"><label for="w-note">Nota</label><input id="w-note" name="note" value="${esc(w.note || '')}" autocomplete="off" placeholder="Perché lo segui"></div>
+      <p class="form-error" id="w-error" hidden></p>
+      <button class="btn primary block" type="submit">Salva</button>
+      ${id ? `<div class="btn-row"><button class="btn" type="button" data-act="watch-buy" data-id="${esc(id)}">Registra acquisto</button><button class="btn danger" type="button" data-act="watch-delete" data-id="${esc(id)}">${icon('trash')}Rimuovi</button></div>` : ''}
+    </form>`,
+  };
+};
+
+SHEETS.portfolios = () => {
+  const all = Object.values(computePositions(D().txns));
+  const valueOf = (pid) => sum(Object.values(computePositions(D().txns.filter((t) => t.pid === pid))), (p) => p.value);
+  const row = (pid, name, value) => `<button class="row" data-act="pick-portfolio" data-pid="${esc(pid)}" aria-pressed="${S.ui.portfolio === pid}">
+    <span class="tx-ico">${icon(pid === 'all' ? 'pie' : 'wallet')}</span>
+    <span class="row-main"><span class="row-title">${esc(name)}</span><span class="row-sub">${money(value)}</span></span>
+    ${S.ui.portfolio === pid ? '<span class="pill up">attivo</span>' : ''}
+  </button>`;
+  return {
+    title: 'Portafogli',
+    body: `<div class="list">${row('all', 'Tutti i portafogli', sum(all, (p) => p.value))}${D().portfolios.map((p) => row(p.id, p.name, valueOf(p.id))).join('')}</div>
+      <button class="btn block" style="margin-top:12px" data-act="settings">Gestisci portafogli</button>`,
+  };
+};
+
+SHEETS.settings = () => {
+  const pf = D().portfolios.map((p) => {
+    const n = D().txns.filter((t) => t.pid === p.id).length;
+    return `<div class="row" style="padding-inline:12px">
+      <span class="row-main"><input aria-label="Nome portafoglio" data-rename="${esc(p.id)}" value="${esc(p.name)}" style="background:transparent;border:0;font-weight:700;font-size:16px;padding:4px 0;width:100%"><span class="row-sub">${n} transazioni</span></span>
+      ${D().portfolios.length > 1 ? `<button class="icon-btn" data-act="portfolio-delete" data-pid="${esc(p.id)}" aria-label="Elimina ${esc(p.name)}">${icon('trash')}</button>` : ''}
+    </div>`;
+  }).join('');
+  const where = store && store.kind === 'db'
+    ? 'I dati sono salvati nel tuo spazio privato di Claude: li vedi solo tu, da qualsiasi dispositivo in cui hai effettuato l\'accesso.'
+    : 'I dati sono salvati solo su questo dispositivo, nel browser. Esporta un backup ogni tanto per non perderli.';
+  return {
+    title: 'Impostazioni',
+    body: `<div class="group-label" style="margin-top:4px">Portafogli</div>
+      <div class="list">${pf}</div>
+      <form class="inline-form" data-form="portfolio-new">
+        <div class="field"><label for="np-name" class="sr-only">Nuovo portafoglio</label><input id="np-name" name="name" placeholder="Nuovo portafoglio, es. Pensione" autocomplete="off"></div>
+        <button class="btn" type="submit">${icon('plus')}Crea</button>
+      </form>
+      <div class="group-label">Backup</div>
+      <div class="list">
+        <button class="row" data-act="export-json"><span class="tx-ico">${icon('download')}</span><span class="row-main"><span class="row-title">Esporta backup</span><span class="row-sub">Tutti i dati in un file .json</span></span></button>
+        <button class="row" data-act="import-json"><span class="tx-ico">${icon('upload')}</span><span class="row-main"><span class="row-title">Importa backup</span><span class="row-sub">Sostituisce i dati attuali</span></span></button>
+        <button class="row" data-act="export-csv"><span class="tx-ico">${icon('download')}</span><span class="row-main"><span class="row-title">Esporta transazioni</span><span class="row-sub">File .csv per Excel o Fogli Google</span></span></button>
+      </div>
+      <div class="group-label">Dati</div>
+      <div class="list">
+        ${hasDemo() ? `<button class="row" data-act="demo-remove"><span class="tx-ico">${icon('close')}</span><span class="row-main"><span class="row-title">Rimuovi dati di esempio</span><span class="row-sub">Tiene solo quello che hai inserito tu</span></span></button>` : ''}
+        ${!D().txns.length ? `<button class="row" data-act="demo-load"><span class="tx-ico">${icon('chart')}</span><span class="row-main"><span class="row-title">Mostra un esempio</span><span class="row-sub">Un portafoglio dimostrativo con prezzi inventati</span></span></button>` : ''}
+        <button class="row" data-act="wipe"><span class="tx-ico" style="color:var(--down)">${icon('trash')}</span><span class="row-main"><span class="row-title down">Cancella tutti i dati</span><span class="row-sub">Transazioni, titoli, prezzi e watchlist</span></span></button>
+      </div>
+      <p class="muted" style="font-size:13px;margin:16px 2px 0">${where}</p>
+      <p class="muted" style="font-size:13px;margin:8px 2px 0">I prezzi si aggiornano a mano: l'app non si collega a banche, broker o servizi esterni.</p>`,
+  };
+};
+
+const confirmFns = {};
+SHEETS.confirm = ({ title, text, ok, key }) => ({
+  title,
+  body: `<p style="margin:0 0 16px">${esc(text)}</p>
+    <div class="btn-row"><button class="btn" data-act="back-sheet">Annulla</button><button class="btn danger solid" data-act="confirm-ok" data-key="${esc(key)}">${esc(ok)}</button></div>`,
+});
+function askConfirm(title, text, ok, fn) {
+  const key = newId('c');
+  confirmFns[key] = fn;
+  pushSheet('confirm', { title, text, ok, key });
+}
+
+function pushSheet(type, args = {}) {
+  S.sheets.push({ type, args });
+  renderSheet();
+}
+function popSheet() {
+  S.sheets.pop();
+  renderSheet();
+}
+function closeSheets() {
+  S.sheets = [];
+  renderSheet();
+}
+function renderSheet() {
+  const layer = $('#sheet-layer');
+  const top = S.sheets[S.sheets.length - 1];
+  if (!top) {
+    layer.hidden = true;
+    document.documentElement.classList.remove('locked');
+    return;
+  }
+  const out = SHEETS[top.type](top.args);
+  $('#sheet-title').textContent = out.title;
+  $('#sheet-back').hidden = S.sheets.length < 2;
+  $('#sheet-body').innerHTML = out.body;
+  layer.hidden = false;
+  document.documentElement.classList.add('locked');
+  if (out.after) out.after();
+}
+
+/* ============================================================
+   Render
+   ============================================================ */
+function renderChrome() {
+  const tabs = [['home', 'chart', 'Portafoglio'], ['analysis', 'pie', 'Analisi'], null, ['dividends', 'coins', 'Dividendi'], ['watch', 'star', 'Watchlist']];
+  const cur = S.ui.tab === 'tx' ? 'home' : S.ui.tab;
+  $('#tabbar').innerHTML = tabs.map((t) => (t
+    ? `<button class="tab" data-act="tab" data-tab="${t[0]}"${cur === t[0] ? ' aria-current="page"' : ''}>${icon(t[1])}${t[2]}</button>`
+    : `<button class="fab" data-act="add-tx" aria-label="Aggiungi transazione">${icon('plus')}</button>`)).join('');
+  const pfLabel = S.ui.portfolio === 'all' ? (D().portfolios.length > 1 ? 'Tutti i portafogli' : D().portfolios[0].name) : pfName(S.ui.portfolio);
+  $('#pf-btn').innerHTML = `<span>${esc(pfLabel)}</span>${icon('chevDown')}`;
+  $('#pf-btn').hidden = S.ui.tab === 'watch';
+  $('#hide-btn').innerHTML = icon(S.ui.hide ? 'eyeOff' : 'eye');
+  $('#hide-btn').setAttribute('aria-label', S.ui.hide ? 'Mostra importi' : 'Nascondi importi');
+  $('[data-act="settings"].icon-btn').innerHTML = icon('sliders');
+  $('#sheet-back').innerHTML = icon('chevLeft');
+  $('#sheet-close').innerHTML = icon('close');
+}
+
+function render() {
+  if (!S.loaded) return;
+  if (S.ui.portfolio !== 'all' && !D().portfolios.some((p) => p.id === S.ui.portfolio)) S.ui.portfolio = 'all';
+  renderChrome();
+  for (const k of Object.keys(CH)) delete CH[k];
+  $('#view').innerHTML = (VIEWS[S.ui.tab] || viewHome)();
+  // Re-render an open detail sheet with fresh numbers; never wipe a form the user is filling in
+  if (S.sheets.length && !FORM_SHEETS.has(S.sheets[S.sheets.length - 1].type)) renderSheet();
+  saveUi();
+}
+
+let toastTimer = null;
+function toast(msg) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.hidden = true; }, 2600);
+}
+
+/* ============================================================
+   Files: export and import
+   ============================================================ */
+async function saveFile(filename, text, mime) {
+  if (window.claude && typeof window.claude.use === 'function') {
+    try {
+      const dl = await window.claude.use('downloads');
+      if (dl) {
+        await dl.save({ filename, data: text });
+        return;
+      }
+    } catch (e) {
+      if (e && e.code === 'declined') return;
+    }
+  }
+  const url = URL.createObjectURL(new Blob([text], { type: mime }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 3000);
+}
+function exportCsv() {
+  const q = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const n = (v) => (v === undefined || v === null || v === '' ? '' : String(v).replace('.', ','));
+  const head = ['Data', 'Tipo', 'Titolo', 'Ticker', 'Portafoglio', 'Quantità', 'Prezzo', 'Commissioni', 'Tasse', 'Importo', 'Nota'];
+  const lines = sortTx(D().txns).map((t) => {
+    const a = asset(t.aid);
+    return [q(t.date), q(txLabel(t)), q(a.name), q(a.ticker), q(pfName(t.pid)), n(t.qty), n(t.price), n(t.fee), n(t.tax), n(+txAmount(t).toFixed(2)), q(t.note)].join(';');
+  });
+  saveFile(`gruzzolo-transazioni-${todayISO()}.csv`, '﻿' + [head.join(';'), ...lines].join('\n'), 'text/csv');
+}
+function importJson(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    let parsed;
+    try {
+      parsed = JSON.parse(reader.result);
+    } catch {
+      toast('Il file non è un backup valido di Gruzzolo (JSON non leggibile).');
+      return;
+    }
+    if (!parsed || !Array.isArray(parsed.txns) || typeof parsed.assets !== 'object') {
+      toast('Il file non è un backup di Gruzzolo: mancano transazioni o titoli.');
+      return;
+    }
+    askConfirm('Importare il backup?', `Il backup contiene ${parsed.txns.length} transazioni. Sostituirà tutti i dati attuali.`, 'Importa', () => {
+      S.data = migrate(parsed);
+      S.data.settings.started = true;
+      S.ui.portfolio = 'all';
+      closeSheets();
+      commit('Backup importato');
+    });
+  };
+  reader.readAsText(file);
+}
+
+/* ============================================================
+   Events
+   ============================================================ */
+const ACTIONS = {
+  tab: (el) => {
+    S.ui.tab = el.dataset.tab;
+    render();
+    window.scrollTo(0, 0);
+  },
+  'go-tx': () => {
+    S.ui.tab = 'tx';
+    S.ui.txFilter = 'all';
+    render();
+    window.scrollTo(0, 0);
+  },
+  range: (el) => { S.ui.range = el.dataset.range; render(); },
+  'chart-mode': (el) => { S.ui.chartMode = el.dataset.mode; render(); },
+  sort: (el) => { S.ui.sort = el.dataset.sort; render(); },
+  'toggle-closed': () => { S.ui.showClosed = !S.ui.showClosed; render(); },
+  'toggle-hide': () => {
+    S.ui.hide = !S.ui.hide;
+    render();
+  },
+  'alloc-by': (el) => { S.ui.allocBy = el.dataset.by; S.ui.allocSel = null; render(); },
+  'alloc-sel': (el) => { S.ui.allocSel = S.ui.allocSel === el.dataset.key ? null : el.dataset.key; render(); },
+  'div-year': (el) => { S.ui.divYear = +el.dataset.year; render(); },
+  'bar-sel': (el) => {
+    const i = +el.dataset.i;
+    const m = CH.div.months[i];
+    const r = $('#div-readout');
+    if (!r) return;
+    r.textContent = m.got > 0 ? `${MONTHS_LONG[i]} ${CH.div.year}: ${money(m.got)} ricevuti`
+      : m.fc > 0 ? `${MONTHS_LONG[i]} ${CH.div.year}: circa ${money(m.fc)} previsti`
+        : `${MONTHS_LONG[i]} ${CH.div.year}: nessun pagamento`;
+  },
+  'tx-filter': (el) => { S.ui.txFilter = el.dataset.f; render(); },
+  'open-asset': (el) => pushSheet('asset', { aid: el.dataset.aid }),
+  'open-tx': (el) => pushSheet('tx', { id: el.dataset.id }),
+  'add-tx': (el) => pushSheet('txForm', { aid: el.dataset.aid, type: el.dataset.type }),
+  'edit-tx': (el) => pushSheet('txForm', { id: el.dataset.id }),
+  'delete-tx': (el) => askConfirm('Eliminare la transazione?', 'Valori e grafici verranno ricalcolati senza questa operazione.', 'Elimina', () => {
+    D().txns = D().txns.filter((t) => t.id !== el.dataset.id);
+    S.sheets = S.sheets.filter((s) => !(s.type === 'tx' && s.args.id === el.dataset.id) && s.type !== 'confirm');
+    renderSheet();
+    commit('Transazione eliminata');
+  }),
+  'edit-asset': (el) => pushSheet('assetForm', { aid: el.dataset.aid }),
+  'delete-asset': (el) => {
+    const aid = el.dataset.aid;
+    const n = D().txns.filter((t) => t.aid === aid).length;
+    askConfirm(`Eliminare ${asset(aid).name}?`, n ? `Verranno eliminate anche ${n} transazioni di questo titolo, in tutti i portafogli, e il suo storico prezzi.` : 'Il titolo e il suo storico prezzi verranno eliminati.', 'Elimina', () => {
+      D().txns = D().txns.filter((t) => t.aid !== aid);
+      delete D().assets[aid];
+      delete D().prices[aid];
+      closeSheets();
+      commit('Titolo eliminato');
+    });
+  },
+  prices: () => pushSheet('prices'),
+  'portfolio-picker': () => pushSheet('portfolios'),
+  'pick-portfolio': (el) => {
+    S.ui.portfolio = el.dataset.pid;
+    closeSheets();
+    render();
+  },
+  settings: () => pushSheet('settings'),
+  'portfolio-delete': (el) => {
+    const pid = el.dataset.pid;
+    const n = D().txns.filter((t) => t.pid === pid).length;
+    askConfirm(`Eliminare ${pfName(pid)}?`, n ? `Verranno eliminate anche le sue ${n} transazioni.` : 'Il portafoglio è vuoto.', 'Elimina', () => {
+      D().txns = D().txns.filter((t) => t.pid !== pid);
+      D().portfolios = D().portfolios.filter((p) => p.id !== pid);
+      popSheet();
+      commit('Portafoglio eliminato');
+    });
+  },
+  'watch-add': () => pushSheet('watchForm', {}),
+  'watch-open': (el) => pushSheet('watchForm', { id: el.dataset.id }),
+  'watch-delete': (el) => {
+    D().watch = D().watch.filter((w) => w.id !== el.dataset.id);
+    closeSheets();
+    commit('Rimosso dalla watchlist');
+  },
+  'watch-buy': (el) => {
+    const w = D().watch.find((x) => x.id === el.dataset.id);
+    if (!w) return;
+    const existing = Object.values(D().assets).find((a) => (w.ticker && a.ticker === w.ticker) || a.name === w.name);
+    pushSheet('txForm', existing ? { aid: existing.id, type: 'buy' } : { type: 'buy', prefill: { name: w.name, ticker: w.ticker, price: w.price, type: 'stock' } });
+  },
+  'export-json': () => saveFile(`gruzzolo-backup-${todayISO()}.json`, JSON.stringify(D(), null, 1), 'application/json'),
+  'export-csv': exportCsv,
+  'import-json': () => $('#import-file').click(),
+  'demo-remove': () => {
+    removeDemo();
+    closeSheets();
+    commit('Dati di esempio rimossi');
+  },
+  'demo-load': () => {
+    S.data = demoData();
+    S.ui.portfolio = 'all';
+    closeSheets();
+    S.ver++;
+    memo.clear();
+    render();
+    toast('Esempio caricato: non viene salvato finché non lo modifichi');
+  },
+  wipe: () => askConfirm('Cancellare tutti i dati?', "Transazioni, titoli, prezzi, portafogli e watchlist verranno eliminati. Se vuoi conservarli, esporta prima un backup.", 'Cancella tutto', () => {
+    S.data = blankData();
+    S.data.settings.started = true;
+    S.ui.portfolio = 'all';
+    closeSheets();
+    commit('Dati cancellati');
+  }),
+  'close-sheet': closeSheets,
+  'back-sheet': popSheet,
+  'confirm-ok': (el) => {
+    const fn = confirmFns[el.dataset.key];
+    delete confirmFns[el.dataset.key];
+    if (fn) fn();
+  },
+};
+
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-act]');
+  if (!el) return;
+  const fn = ACTIONS[el.dataset.act];
+  if (fn) {
+    e.preventDefault();
+    fn(el, e);
+  }
+});
+
+const FORMS = {
+  tx: submitTx,
+  prices: (f) => {
+    const date = f.elements.__date.value;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      $('#pr-error').textContent = 'Inserisci una data valida.';
+      $('#pr-error').hidden = false;
+      return;
+    }
+    let n = 0;
+    for (const input of f.querySelectorAll('input[inputmode]')) {
+      if (!input.value.trim()) continue;
+      const v = parseNum(input.value);
+      if (!(v > 0)) {
+        $('#pr-error').textContent = `Prezzo non valido per ${asset(input.name).name}: usa un numero maggiore di zero, es. 45,20.`;
+        $('#pr-error').hidden = false;
+        return;
+      }
+      setPrice(input.name, date, v);
+      n++;
+    }
+    popSheet();
+    if (n) commit(n === 1 ? '1 prezzo aggiornato' : `${n} prezzi aggiornati`);
+  },
+  'price-one': (f) => {
+    const v = parseNum(f.elements.price.value);
+    if (!(v > 0)) {
+      toast('Scrivi un prezzo maggiore di zero, es. 45,20.');
+      return;
+    }
+    setPrice(f.dataset.aid, todayISO(), v);
+    commit('Prezzo aggiornato');
+  },
+  asset: (f) => {
+    const a = D().assets[f.dataset.aid];
+    const name = f.elements.name.value.trim();
+    if (!name) {
+      $('#ea-error').textContent = 'Il nome non può essere vuoto.';
+      $('#ea-error').hidden = false;
+      return;
+    }
+    Object.assign(a, { name, ticker: f.elements.ticker.value.trim().toUpperCase(), type: f.elements.type.value, sector: f.elements.sector.value, region: f.elements.region.value, currency: f.elements.currency.value });
+    popSheet();
+    commit('Titolo aggiornato');
+  },
+  watch: (f) => {
+    const name = f.elements.name.value.trim();
+    if (!name) {
+      $('#w-error').textContent = 'Dai un nome al titolo.';
+      $('#w-error').hidden = false;
+      return;
+    }
+    const price = parseNum(f.elements.price.value);
+    const target = parseNum(f.elements.target.value);
+    const item = { id: f.dataset.id || newId('w'), name, ticker: f.elements.ticker.value.trim().toUpperCase(), price: price > 0 ? price : 0, target: target > 0 ? target : 0, note: f.elements.note.value.trim() };
+    const i = D().watch.findIndex((w) => w.id === item.id);
+    if (i >= 0) D().watch[i] = item;
+    else D().watch.push(item);
+    closeSheets();
+    commit('Watchlist aggiornata');
+  },
+  'portfolio-new': (f) => {
+    const name = f.elements.name.value.trim();
+    if (!name) return;
+    D().portfolios.push({ id: newId('p'), name });
+    commit('Portafoglio creato');
+  },
+};
+
+document.addEventListener('submit', (e) => {
+  const f = e.target.closest('form[data-form]');
+  if (!f) return;
+  e.preventDefault();
+  const fn = FORMS[f.dataset.form];
+  if (fn) fn(f);
+});
+
+document.addEventListener('input', (e) => {
+  if (e.target.closest('form[data-form="tx"]')) syncTxForm();
+});
+document.addEventListener('change', (e) => {
+  if (e.target.closest('form[data-form="tx"]')) syncTxForm();
+  const pid = e.target.dataset && e.target.dataset.rename;
+  if (pid) {
+    const p = D().portfolios.find((x) => x.id === pid);
+    const name = e.target.value.trim();
+    if (p && name && name !== p.name) {
+      p.name = name;
+      commit('Nome aggiornato');
+    }
+  }
+  if (e.target.id === 'import-file' && e.target.files[0]) {
+    importJson(e.target.files[0]);
+    e.target.value = '';
+  }
+});
+
+// Chart scrubbing (mouse and touch)
+let scrubbing = null;
+document.addEventListener('pointerdown', (e) => {
+  const svg = e.target.closest && e.target.closest('svg[data-chart]');
+  if (!svg) return;
+  scrubbing = svg;
+  scrubAt(svg, e.clientX);
+});
+document.addEventListener('pointermove', (e) => {
+  const svg = e.target.closest && e.target.closest('svg[data-chart]');
+  if (scrubbing) scrubAt(scrubbing, e.clientX);
+  else if (svg && e.pointerType === 'mouse') scrubAt(svg, e.clientX);
+});
+const endScrub = () => {
+  if (scrubbing) scrubEnd(scrubbing);
+  scrubbing = null;
+};
+document.addEventListener('pointerup', endScrub);
+document.addEventListener('pointercancel', endScrub);
+document.addEventListener('pointerout', (e) => {
+  const svg = e.target.closest && e.target.closest('svg[data-chart]');
+  if (svg && !scrubbing && e.pointerType === 'mouse' && !svg.contains(e.relatedTarget)) scrubEnd(svg);
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && S.sheets.length) popSheet();
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden' && store) store.flush();
+});
+let resizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(render, 150);
+});
+
+/* ============================================================
+   Boot
+   ============================================================ */
+async function boot() {
+  restoreUi();
+  renderChrome();
+  store = await pickStore();
+  let data = null;
+  try {
+    data = await store.load();
+  } catch {
+    toast('Non riesco a leggere i dati salvati. Riprova più tardi.');
+  }
+  S.data = data ? migrate(data) : blankData();
+  if (!S.data.settings.started && !S.data.txns.length) S.data = demoData();
+  S.loaded = true;
+  S.ver++;
+  render();
+}
+boot();
+
+if ('serviceWorker' in navigator && location.protocol === 'https:' && !window.claude) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+<!-- APP:END -->
+</body>
+</html>
