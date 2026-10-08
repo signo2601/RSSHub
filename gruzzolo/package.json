@@ -1,0 +1,10 @@
+{
+  "name": "gruzzolo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/",
+    "dev": "node dev/server.mjs",
+    "build:artifact": "node dev/build-artifact.mjs"
+  }
+}
