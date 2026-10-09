@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Grafici Gruzzolo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Manrope:wght@400;500;600;700;800&display=swap">
+<style>
+/* Design tokens copied from the v1 app (css/app.css owns the real ones) */
+:root {
+  --bg: #eef1f5;
+  --surface: #ffffff;
+  --surface-2: #e5e9f0;
+  --line: #d8dee7;
+  --grid: #e6e9ee;
+  --ink: #0d1117;
+  --ink-2: #465061;
+  --muted: #687180;
+  --accent: #f0b03a;
+  --accent-ink: #1c1405;
+  --accent-line: #b87a0e;
+  --accent-soft: rgba(240, 176, 58, .18);
+  --up: #0b8a4f;
+  --up-soft: rgba(11, 138, 79, .12);
+  --down: #c93636;
+  --down-soft: rgba(201, 54, 54, .11);
+  --c1: #2a78d6; --c2: #eb6834; --c3: #1baf7a; --c4: #eda100;
+  --c5: #e87ba4; --c6: #008300; --c7: #4a3aa7; --c8: #e34948; --c-other: #9aa1ad;
+  --font-ui: "Manrope", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Bricolage Grotesque", "Manrope", system-ui, -apple-system, sans-serif;
+  --radius: 18px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0c0e12; --surface: #15181e; --surface-2: #1f242c; --line: #272d37; --grid: #1d2128;
+    --ink: #f2f4f7; --ink-2: #b4bcc8; --muted: #828b99;
+    --accent: #f2b63d; --accent-ink: #1c1405; --accent-line: #f2b63d; --accent-soft: rgba(242, 182, 61, .15);
+    --up: #3ccf86; --up-soft: rgba(60, 207, 134, .13); --down: #ff6b6b; --down-soft: rgba(255, 107, 107, .13);
+    --c1: #3987e5; --c2: #d95926; --c3: #199e70; --c4: #c98500;
+    --c5: #d55181; --c6: #008300; --c7: #9085e9; --c8: #e66767; --c-other: #5d6573;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0c0e12; --surface: #15181e; --surface-2: #1f242c; --line: #272d37; --grid: #1d2128;
+  --ink: #f2f4f7; --ink-2: #b4bcc8; --muted: #828b99;
+  --accent: #f2b63d; --accent-ink: #1c1405; --accent-line: #f2b63d; --accent-soft: rgba(242, 182, 61, .15);
+  --up: #3ccf86; --up-soft: rgba(60, 207, 134, .13); --down: #ff6b6b; --down-soft: rgba(255, 107, 107, .13);
+  --c1: #3987e5; --c2: #d95926; --c3: #199e70; --c4: #c98500;
+  --c5: #d55181; --c6: #008300; --c7: #9085e9; --c8: #e66767; --c-other: #5d6573;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+button { font: inherit; color: inherit; cursor: pointer; }
+.page { max-width: 1240px; margin: 0 auto; padding: 16px 16px 48px; }
+.head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+h1 { font-family: var(--font-display); font-size: 26px; letter-spacing: -.02em; margin: 0; }
+.sub { color: var(--muted); font-size: 13px; margin: 2px 0 0; }
+.seg { display: inline-flex; background: var(--surface-2); border-radius: 12px; padding: 3px; gap: 2px; }
+.seg button { border: 0; background: transparent; border-radius: 9px; padding: 8px 12px; font-size: 13px; font-weight: 700; color: var(--muted); min-height: 36px; }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0, 0, 0, .08); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 520px), 1fr)); gap: 16px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; min-width: 0; }
+.card.wide { grid-column: 1 / -1; }
+.card h2 { font-size: 15px; font-weight: 800; margin: 0; letter-spacing: -.01em; }
+.card p { margin: 2px 0 12px; color: var(--muted); font-size: 12.5px; }
+.hero-v { font-family: var(--font-display); font-weight: 700; font-size: 32px; letter-spacing: -.02em; line-height: 1.1; }
+.hero-d { font-size: 13px; color: var(--ink-2); margin: 2px 0 10px; font-variant-numeric: tabular-nums; }
+.donut-row { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+.list { display: grid; gap: 2px; }
+.row { display: grid; grid-template-columns: 40px 1fr auto auto; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--grid); }
+.row:last-child { border-bottom: 0; }
+.avatar { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 12px; letter-spacing: -.02em; }
+.row-t { font-weight: 700; font-size: 14px; }
+.row-s { color: var(--muted); font-size: 12px; }
+.pill { display: inline-flex; font-size: 12.5px; font-weight: 800; border-radius: 7px; padding: 2px 7px; font-variant-numeric: tabular-nums; }
+.pill.up { background: var(--up-soft); color: var(--up); }
+.pill.down { background: var(--down-soft); color: var(--down); }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 16px; }
+.note { font-size: 12px; color: var(--muted); margin-top: 6px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="head">
+    <div>
+      <h1>Grafici</h1>
+      <p class="sub">Banco di prova di js/charts.js con dati finanziari inventati</p>
+    </div>
+    <div class="seg" role="group" aria-label="Tema">
+      <button data-theme-btn="light">Chiaro</button>
+      <button data-theme-btn="dark">Scuro</button>
+      <button data-theme-btn="auto">Auto</button>
+    </div>
+  </div>
+  <div class="grid" id="grid"></div>
+</div>
+<script type="module">
+import { lineChart, barChart, stackedArea, donutChart, scatterChart, sparkline, initCharts, chartScrubHandlers, seriesColor } from '../js/charts.js';
+import { money, pct, pctSigned, compact, esc, fmtDate, addDays, hashHue } from '../js/util.js';
+
+/* ---------- Deterministic synthetic market data ---------- */
+function rng(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const rand = rng(42);
+const gauss = () => {
+  const u = Math.max(1e-12, rand());
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * rand());
+};
+
+const START = '2023-01-02';
+const TODAY = '2026-10-08';
+const dates = [];
+for (let d = START; d <= TODAY; d = addDays(d, 1)) dates.push(d);
+const N = dates.length;
+const weekend = (s) => [0, 6].includes(new Date(s + 'T12:00').getDay());
+
+// Daily returns: common market factor + idiosyncratic noise, a crash in spring 2025
+const mkt = new Float64Array(N);
+for (let i = 0; i < N; i++) {
+  if (weekend(dates[i])) continue;
+  const crash = dates[i] >= '2025-03-20' && dates[i] <= '2025-04-15' ? -0.006 : 0;
+  mkt[i] = 0.00035 + crash + gauss() * 0.009;
+}
+const accRet = (beta, alpha, noise) => {
+  const r = new Float64Array(N);
+  for (let i = 0; i < N; i++) if (!weekend(dates[i])) r[i] = alpha + beta * mkt[i] + gauss() * noise;
+  return r;
+};
+const rDeg = accRet(1.05, 0.00004, 0.004);
+const rSca = accRet(0.85, 0.00008, 0.005);
+const rBen = mkt;
+const index = (r) => {
+  const out = new Float64Array(N);
+  let v = 100;
+  for (let i = 0; i < N; i++) {
+    v *= 1 + r[i];
+    out[i] = v;
+  }
+  return out;
+};
+// Account values: monthly contributions on top of the return path
+const valueOf = (r, start, monthly) => {
+  const out = new Float64Array(N);
+  let v = start;
+  for (let i = 0; i < N; i++) {
+    if (i && dates[i].slice(8) === '01') v += monthly;
+    v *= 1 + r[i];
+    out[i] = v;
+  }
+  return out;
+};
+const vDeg = valueOf(rDeg, 12000, 400);
+const vSca = Array.from(valueOf(rSca, 0, 250), (v, i) => (dates[i] < '2023-06-01' ? null : v));
+const vTot = Array.from(vDeg, (v, i) => v + (vSca[i] || 0));
+const totRet = new Float64Array(N);
+for (let i = 1; i < N; i++) totRet[i] = (rDeg[i] * vDeg[i - 1] + rSca[i] * (vSca[i - 1] || 0)) / (vTot[i - 1] || 1);
+
+const idxTot = index(totRet);
+const idxDeg = index(rDeg);
+const idxSca = Array.from(index(rSca), (v, i) => (dates[i] < '2023-06-01' ? null : v));
+const idxBen = index(rBen);
+
+// Drawdowns of an index series
+const dd = (arr) => {
+  let peak = -Infinity;
+  return Array.from(arr, (v) => {
+    if (v === null) return null;
+    peak = Math.max(peak, v);
+    return v / peak - 1;
+  });
+};
+// Monthly returns from an index series
+const months = [];
+for (const d of dates) if (!months.includes(d.slice(0, 7))) months.push(d.slice(0, 7));
+const monthly = (arr) => months.map((m) => {
+  const idx = dates.map((d, i) => (d.slice(0, 7) === m ? i : -1)).filter((i) => i >= 0);
+  const prev = idx[0] > 0 ? arr[idx[0] - 1] : arr[idx[0]];
+  const last = arr[idx[idx.length - 1]];
+  return prev && last ? last / prev - 1 : null;
+});
+const last12 = months.slice(-12);
+const sl = (a) => a.slice(-12);
+const mTot = sl(monthly(idxTot));
+const mDeg = sl(monthly(idxDeg));
+const mSca = sl(monthly(idxSca));
+const mBen = sl(monthly(idxBen));
+const mActive = mTot.map((v, i) => (v === null || mBen[i] === null ? null : v - mBen[i]));
+
+// Rolling 60 business-day volatility (annualized)
+const rollVol = (r) => {
+  const bd = [];
+  const out = new Array(N).fill(null);
+  for (let i = 0; i < N; i++) {
+    if (weekend(dates[i])) {
+      out[i] = bd.length >= 60 ? out[i - 1] : null;
+      continue;
+    }
+    bd.push(r[i]);
+    if (bd.length >= 60) {
+      const w = bd.slice(-60);
+      const m = w.reduce((s, x) => s + x, 0) / 60;
+      const v = Math.sqrt(w.reduce((s, x) => s + (x - m) ** 2, 0) / 59) * Math.sqrt(252);
+      out[i] = v;
+    }
+  }
+  return out;
+};
+const volTot = rollVol(totRet);
+const volBen = rollVol(rBen);
+
+// Allocation evolution (EUR by asset class)
+const alloc = {
+  Azioni: vTot.map((v, i) => v * (0.38 + 0.08 * Math.sin(i / 220))),
+  ETF: vTot.map((v, i) => v * (0.34 + 0.05 * Math.cos(i / 300))),
+  Obbligazioni: vTot.map((v, i) => v * (dates[i] < '2024-02-01' ? 0 : 0.14)),
+  Crypto: vTot.map((v, i) => v * (0.04 + 0.03 * Math.max(0, Math.sin(i / 90)))),
+  'Liquidità': vTot.map((v, i) => v * (0.1 + 0.04 * Math.cos(i / 60))),
+};
+
+// Efficient frontier (annualized vol → return)
+const rf = 0.02;
+const frontier = [];
+for (let k = 0; k <= 24; k++) {
+  const vol = 0.075 + k * 0.0075;
+  frontier.push({ x: vol, y: 0.02 + 0.55 * Math.sqrt(vol - 0.06) - 0.01 });
+}
+let best = frontier[0];
+for (const p of frontier) if ((p.y - rf) / p.x > (best.y - rf) / best.x) best = p;
+const cml = [{ x: 0, y: rf }, { x: 0.26, y: rf + ((best.y - rf) / best.x) * 0.26 }];
+const assets = [
+  ['VWCE', 0.152, 0.098], ['CSPX', 0.171, 0.131], ['EIMI', 0.178, 0.041], ['AGGH', 0.061, 0.012], ['IBGL', 0.081, 0.004],
+  ['ENEL', 0.214, 0.087], ['ISP', 0.262, 0.153], ['NVDA', 0.512, 0.61], ['ASML', 0.341, 0.162], ['SGLD', 0.142, 0.118],
+].map(([label, x, y]) => ({ label, x: Math.min(x, 0.33), y: Math.min(y, 0.32), color: 'var(--c-other)', r: 4.5, group: 'Titoli' }));
+
+/* ---------- Page ---------- */
+const CARDS = [
+  { id: 'hero', wide: true, title: 'Valore del portafoglio', sub: 'Trascina sul grafico: il valore in alto segue il dito (chartScrubHandlers)' },
+  { id: 'equity', wide: true, title: 'Andamento (base 100, scala log)', sub: 'Totale, conti e benchmark VWCE.DE' },
+  { id: 'eur', title: 'Valore per conto', sub: 'Euro, scala lineare' },
+  { id: 'monthly', title: 'Rendimenti mensili', sub: 'Ultimi 12 mesi: totale, conti e benchmark' },
+  { id: 'active', title: 'Rendimento attivo mensile', sub: 'Portafoglio meno benchmark' },
+  { id: 'alloc', title: 'Evoluzione dell\'allocazione', sub: 'Quota di ogni classe sul totale' },
+  { id: 'dd', title: 'Drawdown', sub: 'Quanto sei sotto il massimo precedente' },
+  { id: 'vol', title: 'Volatilità mobile 60 giorni', sub: 'Annualizzata, portafoglio vs benchmark' },
+  { id: 'frontier', wide: true, title: 'Frontiera efficiente', sub: 'Rischio (volatilità) e rendimento attesi; linea tratteggiata = Capital Market Line' },
+  { id: 'donut', title: 'Composizione', sub: 'Tocca una fetta per selezionarla' },
+  { id: 'sparks', title: 'Titoli (sparkline)', sub: 'Ultimi 3 mesi' },
+  { id: 'edge', title: 'Casi limite', sub: 'Nessun dato · scala log con valori negativi (ricade su lineare)' },
+];
+
+const grid = document.getElementById('grid');
+grid.innerHTML = CARDS.map((c) => `<section class="card${c.wide ? ' wide' : ''}"><h2>${esc(c.title)}</h2><p>${esc(c.sub)}</p><div data-slot="${c.id}"></div></section>`).join('');
+
+let donutSel = null;
+const slotW = (id) => document.querySelector(`[data-slot="${id}"]`).clientWidth;
+const put = (id, html) => {
+  document.querySelector(`[data-slot="${id}"]`).innerHTML = html;
+};
+
+function render() {
+  // Hero with scrub readout
+  const hw = slotW('hero');
+  const lastI = N - 1;
+  const heroHtml = (i) => `<div class="hero-v">${money(vTot[i])}</div><div class="hero-d">${i === lastI ? 'Oggi' : fmtDate(dates[i])} · ${pctSigned(vTot[i] / vTot[0] - 1)} dall'inizio</div>`;
+  put('hero', `<div id="hero-read">${heroHtml(lastI)}</div>` + lineChart('hero', {
+    dates, series: [{ name: 'Valore', color: 'var(--accent-line)', values: vTot }], w: hw, h: 200, yFormat: compact,
+    tooltipValue: (v) => money(v), ariaLabel: 'Valore del portafoglio nel tempo',
+  }));
+  chartScrubHandlers('hero', {
+    onScrub: (i) => { document.getElementById('hero-read').innerHTML = heroHtml(i); },
+    onEnd: () => { document.getElementById('hero-read').innerHTML = heroHtml(lastI); },
+  });
+
+  put('equity', lineChart('equity', {
+    dates, w: slotW('equity'), h: 260, log: true, yFormat: (v) => v.toLocaleString('it-IT', { maximumFractionDigits: 0 }),
+    tooltipValue: (v) => v.toLocaleString('it-IT', { minimumFractionDigits: 1, maximumFractionDigits: 1 }),
+    series: [
+      { name: 'Totale', color: 'var(--accent-line)', values: idxTot, area: true },
+      { name: 'DEGIRO', color: seriesColor(0), values: idxDeg },
+      { name: 'Scalable Capital', color: seriesColor(1), values: idxSca },
+      { name: 'Benchmark VWCE', color: 'var(--muted)', values: idxBen, dash: true },
+    ],
+    ariaLabel: 'Andamento base 100 di totale, conti e benchmark',
+  }));
+
+  put('eur', lineChart('eur', {
+    dates, w: slotW('eur'), yFormat: compact, tooltipValue: (v) => money(v),
+    series: [
+      { name: 'Totale', color: 'var(--accent-line)', values: vTot, area: true },
+      { name: 'DEGIRO', color: seriesColor(0), values: vDeg },
+      { name: 'Scalable Capital', color: seriesColor(1), values: vSca },
+    ],
+    ariaLabel: 'Valore in euro per conto',
+  }));
+
+  put('monthly', barChart('monthly', {
+    labels: last12, w: slotW('monthly'), yFormat: (v) => pct(v, 1), tooltipValue: (v) => pctSigned(v),
+    series: [
+      { name: 'Totale', color: 'var(--accent-line)', values: mTot },
+      { name: 'DEGIRO', color: seriesColor(0), values: mDeg },
+      { name: 'Scalable Capital', color: seriesColor(1), values: mSca },
+      { name: 'Benchmark', color: 'var(--muted)', values: mBen },
+    ],
+    ariaLabel: 'Rendimenti mensili',
+  }));
+
+  put('active', barChart('active', {
+    labels: months.slice(-24), w: slotW('active'), yFormat: (v) => pct(v, 1), tooltipValue: (v) => pctSigned(v),
+    series: [{ name: 'Attivo vs benchmark', color: 'var(--accent-line)', values: (() => {
+      const a = monthly(idxTot).slice(-24);
+      const b = monthly(idxBen).slice(-24);
+      return a.map((v, i) => (v === null || b[i] === null ? null : v - b[i]));
+    })() }],
+    ariaLabel: 'Rendimento attivo mensile',
+  }));
+
+  put('alloc', stackedArea('alloc', {
+    dates, w: slotW('alloc'), percent: true,
+    series: Object.entries(alloc).map(([name, values], k) => ({ name, values, color: name === 'Liquidità' ? 'var(--c-other)' : seriesColor(k) })),
+    ariaLabel: 'Evoluzione dell\'allocazione per classe',
+  }));
+
+  put('dd', lineChart('dd', {
+    dates, w: slotW('dd'), zero: true, yFormat: (v) => pct(v, 0), tooltipValue: (v) => pct(v, 1),
+    series: [
+      { name: 'Totale', color: 'var(--accent-line)', values: dd(idxTot), area: true },
+      { name: 'Benchmark', color: 'var(--muted)', values: dd(idxBen), dash: true },
+      { name: 'DEGIRO', color: seriesColor(0), values: dd(idxDeg) },
+      { name: 'Scalable Capital', color: seriesColor(1), values: dd(idxSca) },
+    ],
+    ariaLabel: 'Drawdown nel tempo',
+  }));
+
+  put('vol', lineChart('vol', {
+    dates, w: slotW('vol'), yFormat: (v) => pct(v, 0), tooltipValue: (v) => pct(v, 1),
+    series: [
+      { name: 'Portafoglio', color: 'var(--accent-line)', values: volTot },
+      { name: 'Benchmark', color: 'var(--muted)', values: volBen, dash: true },
+    ],
+    ariaLabel: 'Volatilità mobile a 60 giorni',
+  }));
+
+  const fw = slotW('frontier');
+  put('frontier', scatterChart('frontier', {
+    w: fw, h: fw < 560 ? 300 : 360, xFormat: (v) => pct(v, 0), yFormat: (v) => pct(v, 0),
+    tooltipX: (v) => pct(v, 1), tooltipY: (v) => pct(v, 1),
+    xLabel: 'Volatilità annua →', yLabel: '↑ Rendimento annuo',
+    lines: [
+      { name: 'Frontiera efficiente', color: seriesColor(0), points: frontier },
+      { name: 'Capital Market Line', color: 'var(--muted)', points: cml, dash: true },
+    ],
+    points: [
+      ...assets,
+      { label: 'Min varianza', x: frontier[0].x, y: frontier[0].y, color: seriesColor(2), r: 6, special: true, group: 'Min varianza' },
+      { label: 'Max Sharpe', x: best.x, y: best.y, color: seriesColor(3), r: 6, special: true, group: 'Max Sharpe', sub: `Sharpe ${((best.y - rf) / best.x).toFixed(2).replace('.', ',')}` },
+      { label: 'Portafoglio attuale', x: 0.158, y: 0.071, color: 'var(--accent-line)', r: 6.5, special: true, group: 'Portafoglio attuale' },
+      { label: 'Senza rischio', x: 0, y: rf, color: 'var(--ink-2)', r: 4, special: true },
+    ],
+    ariaLabel: 'Frontiera efficiente con titoli e portafoglio attuale',
+  }));
+
+  const items = [
+    { key: 'etf', label: 'ETF', value: 18450, color: seriesColor(0) },
+    { key: 'stock', label: 'Azioni', value: 12930, color: seriesColor(1) },
+    { key: 'bond', label: 'Obbligazioni', value: 5210, color: seriesColor(2) },
+    { key: 'crypto', label: 'Crypto', value: 1760, color: seriesColor(3) },
+    { key: 'commodity', label: 'Materie prime', value: 940, color: seriesColor(4) },
+    { key: 'cash', label: 'Liquidità', value: 2300, color: 'var(--c-other)' },
+  ];
+  const tot = items.reduce((s, x) => s + x.value, 0);
+  const sel = items.find((x) => x.key === donutSel);
+  put('donut', `<div class="donut-row">${donutChart('donut', {
+    items, size: 200, selected: donutSel, actKey: 'demo-donut',
+    centerValue: sel ? pct(sel.value / tot, 1) : money(tot), centerLabel: sel ? sel.label : 'Totale',
+    ariaLabel: 'Composizione per classe',
+  })}</div>`);
+
+  const tickers = [
+    ['VWCE', 'Vanguard FTSE All-World', 0.9, 11],
+    ['ENEL', 'Enel', 1.2, 22],
+    ['NVDA', 'NVIDIA', 2.4, 33],
+    ['AGGH', 'iShares Global Aggregate Bond', 0.3, 44],
+    ['ISP', 'Intesa Sanpaolo', 1.4, 55],
+  ];
+  put('sparks', `<div class="list">${tickers.map(([t, name, sd, seed]) => {
+    const r = rng(seed);
+    let v = 100;
+    const vals = Array.from({ length: 66 }, () => (v *= 1 + (r() - 0.48) * sd * 0.03));
+    const ch = vals[vals.length - 1] / vals[0] - 1;
+    const tone = ch >= 0 ? 'up' : 'down';
+    return `<div class="row"><span class="avatar" style="background:hsl(${hashHue(t)} 42% 44%)">${esc(t)}</span><span><span class="row-t">${esc(name)}</span><br><span class="row-s">${esc(t)}</span></span>${sparkline(vals, { w: 72, h: 28, color: `var(--${tone})` })}<span class="pill ${tone}">${pctSigned(ch, 1)}</span></div>`;
+  }).join('')}</div>`);
+
+  const ew = Math.max(200, Math.floor((slotW('edge') - 16) / (slotW('edge') > 460 ? 2 : 1)));
+  put('edge', `<div class="two"><div>${lineChart('empty', { dates: [], series: [], w: ew, h: 150, ariaLabel: 'Grafico vuoto' })}</div><div>${lineChart('logfb', {
+    dates: dates.slice(-120), w: ew, h: 150, log: true, zero: true, yFormat: (v) => pct(v, 0), tooltipValue: (v) => pctSigned(v),
+    series: [{ name: 'Rendimento', color: 'var(--accent-line)', values: Array.from(idxTot.slice(-120), (v) => v / idxTot[N - 120] - 1) }],
+    ariaLabel: 'Rendimento cumulato',
+  })}<div class="note" id="logfb-note"></div></div></div>`);
+  const fb = document.querySelector('[data-chart-id="logfb"]');
+  document.getElementById('logfb-note').textContent = fb && fb.dataset.logFallback ? 'Titolo SVG: ' + fb.querySelector('title').textContent : '';
+}
+
+// Demo stand-in for main.js delegation of data-act clicks
+document.addEventListener('click', (e) => {
+  const seg = e.target.closest('[data-act="demo-donut"]');
+  if (seg) {
+    donutSel = donutSel === seg.dataset.key ? null : seg.dataset.key;
+    render();
+  }
+  const tb = e.target.closest('[data-theme-btn]');
+  if (tb) setTheme(tb.dataset.themeBtn);
+});
+
+function setTheme(t) {
+  if (t === 'auto') delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = t;
+  document.querySelectorAll('[data-theme-btn]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.themeBtn === t)));
+}
+setTheme(new URLSearchParams(location.search).get('theme') || 'auto');
+
+initCharts();
+render();
+let rt = 0;
+let lastW = document.documentElement.clientWidth;
+window.addEventListener('resize', () => {
+  clearTimeout(rt);
+  rt = setTimeout(() => {
+    if (document.documentElement.clientWidth === lastW) return;
+    lastW = document.documentElement.clientWidth;
+    render();
+  }, 150);
+});
+if (document.fonts) document.fonts.ready.then(() => render());
+window.__demoReady = true;
+</script>
+</body>
+</html>

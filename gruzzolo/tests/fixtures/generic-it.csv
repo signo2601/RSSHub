@@ -1,0 +1,11 @@
+Data;Tipo;ISIN;Titolo;Quantità;Prezzo;Valuta;Cambio;Commissioni;Importo;Note
+15/01/2024;Acquisto;IT0003128367;Enel;200;6,05;EUR;;2,95;;
+20/02/2024;Acquisto;US0378331005;Apple;3;182,30;USD;1,0790;1,00;;
+
+22/04/2024;Dividendo;IT0003128367;Enel;;;EUR;;;31,82;"Dividendo netto; saldo 2023"
+01/05/2024;Vendita;IT0003128367;Enel;-50;6,60;EUR;;2,95;;
+10/05/2024;Deposito;;;;;EUR;;;1.500,00;Bonifico
+31/05/2024;Imposta di bollo;;;;;EUR;;;5,00;Bollo
+03/06/2024;Commissione;;;;;EUR;;;2,50;Connectivity fee 2024
+15/06/2024;Interessi;;;;;EUR;;;1,20;
+20/06/2024;Giroconto;;;;;EUR;;;100,00;

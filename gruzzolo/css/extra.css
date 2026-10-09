@@ -1,0 +1,398 @@
+/* Gruzzolo — tab "Altro" (js/views/more.js) and every sheet it opens.
+   Phones: iOS-settings feel (small section header with an inline icon, grouped rounded list,
+   muted footnote under each group). Desktop (≥ 900px): two columns of cards.
+   Colors come only from the tokens in app.css, so light and dark themes both work. */
+
+/* ======================================================================
+   Page layout (phone first)
+   ====================================================================== */
+.more-cols, .more-col { display: flex; flex-direction: column; gap: 28px; min-width: 0; }
+.more-group { display: flex; flex-direction: column; min-width: 0; }
+
+/* Section header: icon and title on one line, like an iOS settings group */
+.more-group-title {
+  display: flex; align-items: center; gap: 8px; min-width: 0;
+  margin: 0 6px 8px; font-size: 12.5px; font-weight: 800; letter-spacing: .06em; line-height: 1.2;
+  text-transform: uppercase; color: var(--muted);
+}
+.more-gico {
+  display: inline-grid; place-items: center; flex-shrink: 0;
+  width: 22px; height: 22px; border-radius: 7px;
+  background: var(--accent-soft); color: var(--accent-line);
+}
+.more-gico .ico { width: 14px; height: 14px; stroke-width: 2.2; }
+
+/* Footnote under a group */
+.more-foot { margin: 8px 14px 0; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+.more-foot b { color: var(--ink-2); font-weight: 800; }
+
+/* ---------- Rows ---------- */
+.more-row { min-height: 58px; padding: 10px 14px; gap: 12px; }
+.more-group .row-main { gap: 2px; }
+.more-group .row-title { font-size: 15px; white-space: normal; overflow-wrap: anywhere; }
+.more-group .row-sub .tag { margin-right: 2px; padding: 0 6px; font-size: 10.5px; vertical-align: 1px; }
+/* Subtitles explain the setting: up to two lines instead of a hard cut */
+.more-row .row-sub, .more-static .row-sub {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+  white-space: normal; line-height: 1.35;
+}
+.more-row:disabled { opacity: .55; }
+.more-row .chev { margin-right: -4px; }
+.more-group .list .row:focus-visible { outline-offset: -2px; border-radius: 4px; }
+
+/* Leading icon tile (same 34px column as the account avatars) */
+.more-ico {
+  display: grid; place-items: center; flex-shrink: 0;
+  width: 34px; height: 34px; border-radius: 10px;
+  background: var(--surface-2); color: var(--ink-2);
+}
+.more-ico .ico { width: 18px; height: 18px; }
+.more-ico.accent { background: var(--accent); color: var(--accent-ink); }
+.more-ico.accent .ico { stroke-width: 2.3; }
+.more-ico.warn { background: var(--warn-soft); color: var(--warn); }
+.more-ico.danger { background: var(--down-soft); color: var(--down); }
+.more-acc-av { font-size: 11.5px; }
+
+/* Rows that only show information */
+.row.more-static { cursor: default; padding-top: 12px; padding-bottom: 12px; }
+.more-status > .dot { margin: 0 13.5px; }
+.more-status .row-title { white-space: normal; }
+
+/* Numbered steps (sync rows, sync and guide sheets) */
+.more-steps {
+  counter-reset: step; list-style: none; margin: 0; padding: 0;
+  display: flex; flex-direction: column; gap: 10px; flex: 1; min-width: 0;
+}
+.more-steps li {
+  counter-increment: step; position: relative; min-height: 24px; padding-left: 36px;
+  font-size: 14px; line-height: 1.45; color: var(--ink-2); overflow-wrap: anywhere;
+}
+.more-steps li::before {
+  content: counter(step); position: absolute; left: 0; top: -1px;
+  display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%;
+  background: var(--accent-soft); color: var(--accent-line); font-size: 12.5px; font-weight: 800;
+}
+.more-steps b { color: var(--ink); font-weight: 800; }
+
+/* ---------- Appearance: theme segmented control and privacy switch ---------- */
+.row.more-theme { min-height: 0; padding-bottom: 6px; }
+.more-seg-wrap { padding: 4px 14px 14px; }
+.more-seg button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 44px; padding: 0 8px; font-size: 13.5px;
+}
+.more-seg .ico { width: 17px; height: 17px; }
+.more-seg button[aria-pressed="true"] .ico { color: var(--accent-line); }
+
+.more-switch .row-title { white-space: normal; }
+.more-toggle {
+  position: relative; flex-shrink: 0; width: 51px; height: 31px; border-radius: 16px;
+  background: var(--surface-2); border: 1px solid var(--line);
+  transition: background-color .18s, border-color .18s;
+}
+.more-toggle::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 25px; height: 25px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .3); transition: transform .18s;
+}
+.more-switch[aria-checked="true"] .more-toggle { background: var(--accent); border-color: var(--accent); }
+.more-switch[aria-checked="true"] .more-toggle::after { transform: translateX(20px); }
+
+/* ======================================================================
+   Sheets: shared pieces
+   ====================================================================== */
+.more-form { gap: 16px; }
+.more-form > p, .more-sheet p, .imp p { margin: 0; }
+.more-form > .btn.sm { align-self: flex-start; }
+.more-form .btn.ghost { color: var(--ink-2); }
+.more-lead, .hint.more-lead { font-size: 14px; line-height: 1.5; color: var(--ink-2); }
+.more-lead .info-btn { display: inline-grid; vertical-align: middle; margin-left: 2px; }
+.more-sheet { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.more-sheet > p { font-size: 15px; color: var(--ink-2); }
+.more-sheet b { color: var(--ink); }
+.more-form > .more-steps, .more-sheet > .more-steps {
+  padding: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+}
+.more-bullets { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 14.5px; color: var(--ink-2); }
+.more-bullets li::marker { color: var(--accent-line); }
+.more-warn { align-items: flex-start; flex-wrap: nowrap; }
+.more-warn .ico { margin-top: 1px; }
+.banner.warn .ico { color: var(--warn); }
+.more-sheet .banner, .more-form .banner { font-size: 13.5px; line-height: 1.45; }
+.more-sheet .banner .ico, .more-form .banner .ico { flex-shrink: 0; }
+.more-form .check { font-size: 14.5px; cursor: pointer; }
+
+/* Label with an info button on the same line */
+.more-label-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 24px; }
+.more-label-row label { font-size: 13px; font-weight: 700; color: var(--ink-2); }
+
+/* Input with a unit (% or €) inside, on the right */
+.unit-input { position: relative; display: flex; align-items: center; min-width: 0; }
+.unit-input input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]) {
+  width: 100%; min-width: 0; min-height: 46px; padding: 10px 34px 10px 12px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  font-size: 16px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums;
+  -webkit-appearance: none; appearance: none;
+}
+.unit-input > span {
+  position: absolute; right: 13px; top: 50%; transform: translateY(-50%);
+  pointer-events: none; font-size: 15px; font-weight: 700; color: var(--muted);
+}
+.unit-input input::placeholder { color: var(--muted); font-weight: 500; opacity: .8; }
+.unit-input input:focus { outline: 2px solid var(--accent-line); outline-offset: 0; border-color: transparent; }
+.unit-input input[aria-invalid="true"] { border-color: var(--down); }
+
+/* Selects outside a .field (external P&L rows, import column mapping) */
+.ext-row select, .imp-map select {
+  width: 100%; min-width: 0; min-height: 46px; padding: 10px 34px 10px 12px;
+  background-color: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  font-size: 16px; font-weight: 600; color: var(--ink);
+  -webkit-appearance: none; appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a93a1' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 11px center; background-size: 16px;
+}
+.ext-row select:focus, .imp-map select:focus { outline: 2px solid var(--accent-line); outline-offset: 0; border-color: transparent; }
+/* Inputs inside a list row: a slightly stronger border, like the manual prices sheet */
+.ext-row select, .ext-row .unit-input input, .ter-row .unit-input input { border-color: color-mix(in srgb, var(--line) 70%, var(--muted)); }
+.ext-row .unit-input input, .ter-row .unit-input input { text-align: right; font-weight: 700; }
+
+/* ======================================================================
+   Sheet: account editor
+   ====================================================================== */
+.more-acc-head {
+  display: flex; align-items: center; gap: 12px; min-width: 0;
+  padding: 12px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+}
+.more-acc-head .avatar { width: 44px; height: 44px; font-size: 14px; }
+.more-acc-head > div { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.more-acc-head b { font-size: 16px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.more-acc-head .hint { font-size: 13px; font-variant-numeric: tabular-nums; }
+.more-cash-seg .seg-lbl { min-height: 44px; padding: 4px 8px; white-space: normal; text-align: center; line-height: 1.2; }
+.field .more-cash-hint { font-size: 13.5px; line-height: 1.45; color: var(--ink-2); }
+
+/* ======================================================================
+   Sheet: CSV import wizard
+   ====================================================================== */
+.imp { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+
+/* Stepper: 1 File — 2 Controllo — 3 Importa */
+.imp-steps { display: flex; align-items: center; gap: 8px; margin: 0 0 2px; padding: 0; list-style: none; min-width: 0; }
+.imp-steps li {
+  display: flex; align-items: center; gap: 7px; min-width: 0;
+  font-size: 13px; font-weight: 700; color: var(--muted); white-space: nowrap;
+}
+.imp-steps li + li { flex: 1 1 0; }
+.imp-steps li + li::before { content: ""; flex: 1 1 auto; min-width: 10px; height: 2px; border-radius: 1px; background: var(--line); }
+.imp-steps li.done + li::before { background: var(--up); }
+.imp-steps li[aria-current="step"] { color: var(--ink); font-weight: 800; }
+.imp-step-n {
+  display: grid; place-items: center; flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%;
+  background: var(--surface-2); color: var(--ink-2); font-size: 12.5px; font-weight: 800;
+}
+.imp-step-n .ico { width: 15px; height: 15px; stroke-width: 2.6; }
+.imp-steps li[aria-current="step"] .imp-step-n { background: var(--accent); color: var(--accent-ink); }
+.imp-steps li.done .imp-step-n { background: var(--up-soft); color: var(--up); }
+
+.imp-intro { font-size: 14.5px; line-height: 1.5; color: var(--ink-2); }
+.imp-h { margin: 6px 0 -4px; font-size: 15px; font-weight: 800; letter-spacing: -.01em; }
+.imp > .hint, .imp-none + .hint { font-size: 13px; line-height: 1.45; }
+.imp .form-error { margin: 0; }
+
+/* File pickers are labels around a hidden input: show the focus ring on the label */
+.imp-pick, .imp-change { cursor: pointer; }
+.imp-pick { min-height: 50px; font-size: 15px; }
+.imp-pick:focus-within, .imp-change:focus-within { outline: 2px solid var(--accent-line); outline-offset: 2px; }
+
+/* Where to find the file, per broker */
+.imp-guides { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.imp-guide {
+  display: flex; flex-direction: column; gap: 8px; min-width: 0;
+  padding: 12px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+}
+.imp-guide-head { display: flex; align-items: center; gap: 10px; min-width: 0; font-size: 14.5px; }
+.imp-guide-head b { font-weight: 800; }
+.imp-path { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 4px; font-size: 12.5px; }
+.imp-path b { padding: 3px 8px; border-radius: 7px; background: var(--surface-2); color: var(--ink); font-weight: 700; white-space: nowrap; }
+.imp-arrow { color: var(--muted); font-weight: 700; }
+.imp-guide .hint { font-size: 12.5px; }
+
+/* Chosen file */
+.imp-file {
+  display: flex; align-items: center; gap: 12px; min-width: 0;
+  padding: 8px 8px 8px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+}
+.imp-file > .ico { width: 26px; height: 26px; color: var(--accent-line); }
+.imp-file-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.imp-file-main b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 800; }
+.imp-file-main .hint { font-size: 12.5px; }
+.imp-change { flex-shrink: 0; min-height: 44px; padding: 0 10px; border-radius: 10px; }
+.imp-opts { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.imp-opts .hint { line-height: 1.45; }
+
+/* Tables (column mapping, raw rows, preview) as cards that scroll sideways on phones */
+.imp .table-wrap { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 2px 14px; }
+.imp-map { font-size: 14px; }
+.imp-map thead th { padding-top: 10px; }
+.imp-map tbody th {
+  width: 42%; padding: 8px 12px 8px 0; vertical-align: middle; border-bottom: 1px solid var(--line);
+  white-space: normal; text-transform: none; letter-spacing: 0; font-size: 14px; font-weight: 700; color: var(--ink);
+}
+.imp-map tbody tr:last-child th { border-bottom: 0; }
+.imp-map tbody th small { display: block; margin-top: 1px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.imp-map td { padding: 6px 0; }
+.imp-map select { min-width: 170px; }
+.imp-table { font-size: 13px; }
+.imp-table thead th { padding-top: 10px; }
+.imp-table td { white-space: nowrap; padding: 9px 10px; }
+.imp-table .imp-name { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+.imp-none { margin: 0; }
+
+/* Lists of warnings, notes and skipped rows */
+.imp-list {
+  display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 10px 14px 10px 32px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  font-size: 13.5px; line-height: 1.45; color: var(--ink-2);
+}
+.imp-list.warn { background: var(--warn-soft); border-color: transparent; color: var(--ink); }
+.imp-list.warn li::marker { color: var(--warn); }
+.imp-list.notes li::marker { color: var(--accent-line); }
+.imp-details { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; min-width: 0; }
+.imp-details > summary {
+  display: flex; align-items: center; gap: 8px; min-height: 46px; padding: 0 14px;
+  list-style: none; cursor: pointer; font-size: 14px; font-weight: 700; color: var(--ink-2);
+  -webkit-user-select: none; user-select: none;
+}
+.imp-details > summary::-webkit-details-marker { display: none; }
+.imp-details > summary::after {
+  content: ""; flex-shrink: 0; margin-left: auto; width: 8px; height: 8px;
+  border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted);
+  transform: translateY(-2px) rotate(45deg); transition: transform .2s;
+}
+.imp-details[open] > summary::after { transform: translateY(2px) rotate(-135deg); }
+.imp-details > .imp-list { margin: 0 10px 10px; }
+
+/* Summary before importing */
+.imp-sum { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.imp-stat {
+  display: flex; flex-direction: column; gap: 2px; min-width: 0;
+  padding: 10px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+}
+.imp-stat b { font-family: var(--font-display); font-size: 24px; font-weight: 700; line-height: 1.1; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+.imp-stat span { font-size: 12.5px; font-weight: 600; line-height: 1.3; color: var(--muted); }
+.imp-stat.accent {
+  background: linear-gradient(160deg, var(--accent-soft), transparent 75%), var(--surface);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
+}
+.imp-stat.accent span { color: var(--ink-2); }
+.imp-types { font-size: 14px; font-weight: 600; color: var(--ink-2); }
+.imp-asset { min-height: 54px; padding: 8px 12px; gap: 10px; }
+.imp-asset .row-title { font-size: 14.5px; }
+.tag.imp-new { background: var(--accent-soft); color: var(--ink); }
+.imp-progress { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 700; color: var(--ink-2); }
+.imp-progress::before {
+  content: ""; flex-shrink: 0; width: 16px; height: 16px; border-radius: 50%;
+  border: 2px solid var(--line); border-top-color: var(--accent-line); animation: spin .8s linear infinite;
+}
+.imp .sheet-actions { margin-top: 4px; }
+
+/* Action bar that stays at the bottom of a long sheet (import summary, rates, external P&L, TER).
+   The sheet body's own padding is cancelled so the bar sits on the sheet's bottom edge. */
+.sheet-actions.more-sticky {
+  --pad-x: 16px; --pad-b: calc(28px + env(safe-area-inset-bottom, 0px));
+  position: sticky; bottom: calc(-1 * var(--pad-b)); z-index: 2;
+  margin: 2px calc(-1 * var(--pad-x)) calc(-1 * var(--pad-b));
+  padding: 12px var(--pad-x) calc(12px + var(--pad-b));
+  background: var(--bg); border-top: 1px solid var(--line);
+}
+.sheet-actions.more-sticky > .btn:not(.primary) { flex: 0 1 auto; padding: 0 18px; }
+
+/* ======================================================================
+   Sheet: external fiscal P&L per year
+   ====================================================================== */
+.ext-list { display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.ext-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); grid-template-areas: "year year" "sign amount";
+  gap: 8px 10px; padding: 12px 14px; border-top: 1px solid var(--line);
+}
+.ext-row:first-child { border-top: 0; }
+.ext-year { grid-area: year; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; min-width: 0; }
+.ext-year b { font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.ext-year .hint { font-variant-numeric: tabular-nums; }
+.ext-row > select { grid-area: sign; }
+.ext-row > .unit-input { grid-area: amount; }
+
+/* ======================================================================
+   Sheet: TER of ETFs and funds
+   ====================================================================== */
+.ter-row { gap: 10px; min-height: 66px; padding: 9px 12px; }
+.ter-row .row-title {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+  white-space: normal; font-size: 14.5px; line-height: 1.3; cursor: pointer;
+}
+.ter-row .row-sub { white-space: normal; }
+.ter-input { flex: 0 0 106px; width: 106px; }
+.ter-input input:not([type="checkbox"]) { min-height: 44px; padding-right: 30px; }
+
+/* ======================================================================
+   Sheet: price server
+   ====================================================================== */
+.more-server-status {
+  display: flex; align-items: flex-start; gap: 10px; min-height: 52px; min-width: 0;
+  padding: 12px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+}
+.more-server-status .dot { margin-top: 7px; }
+.more-server-status b { display: block; font-weight: 700; overflow-wrap: anywhere; }
+.more-server-status small { display: block; margin-top: 1px; font-size: 12.5px; color: var(--muted); }
+
+/* ======================================================================
+   Desktop (≥ 900px): two columns of cards
+   ====================================================================== */
+@media (min-width: 900px) {
+  .more-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: start; }
+  .more-col { gap: 20px; }
+  .more-group {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    overflow: hidden; box-shadow: var(--shadow-sm);
+  }
+  .more-group-title {
+    margin: 0; padding: 14px 16px 12px; gap: 10px; border-bottom: 1px solid var(--line);
+    font-size: 15.5px; letter-spacing: -.01em; text-transform: none; color: var(--ink);
+  }
+  .more-gico { width: 30px; height: 30px; border-radius: 9px; }
+  .more-gico .ico { width: 17px; height: 17px; }
+  .more-group > .list { border: 0; border-radius: 0; background: transparent; }
+  .more-row { padding: 10px 16px; }
+  .more-status > .dot { margin: 0 13.5px; }
+  .more-seg-wrap { padding: 4px 16px 14px; }
+  .more-foot {
+    margin: 0; padding: 11px 16px 13px; border-top: 1px solid var(--line);
+    background: color-mix(in srgb, var(--surface-2) 40%, var(--surface));
+  }
+
+  .imp-guides { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .imp-opts { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+  .imp-sum { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+  .sheet-actions.more-sticky { --pad-x: 22px; --pad-b: 24px; }
+  .imp .sheet-actions, .more-form .more-sticky { justify-content: flex-end; }
+  .imp .sheet-actions > .btn, .more-form .more-sticky > .btn { flex: 0 0 auto; min-width: 150px; }
+  .imp-assets { max-height: 420px; overflow-y: auto; overscroll-behavior: contain; }
+
+  .ext-row { grid-template-columns: minmax(0, 1fr) 136px 168px; grid-template-areas: "year sign amount"; align-items: center; }
+  .ext-year { flex-direction: column; gap: 0; }
+  .ter-input { flex-basis: 116px; width: 116px; }
+}
+
+/* Mouse only: hover feedback */
+@media (hover: hover) and (pointer: fine) {
+  .imp-details > summary:hover { color: var(--ink); }
+  .imp-change:hover { background: var(--surface-2); text-decoration: none; }
+  .more-switch:hover .more-toggle { border-color: var(--muted); }
+}
+
+/* Narrow phones */
+@media (max-width: 359px) {
+  .more-seg .ico { display: none; }
+  .imp-steps li > span:last-child { display: none; }
+  .imp-steps li[aria-current="step"] > span:last-child { display: inline; }
+  .ter-input { flex-basis: 92px; width: 92px; }
+  .imp-stat b { font-size: 21px; }
+}
