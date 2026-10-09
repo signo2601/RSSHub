@@ -1,15 +1,15 @@
 // Tab "Mercati": search (Yahoo Finance through our server, plus the offline catalog), watchlist,
 // held securities, popular lists. Sheets: 'quote' (any symbol) and 'watchForm' (target and note).
-import { S, D, assetCode, commit, TYPE_LABEL } from '../state.js';
+import { S, D, assetCode, commit, hasDemo, TYPE_LABEL } from '../state.js';
 import { ACTIONS, FORMS, INPUTS, SHEETS, FORM_SHEETS, MOUNTS } from '../registry.js';
 import { app } from '../app.js';
 import { market } from '../market.js';
 import { historyFor, positions, lastQuote } from '../engine.js';
 import { CATALOG, GROUPS, searchCatalog, findInCatalog } from '../catalog.js';
 import { sparkline } from '../charts.js';
-import { esc, icon, money, priceFmt, pct, pctSigned, num, numInput, parseNum, fmtDate, fmtTime, tone, todayISO, addMonths, addDays, newId, debounce, iso, qtyFmt } from '../util.js';
+import { esc, icon, money, priceFmt, pct, pctSigned, num, numInput, parseNum, fmtDate, fmtTime, tone, todayISO, addMonths, addDays, newId, debounce, iso, qtyFmt, isDesktop } from '../util.js';
 import { avatar, pctPill, demoBanner, unitFor } from './home.js';
-import { sheetInnerWidth, priceChartBlock, historyPoints, tickerOf, guessCurrency } from './sheets.js';
+import { sheetInnerWidth, priceChartBlock, historyPoints, tickerOf, guessCurrency, scopeSheet } from './sheets.js';
 
 /* ---------- Quotes from the market cache ---------- */
 const exactCatalog = (symbol) => {
@@ -20,7 +20,8 @@ const isDemoHistory = (h) => Boolean(h && (h.synthetic || market.isDemoSymbol(h.
 
 // Last price, change versus the previous close and the history of a symbol (real or demo data)
 export function quoteOf(symbol) {
-  const h = symbol ? historyFor(symbol) : null;
+  // Synthetic example prices only while the example portfolio is loaded
+  const h = symbol ? (hasDemo() ? historyFor(symbol) : market.getHistory(symbol)) : null;
   if (!h) return null;
   const pts = historyPoints(h);
   if (!pts.length) return null;
@@ -70,13 +71,85 @@ function startLive(q) {
   runLive(k, live.gen);
 }
 
+/* ---------- Light quotes for list rows (popular, search results) ---------- */
+// Rows without a cached history get their price from one /api/quotes request per list
+// (≤ 50 symbols, last few days only) instead of a 10-year download each. Memory only, 5 minutes.
+const LITE_TTL = 5 * 60e3;
+const LITE_MAX = 50;
+const lite = new Map(); // symbol → { price, prev, changePct, currency, at }
+const liteWanted = new Set();
+const litePending = new Set();
+const liteTried = new Map(); // symbol → ms of the last request (unknown symbols are not asked again soon)
+
+export function liteQuote(symbol) {
+  const l = lite.get(symbol);
+  return l && Date.now() - l.at < LITE_TTL * 6 ? l : null;
+}
+
+async function fetchLite(symbols) {
+  if (market.status === 'offline' || typeof fetch !== 'function') return;
+  const now = Date.now();
+  const want = [...new Set(symbols)].filter((s) => s && !market.isDemoSymbol(s) && !litePending.has(s)
+    && !market.getHistory(s) && !(now - (liteTried.get(s) || 0) < LITE_TTL)).slice(0, LITE_MAX);
+  if (!want.length) return;
+  for (const s of want) {
+    litePending.add(s);
+    liteTried.set(s, now);
+  }
+  let got = 0;
+  try {
+    const base = String(market.apiBase || '').replace(/\/+$/, '');
+    const res = await fetch(`${base}/api/quotes?symbols=${want.map(encodeURIComponent).join(',')}`);
+    const j = res.ok ? await res.json() : null;
+    const at = Date.now();
+    for (const [s, q] of Object.entries((j && j.quotes) || {})) {
+      if (!q) continue;
+      const close = Array.isArray(q.close) ? q.close.filter((x) => x > 0) : [];
+      let price = q.price > 0 ? q.price : close[close.length - 1];
+      let prev = q.prev > 0 ? q.prev : close.length > 1 ? close[close.length - 2] : null;
+      let currency = q.currency || '';
+      if (currency === 'GBp' || currency === 'GBX') {
+        // pence → pounds, as market.js does for histories
+        price /= 100;
+        prev = prev ? prev / 100 : prev;
+        currency = 'GBP';
+      }
+      if (!(price > 0)) continue;
+      lite.set(s, { price, prev, changePct: prev > 0 ? price / prev - 1 : 0, currency, at });
+      got++;
+    }
+  } catch { /* the rows keep their currency tag */ } finally {
+    for (const s of want) litePending.delete(s);
+  }
+  if (got) refreshListsInPlace();
+}
+
+const flushLite = debounce(() => {
+  const list = [...liteWanted];
+  liteWanted.clear();
+  if (list.length) fetchLite(list);
+}, 250);
+
+// Redraw the lists that show light quotes without a full render (keeps the iPhone keyboard open)
+function refreshListsInPlace() {
+  if (typeof document === 'undefined' || S.ui.tab !== 'market') return;
+  if (String(S.ui.marketQuery || '').trim()) updateResults();
+  const pop = document.getElementById('mkt-pop');
+  if (pop) pop.innerHTML = popularBlock(GROUPS.includes(popGroup) ? popGroup : GROUPS[0]);
+  const top = S.sheets[S.sheets.length - 1];
+  if (top && top.name === 'quote' && !quoteOf(top.args.symbol) && lite.has(top.args.symbol)) app.renderSheet();
+}
+
 function resultRow(r) {
   const q = quoteOf(r.symbol);
+  const l = q ? null : liteQuote(r.symbol);
+  if (!q && !l && r.symbol) liteWanted.add(r.symbol);
   const own = Object.values(D().assets).some((a) => a.symbol === r.symbol);
   const sub = [r.symbol, r.exchange, typeText(r)].filter(Boolean).join(' · ');
-  const end = q
-    ? `<span class="row-value num">${priceFmt(q.price, q.currency)}</span>${pctPill(q.changePct)}`
-    : `<span class="tag">${r.src === 'catalog' ? esc(r.currency || 'Catalogo') : 'Yahoo'}</span>`;
+  let end;
+  if (q) end = `<span class="row-value num">${priceFmt(q.price, q.currency)}</span>${pctPill(q.changePct)}`;
+  else if (l) end = `<span class="row-value num">${priceFmt(l.price, l.currency || r.currency || guessCurrency(r.symbol))}</span>${l.prev > 0 ? pctPill(l.changePct) : ''}`;
+  else end = `<span class="tag">${r.src === 'catalog' ? esc(r.currency || 'Catalogo') : 'Yahoo'}</span>`;
   return `<button class="row result-row" type="button" data-act="open-quote" data-symbol="${esc(r.symbol)}" data-name="${esc(r.name || '')}" data-exchange="${esc(r.exchange || '')}" data-type="${esc(r.type || '')}">
     ${avatar({ name: r.name, ticker: tickerOf(r.symbol), symbol: r.symbol, type: r.type }, 'sm')}
     <span class="row-main"><span class="row-title">${esc(r.name || r.symbol)}${own ? ' <span class="own-dot" title="Nel tuo portafoglio">●</span>' : ''}</span><span class="row-sub">${esc(sub)}</span></span>
@@ -92,8 +165,8 @@ function resultsHtml(query) {
   const fromLive = live.q === q ? live.results.filter((r) => r && r.symbol && !seen.has(r.symbol)).map((r) => ({ ...r, src: 'yahoo' })) : [];
   const items = [...cat, ...fromLive].slice(0, 30);
   let status = '';
-  if (market.status === 'offline') status = `<p class="mkt-note">${icon('cloud')}<span>Ricerca online non disponibile: mostro il catalogo.</span></p>`;
-  else if (live.pending && q.length >= 2) status = '<p class="mkt-note"><span class="dot busy"></span><span>Cerco su Yahoo Finance…</span></p>';
+  // Offline: the page already says so in one line above the search results
+  if (market.status !== 'offline' && live.pending && q.length >= 2) status = '<p class="mkt-note"><span class="dot busy"></span><span>Cerco su Yahoo Finance…</span></p>';
   const list = items.length
     ? `<div class="list">${items.map(resultRow).join('')}</div>`
     : (live.pending ? '' : `<div class="empty"><p>Nessun risultato per “${esc(q)}”. Prova con il ticker (es. VWCE) o con il codice ISIN (es. IE00BK5BQT80).</p></div>`);
@@ -116,15 +189,18 @@ function updateResults() {
   }
   if (home) home.hidden = Boolean(q.trim());
   if (clear) clear.hidden = !q;
+  flushLite();
 }
 
 /* ---------- Sections ---------- */
 function targetText(w, price, ccy) {
   if (!(w.target > 0)) return '';
-  if (!(price > 0)) return `Obiettivo ${priceFmt(w.target, ccy)}`;
+  const t = priceFmt(w.target, ccy);
+  if (!(price > 0)) return `Obiettivo ${t}`;
   const d = w.target / price - 1;
-  if (Math.abs(d) < 0.005) return `Obiettivo ${priceFmt(w.target, ccy)} · raggiunto`;
-  return `Obiettivo ${priceFmt(w.target, ccy)} · ${pctSigned(d, 1)}`;
+  if (Math.abs(d) < 0.005) return `Obiettivo raggiunto (${t})`;
+  // The distance first: on a phone the end of the line gets cut
+  return `${pctSigned(d, 1)} all'obiettivo (${t})`;
 }
 
 function watchRow(w, today) {
@@ -136,7 +212,9 @@ function watchRow(w, today) {
     const from = addMonths(today, -3);
     const vals = q.pts.filter((p) => p[0] >= from).map((p) => p[1]);
     const r = vals.length > 1 ? vals[vals.length - 1] / vals[0] - 1 : 0;
-    spark = `<span class="spark-wrap" aria-hidden="true">${sparkline(vals, { w: 64, h: 28, color: r >= 0 ? 'var(--up)' : 'var(--down)' })}</span>`;
+    // Narrower on phones: the name and the distance to the target need the room
+    const sw = isDesktop() ? 72 : 48;
+    spark = `<span class="spark-wrap" aria-hidden="true">${sparkline(vals, { w: sw, h: 28, color: r >= 0 ? 'var(--up)' : 'var(--down)' })}</span>`;
   }
   const sub = [targetText(w, price, ccy) || w.ticker || w.symbol, w.note].filter(Boolean).join(' · ');
   let end;
@@ -167,8 +245,17 @@ function heldRows() {
   }).join('');
 }
 
-function popularRows(group) {
-  return CATALOG.filter((c) => c.group === group).map((c) => resultRow({ ...c, src: 'catalog' })).join('');
+// Popular list of a group: the first POP_SHOWN rows, the rest behind "Mostra tutti"
+const POP_SHOWN = 12;
+let popAll = false;
+function popularBlock(group) {
+  const items = CATALOG.filter((c) => c.group === group);
+  const shown = popAll ? items : items.slice(0, POP_SHOWN);
+  const rows = shown.map((c) => resultRow({ ...c, src: 'catalog' })).join('');
+  const more = items.length > shown.length
+    ? `<button class="btn block pop-more" type="button" data-act="mkt-pop-more">Mostra tutti (${items.length})${icon('chevDown')}</button>`
+    : '';
+  return `<div class="list">${rows}</div>${more}`;
 }
 
 export function renderMarket() {
@@ -182,25 +269,31 @@ export function renderMarket() {
     <div class="page-head"><div><p class="eyebrow">Prezzi da Yahoo Finance</p><h1 class="page-title">Mercati</h1></div></div>
     <div class="search-box mkt-search" role="search">
       ${icon('search')}
-      <input id="mkt-q" type="search" data-input="mkt-search" value="${esc(query)}" placeholder="Cerca azioni, ETF, crypto: nome, ticker o ISIN" aria-label="Cerca un titolo" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
+      <input id="mkt-q" type="search" data-input="mkt-search" value="${esc(query)}" placeholder="Cerca per nome, ticker o ISIN" aria-label="Cerca azioni, ETF, obbligazioni o crypto per nome, ticker o ISIN" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
       <button class="icon-btn clear-btn" id="mkt-clear" type="button" data-act="mkt-clear" aria-label="Cancella la ricerca"${query ? '' : ' hidden'}>${icon('close')}</button>
     </div>
     ${offline ? `<p class="mkt-note">${icon('cloud')}<span>Server prezzi non raggiungibile: mostro il catalogo e gli ultimi prezzi salvati.</span></p>` : ''}
     <div id="mkt-results"${query.trim() ? '' : ' hidden'}>${resultsHtml(query)}</div>
-    <div id="mkt-home" class="stack mkt-home"${query.trim() ? ' hidden' : ''}>
+    <div id="mkt-home" class="mkt-home"${query.trim() ? ' hidden' : ''}>
       ${demoBanner()}
-      <section class="section" aria-label="Watchlist">
-        <div class="sec-head"><h2>Watchlist <span class="muted">${watch.length || ''}</span></h2><button class="link-btn" type="button" data-act="watch-add">${icon('plus')}Aggiungi</button></div>
-        ${watch.length
+      <div class="mkt-cols">
+        <div class="mkt-col">
+          <section class="section" aria-label="Watchlist">
+            <div class="sec-head"><h2>Watchlist <span class="muted">${watch.length || ''}</span></h2><button class="link-btn" type="button" data-act="watch-add">${icon('plus')}Aggiungi</button></div>
+            ${watch.length
     ? `<div class="list">${watch.map((w) => watchRow(w, today)).join('')}</div><p class="hint">Il prezzo obiettivo ti ricorda a che prezzo vorresti comprare o vendere; la percentuale è quanto manca per arrivarci.</p>`
     : `<div class="empty compact"><p>Nessun titolo osservato. Cerca un titolo e tocca «Aggiungi alla watchlist» per seguirne il prezzo.</p></div>`}
-      </section>
-      ${held ? `<section class="section" aria-label="I tuoi titoli"><div class="sec-head"><h2>I tuoi titoli</h2></div><div class="list">${held}</div></section>` : ''}
-      <section class="section" aria-label="Titoli popolari">
-        <div class="sec-head"><h2>Popolari</h2><span class="hint">Tocca un titolo per vederne il grafico</span></div>
-        <div class="chips group-chips" role="group" aria-label="Categoria">${GROUPS.map((g) => `<button class="chip" type="button" data-act="mkt-group" data-group="${esc(g)}" aria-pressed="${g === group}">${esc(g)}</button>`).join('')}</div>
-        <div class="list">${popularRows(group)}</div>
-      </section>
+          </section>
+          ${held ? `<section class="section" aria-label="I tuoi titoli"><div class="sec-head"><h2>I tuoi titoli</h2></div><div class="list">${held}</div></section>` : ''}
+        </div>
+        <div class="mkt-col">
+          <section class="section" aria-label="Titoli popolari">
+            <div class="sec-head"><h2>Popolari</h2><span class="hint">Tocca un titolo per il grafico</span></div>
+            <div class="chips group-chips" role="group" aria-label="Categoria">${GROUPS.map((g) => `<button class="chip" type="button" data-act="mkt-group" data-group="${esc(g)}" aria-pressed="${g === group}">${esc(g)}</button>`).join('')}</div>
+            <div id="mkt-pop" class="mkt-pop">${popularBlock(group)}</div>
+          </section>
+        </div>
+      </div>
     </div>
   </div>`;
 }
@@ -275,6 +368,14 @@ SHEETS.quote = (args = {}) => {
     <p class="hint">Rendimento 1 anno con i dividendi reinvestiti. Dividendi lordi per azione (o quota) degli ultimi 12 mesi e rendimento rispetto al prezzo di oggi.</p>`;
   } else if (offline || args.failed) {
     priceBlock = `<div class="banner info">${icon('cloud')}<p>${offline ? 'Server prezzi non raggiungibile: il grafico apparirà quando torni online.' : 'Yahoo Finance non ha dati per questo simbolo, o è occupato: riprova tra poco.'}</p></div>`;
+  } else if (liteQuote(symbol)) {
+    // Last price from the list request, while the full history downloads
+    const l = liteQuote(symbol);
+    const lc = l.currency || ccy || guessCurrency(symbol);
+    priceBlock = `<div class="quote-price"><div class="price-big num">${priceFmt(l.price, lc)}</div>
+      <div class="price-change">${l.prev > 0 ? `${pctPill(l.changePct)} <span class="muted num">${l.price >= l.prev ? '+' : '−'}${priceFmt(Math.abs(l.price - l.prev), lc)}</span>` : ''}</div></div>
+      <p class="src-line" aria-live="polite">Prezzo da Yahoo Finance · carico il grafico…</p>
+      <div class="skeleton chart-skel"></div>`;
   } else {
     priceBlock = `<p class="src-line" aria-live="polite">Carico i prezzi…</p>
       <div class="skeleton skel-price"></div><div class="skeleton chart-skel"></div>`;
@@ -348,6 +449,8 @@ SHEETS.watchForm = (args = {}) => {
   };
 };
 FORM_SHEETS.add('watchForm');
+scopeSheet('quote');
+scopeSheet('watchForm');
 
 FORMS['mkt-watch'] = (form) => {
   const w = D().watch.find((x) => x.id === form.dataset.id);
@@ -455,7 +558,14 @@ Object.assign(ACTIONS, {
     updateResults();
   },
   'mkt-group': (el) => {
-    if (GROUPS.includes(el.dataset.group)) popGroup = el.dataset.group;
+    if (GROUPS.includes(el.dataset.group) && el.dataset.group !== popGroup) {
+      popGroup = el.dataset.group;
+      popAll = false;
+    }
+    app.render();
+  },
+  'mkt-pop-more': () => {
+    popAll = true;
     app.render();
   },
   'mkt-quote-range': (el) => {
@@ -481,9 +591,10 @@ INPUTS['mkt-search'] = (el, ev) => {
   updateResults();
 };
 
-// A query kept from an earlier visit: fetch its live results again
+// A query kept from an earlier visit: fetch its live results again; prices of the listed rows
 MOUNTS.push(() => {
   if (S.ui.tab !== 'market') return;
+  flushLite();
   const q = String(S.ui.marketQuery || '').trim();
   if (q.length >= 2 && live.q !== q && !live.pending && market.status !== 'offline') {
     startLive(q);

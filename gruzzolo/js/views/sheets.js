@@ -258,7 +258,7 @@ SHEETS.asset = (args = {}) => {
   }
 
   const txList = own.length
-    ? `<div class="list">${own.slice(0, 50).map((t) => txRow(t, { showAsset: false, showAcc: D().accounts.length > 1 })).join('')}</div>${own.length > 50 ? `<p class="hint">Mostro le 50 operazioni più recenti su ${own.length}.</p>` : ''}`
+    ? `<div class="list">${own.slice(0, 50).map((t) => txRow(t, { showAsset: false, showAcc: new Set(own.map((x) => x.acc)).size > 1 })).join('')}</div>${own.length > 50 ? `<p class="hint">Mostro le 50 operazioni più recenti su ${own.length}.</p>` : ''}`
     : '<p class="muted">Nessuna operazione registrata su questo titolo.</p>';
 
   return {
@@ -504,7 +504,7 @@ function comboItems(name, q, live = []) {
     if (it.symbol) seen.add('s:' + it.symbol);
     items.push(it);
   };
-  if (name === 'tx') for (const a of localAssetMatches(q).slice(0, q ? 6 : 8)) add(fromAsset(a));
+  if (name === 'tx') for (const a of localAssetMatches(q).slice(0, q ? 6 : 5)) add(fromAsset(a));
   if (q.trim()) {
     for (const c of searchCatalog(q, 8)) {
       const own = name === 'tx' ? assetBySymbol(c.symbol) : null;
@@ -988,7 +988,9 @@ function prefill(form) {
     price = priceOn(st.a.id, date);
     if (price) note = `Ultimo prezzo noto al ${fmtDate(date)}: correggilo con quello eseguito`;
   } else if (st.mode === 'pick' && st.pick) {
-    price = closeOn(historyFor(st.pick.symbol), date);
+    // A new asset is priced by real market data only: never prefill a synthetic example price
+    const h = market.getHistory(st.pick.symbol);
+    price = h && !h.synthetic ? closeOn(h, date) : null;
     if (price) note = `Chiusura del ${fmtDate(date)}: correggila con il prezzo eseguito`;
   }
   if (el.price.dataset.touched !== '1') {
@@ -1352,6 +1354,20 @@ FORMS['price-one'] = (form) => {
   commit(`Prezzo di ${a.name} aggiornato`);
   return true;
 };
+
+// Wrap the body of a portfolio sheet in <div class="pf-sheet pf-NAME"> so css/portfolio.css can
+// space its blocks without touching the sheets of the other views
+export function scopeSheet(name) {
+  const fn = SHEETS[name];
+  if (typeof fn !== 'function' || fn.scoped) return;
+  const wrapped = (args) => {
+    const out = fn(args);
+    return out && typeof out.body === 'string' ? { ...out, body: `<div class="pf-sheet pf-${name}">${out.body}</div>` } : out;
+  };
+  wrapped.scoped = true;
+  SHEETS[name] = wrapped;
+}
+for (const name of ['asset', 'assetForm', 'tx', 'txForm', 'prices']) scopeSheet(name);
 
 /* ======================================================================
    Actions

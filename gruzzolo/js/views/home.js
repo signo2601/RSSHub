@@ -5,7 +5,7 @@ import { S, D, asset, account, accName, scopeIds, scopeKey, hasDemo, cached, inc
 import { ACTIONS, MOUNTS } from '../registry.js';
 import { app } from '../app.js';
 import { market } from '../market.js';
-import { getSeries, positions, txnsFor, lastQuote, incomeEvents, cashAt, fxOn } from '../engine.js';
+import { getSeries, positions, txnsFor, lastQuote, incomeEvents, cashAt, fxOn, qtyAt } from '../engine.js';
 import { lineChart, chartScrubHandlers } from '../charts.js';
 import {
   esc, icon, money, moneySigned, pct, pctSigned, pctPlain, qtyFmt, priceFmt, fmtDate, fmtTime, tone, todayISO,
@@ -106,8 +106,9 @@ export function txRow(t, { showAsset = true, showYear = true, showAcc = multiAcc
   let detail = '';
   if ((t.type === 'buy' || t.type === 'sell') && a) detail = `${qtyFmt(t.qty)} × ${priceFmt(t.price, a.currency || 'EUR')}`;
   const title = showAsset && a ? a.name : label;
-  const subParts = showAsset && a ? [label, detail, date] : [detail, date];
-  if (!a && t.note) subParts.splice(subParts.length - 1, 0, t.note);
+  // The date comes before quantity × price: on a phone the end of the line gets cut
+  const subParts = showAsset && a ? [label, date, detail] : [date, detail];
+  if (!a && t.note) subParts.unshift(t.note);
   const amt = txAmount(t);
   let cls = '';
   let text = money(Math.abs(amt));
@@ -220,8 +221,9 @@ function rangeFor(key, range) {
 const isLinked = (a) => Boolean(a && a.symbol && (a.priceSource === 'auto' || a.priceSource === 'demo'));
 const isManual = (a) => Boolean(a && a.type !== 'cash' && (a.priceSource === 'manual' || !a.symbol));
 
-// Today's change of the open positions, only from fresh market quotes
-function todayChange(open, today) {
+// Today's change of the open positions, only from fresh market quotes and only on the
+// quantity already held at the previous close (shares bought today did not "move" for the user)
+function todayChange(open, today, ids = null) {
   let change = 0;
   let base = 0;
   let count = 0;
@@ -232,8 +234,10 @@ function todayChange(open, today) {
     if (a.priceSource === 'auto' && market.status === 'offline') continue;
     const q = lastQuote(p.aid);
     if (!q || q.source !== 'market' || !q.date || dayDiff(q.date, today) > 4) continue;
-    change += p.dayChange;
-    base += p.value - p.dayChange;
+    const before = p.qty > 0 ? Math.min(1, Math.max(0, qtyAt(ids, p.aid, addDays(q.date, -1))) / p.qty) : 0;
+    if (!(before > 0)) continue;
+    change += p.dayChange * before;
+    base += (p.value - p.dayChange) * before;
     count++;
     if (q.date > latest) latest = q.date;
   }
@@ -291,7 +295,9 @@ function emptyHome() {
 }
 
 function heroDefaultHtml(R, range, today, todayInfo) {
-  const delta = R ? deltaChip(R.gainTotal, R.perfTotal, `<span class="muted">${RANGE_TEXT[range]}</span>`) : '';
+  // A range longer than the portfolio's life is simply "since the start"
+  const when = R && R.base < 0 ? RANGE_TEXT.MAX : RANGE_TEXT[range];
+  const delta = R ? deltaChip(R.gainTotal, R.perfTotal, `<span class="muted">${when}</span>`) : '';
   const day = todayInfo
     ? `<span class="hero-today ${tone(todayInfo.change)}">${todayInfo.isToday ? 'Oggi' : 'Ultima seduta'} ${moneySigned(todayInfo.change)} (${pctSigned(todayInfo.pct)})</span>`
     : '';
@@ -368,7 +374,7 @@ export function renderHome() {
   const all = positions({ accIds: ids });
   const open = all.filter((p) => p.qty > 0);
   const closed = all.filter((p) => p.qty <= 0);
-  const todayInfo = todayChange(open, today);
+  const todayInfo = todayChange(open, today, ids);
   const def = heroDefaultHtml(R, range, today, todayInfo);
 
   // Chart
@@ -376,7 +382,9 @@ export function renderHome() {
   const h = isDesktop() ? 260 : 196;
   let chart = '';
   const tracksCash = D().accounts.some((a) => a.cashMode === 'track' && (!ids || ids.includes(a.id)));
-  if (R && R.dates.length) {
+  if (R && R.dates.length === 1) {
+    chart = `<div class="chart-empty-note">Il grafico si disegna dal secondo giorno: oggi è il primo giorno del ${ids ? 'conto' : 'portafoglio'}.</div>`;
+  } else if (R && R.dates.length) {
     const yFmt = S.ui.hide ? () => '' : compact;
     chart = valueMode
       ? lineChart('home-chart', {
