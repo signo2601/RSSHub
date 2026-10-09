@@ -4,7 +4,7 @@
 // Pure analytics: no DOM, no clock. "today" is always a parameter (results memoized via cached()).
 import { D, FEE_KINDS, accName, asset, cached } from './state.js';
 import { costEvents, fxOn, getSeries, positions, priceOn, realizedEvents, taxEvents, txnsFor } from './engine.js';
-import { addDays, dayDiff } from './util.js';
+import { addDays, dayDiff, money, moneySigned } from './util.js';
 
 const EPS = 1e-9;
 const CENT = 0.005; // amounts below half a cent count as zero
@@ -18,9 +18,12 @@ const SHOWN_PAST_YEARS = 5;
 
 // Italian tax treatment of realized P&L by asset type:
 // 'diversi' = redditi diversi (gains and losses both count), 'capitale' = redditi di capitale
-// (gains cannot offset losses; losses still enter the backpack), 'escluso' = not considered.
+// (gains cannot offset losses; losses still enter the backpack), 'cripto' = crypto-assets
+// (art. 67 c. 1 lett. c-sexies TUIR, since 2023: a separate backpack, their gains and losses
+// offset only each other), 'escluso' = not considered.
 export const FISCAL_CLASS = {
-  stock: 'diversi', bond: 'diversi', crypto: 'diversi', commodity: 'diversi', other: 'diversi',
+  stock: 'diversi', bond: 'diversi', commodity: 'diversi', other: 'diversi',
+  crypto: 'cripto',
   etf: 'capitale', fund: 'capitale',
   cash: 'escluso', realestate: 'escluso',
 };
@@ -29,6 +32,7 @@ const normIds = (accIds) => (Array.isArray(accIds) && accIds.length ? accIds : n
 const seriesKey = (accIds) => (accIds ? accIds[0] : 'all');
 const yearOf = (d) => d.slice(0, 4);
 const fin = (x) => (Number.isFinite(x) ? x : 0);
+const num = (x) => fin(+x); // transaction fields may be strings in old or hand-edited data
 const byDateDesc = (a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0);
 
 // Latest transaction date: fallback "today" when a caller passes none (never the clock)
@@ -101,11 +105,12 @@ function holdingsWalker(accIds) {
       if ((t.type !== 'buy' && t.type !== 'sell') || !t.aid) continue;
       const k = t.acc + '|' + t.aid;
       const h = per.get(k) || { aid: t.aid, qty: 0, costLocal: 0 };
+      const tq = Math.max(0, num(t.qty));
       if (t.type === 'buy') {
-        h.qty += t.qty;
-        h.costLocal += t.qty * t.price;
+        h.qty += tq;
+        h.costLocal += tq * Math.max(0, num(t.price));
       } else if (h.qty > 0) {
-        const q = Math.min(t.qty, h.qty);
+        const q = Math.min(tq, h.qty);
         h.costLocal -= h.costLocal * (q / h.qty);
         h.qty -= q;
         if (h.qty < 1e-9) {
@@ -276,7 +281,8 @@ export const BACKPACK_NOTES = [
   'È una stima basata sulle vendite registrate nell\'app, non una consulenza fiscale: controlla sempre con il commercialista o con i documenti del broker.',
   'Una minusvalenza (perdita realizzata vendendo un titolo) può compensare le plusvalenze dell\'anno in cui nasce e dei 4 anni successivi. Si usano prima le più vecchie; dopo il 31 dicembre del quarto anno successivo scade.',
   'ETF e fondi (armonizzati UCITS): i guadagni sono «redditi di capitale» e non possono compensare le minusvalenze, quindi qui non sono contati. Le perdite su ETF e fondi invece entrano nello zaino.',
-  'Azioni, obbligazioni, ETC/materie prime e crypto: guadagni e perdite sono «redditi diversi» e contano entrambi. Liquidità e immobili sono esclusi.',
+  'Azioni, obbligazioni ed ETC/materie prime: guadagni e perdite sono «redditi diversi» e contano entrambi. Liquidità e immobili sono esclusi.',
+  'Cripto-attività: dal 2023 hanno uno zaino separato (le loro perdite compensano solo guadagni su cripto, e viceversa), quindi non sono in questa tabella.',
   'Titoli di Stato ed equiparati (es. BTP): per legge guadagni e perdite andrebbero contati solo al 48,08%, perché tassati al 12,5%. Qui questa riduzione non è applicata: sono contati per intero.',
   'Regime amministrato (banche e broker italiani che fanno da sostituto d\'imposta): lo zaino lo gestisce il broker, separato per ogni intermediario. Regime dichiarativo (es. DEGIRO): lo gestisci tu nella dichiarazione dei redditi (quadro RT).',
   '«P&L esterno» sono guadagni (+) o perdite (−) realizzati fuori dall\'app, per esempio su un altro conto: li inserisci tu anno per anno.',
@@ -293,45 +299,25 @@ export function fiscalBackpack({ accIds = null, today = null, settings = null } 
   const st = settings || D().settings;
   const day = today || lastTxnDate();
   const key = ['fiscalBackpack', ids ? ids.join(',') : 'all', day, st.taxRate, JSON.stringify(st.externalPL || {})].join('|');
-  return cached(key, () => computeBackpack(ids, day, st));
+  const res = cached(key, () => computeBackpack(ids, day, st));
+  if (!res.crypto.active) return res;
+  // Formatted on every call (not memoized), so the privacy mode hides the amounts
+  const net = res.crypto.rows[res.crypto.rows.length - 1].net;
+  const line = `Il tuo zaino cripto: minusvalenze ancora usabili ${money(res.crypto.available)}`
+    + `${Math.abs(net) > CENT ? `, risultato cripto del ${res.year} ${moneySigned(net)}` : ''}. Valgono solo contro guadagni su cripto-attività.`;
+  return { ...res, notes: [...res.notes, line] };
 }
 
-function computeBackpack(accIds, today, settings) {
-  const current = +yearOf(today);
-  const external = settings.externalPL && typeof settings.externalPL === 'object' ? settings.externalPL : {};
-  const realized = new Map(); // year → { portfolio, gains, losses, ignored }
-  const yearRow = (y) => {
-    if (!realized.has(y)) realized.set(y, { portfolio: 0, gains: 0, losses: 0, ignored: 0 });
-    return realized.get(y);
-  };
-  let first = current - 9;
-  for (const e of realizedEvents(accIds)) {
-    const y = +yearOf(e.date);
-    if (!(y <= current)) continue;
-    const cls = FISCAL_CLASS[asset(e.aid).type] || 'diversi';
-    if (cls === 'escluso') continue;
-    const pl = fin(e.pl);
-    const r = yearRow(y);
-    first = Math.min(first, y);
-    if (cls === 'capitale' && pl > 0) {
-      r.ignored += pl; // ETF / fund gain: redditi di capitale, cannot offset losses
-      continue;
-    }
-    r.portfolio += pl;
-    if (pl >= 0) r.gains += pl;
-    else r.losses += pl;
-  }
-  for (const k of Object.keys(external)) {
-    const y = Number(k);
-    if (Number.isInteger(y) && y <= current && Math.abs(fin(+external[k])) > CENT) first = Math.min(first, y);
-  }
+const emptyYear = () => ({ portfolio: 0, gains: 0, losses: 0, ignored: 0 });
 
-  // Walk the years: losses create lots, gains consume the oldest valid lots first (FIFO)
+// Walk the years of one tax silo: a negative year creates a loss lot, a positive year uses the
+// oldest lots still valid (FIFO). realized: Map year → { portfolio, gains, losses, ignored }.
+function walkLots(realized, external, first, current) {
   const lots = [];
   const lotOf = new Map();
   const info = new Map();
   for (let y = first; y <= current; y++) {
-    const r = realized.get(y) || { portfolio: 0, gains: 0, losses: 0, ignored: 0 };
+    const r = realized.get(y) || emptyYear();
     const ext = fin(+external[String(y)]);
     const net = r.portfolio + ext;
     const used = [];
@@ -354,11 +340,15 @@ function computeBackpack(accIds, today, settings) {
     info.set(y, { ...r, external: ext, net, offset: used.reduce((s, u) => s + u.amount, 0), used });
   }
   for (const lot of lots) if (lot.remaining < CENT) lot.remaining = 0;
+  return { lots, lotOf, info };
+}
 
+// Table rows (the shown years) of a walked silo
+function backpackRows({ lotOf, info }, current) {
   const rows = [];
   let expired = 0;
   for (let y = current - SHOWN_PAST_YEARS; y <= current; y++) {
-    const r = info.get(y) || { portfolio: 0, gains: 0, losses: 0, ignored: 0, external: 0, net: 0, offset: 0, used: [] };
+    const r = info.get(y) || { ...emptyYear(), external: 0, net: 0, offset: 0, used: [] };
     const lot = lotOf.get(y) || null;
     let status;
     if (y === current) status = 'in corso';
@@ -385,16 +375,67 @@ function computeBackpack(accIds, today, settings) {
       usedBy: lot ? lot.usedBy : [], // [{ year (of the gain), amount }]
     });
   }
-  const available = lots.filter((l) => l.expires >= current).reduce((s, l) => s + l.remaining, 0);
+  return { rows, expired };
+}
+
+const lotList = (lots, current) => lots.map((l) => ({ year: l.year, amount: l.amount, remaining: l.remaining, expires: l.expires, valid: l.expires >= current }));
+const availableOf = (lots, current) => lots.filter((l) => l.expires >= current).reduce((s, l) => s + l.remaining, 0);
+
+function computeBackpack(accIds, today, settings) {
+  const current = +yearOf(today);
+  const external = settings.externalPL && typeof settings.externalPL === 'object' ? settings.externalPL : {};
+  const main = new Map(); // year → { portfolio, gains, losses, ignored }
+  const crypto = new Map();
+  let first = current - 9;
+  for (const e of realizedEvents(accIds)) {
+    const y = +yearOf(e.date);
+    if (!(y <= current)) continue;
+    const cls = FISCAL_CLASS[asset(e.aid).type] || 'diversi';
+    if (cls === 'escluso') continue;
+    const pl = fin(e.pl);
+    const silo = cls === 'cripto' ? crypto : main;
+    if (!silo.has(y)) silo.set(y, emptyYear());
+    const r = silo.get(y);
+    first = Math.min(first, y);
+    if (cls === 'capitale' && pl > 0) {
+      r.ignored += pl; // ETF / fund gain: redditi di capitale, cannot offset losses
+      continue;
+    }
+    r.portfolio += pl;
+    if (pl >= 0) r.gains += pl;
+    else r.losses += pl;
+  }
+  for (const k of Object.keys(external)) {
+    const y = Number(k);
+    if (Number.isInteger(y) && y <= current && Math.abs(fin(+external[k])) > CENT) first = Math.min(first, y);
+  }
+
+  // External P&L is entered for securities, so it belongs to the main backpack
+  const walked = walkLots(main, external, first, current);
+  const { rows, expired } = backpackRows(walked, current);
+  const available = availableOf(walked.lots, current);
   const taxRate = Number.isFinite(settings.taxRate) ? settings.taxRate : 0.26;
+
+  // Crypto-assets: same rules, own backpack (shown in the notes until the table has a place for it)
+  const cw = walkLots(crypto, {}, first, current);
+  const cRows = backpackRows(cw, current);
+  const cryptoPart = {
+    rows: cRows.rows,
+    available: availableOf(cw.lots, current),
+    expired: cRows.expired,
+    lots: lotList(cw.lots, current),
+    active: crypto.size > 0,
+  };
+  const notes = [...BACKPACK_NOTES, savingNote(taxRate)];
   return {
     year: current,
     rows,
     available,
     potentialSaving: available * taxRate,
     expired,
-    lots: lots.map((l) => ({ year: l.year, amount: l.amount, remaining: l.remaining, expires: l.expires, valid: l.expires >= current })),
-    notes: [...BACKPACK_NOTES, savingNote(taxRate)],
+    lots: lotList(walked.lots, current),
+    crypto: cryptoPart,
+    notes,
   };
 }
 

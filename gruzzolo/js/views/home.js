@@ -420,7 +420,7 @@ export function renderHome() {
   let kpis = kpi('Capitale investito', money(cost), { sub: `${open.length} ${open.length === 1 ? 'posizione aperta' : 'posizioni aperte'}` })
     + kpi('Plus/minus latente', moneySigned(unreal), { cls: tone(unreal), sub: cost > 0 ? `${pctSigned(unreal / cost)} sul capitale` : 'se vendessi oggi', info: 'plNonRealizzato' })
     + kpi('Plus/minus realizzata', moneySigned(realized), { cls: tone(realized), sub: 'dalle vendite, prima delle tasse', info: 'plRealizzato' })
-    + kpi('Dividendi e cedole', money(income), { sub: 'netti, dall\'inizio' });
+    + kpi('Dividendi e cedole', money(income), { sub: 'netti dall\'inizio, interessi inclusi' });
   if (tracksCash) kpis += kpi('Liquidità', money(cashAt(ids, today)), { sub: 'contanti sul conto del broker', info: 'liquidita', wide: true });
 
   // Positions

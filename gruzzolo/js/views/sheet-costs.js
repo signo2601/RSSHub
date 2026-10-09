@@ -233,6 +233,7 @@ function backpackCard(fb, ctx) {
       <div class="zx-box main"><span class="kpi-label">Zaino fiscale disponibile</span><b class="num">${money(fb.available)}</b><small>minusvalenze ancora usabili</small></div>
       <div class="zx-box"><span class="kpi-label">Risparmio d'imposta potenziale (${pct(rate, 0)})</span><b class="num up">${money(fb.potentialSaving)}</b><small>tasse risparmiate su futuri guadagni</small></div>
       <div class="zx-box"><span class="kpi-label">Minusvalenze scadute (non compensabili)</span><b class="num${fb.expired > 0.005 ? ' down' : ''}">${money(fb.expired)}</b><small>perse perché troppo vecchie</small></div>
+      ${fb.crypto && fb.crypto.active ? `<div class="zx-box"><span class="kpi-label">Zaino cripto (separato)</span><b class="num">${money(fb.crypto.available)}</b><small>minusvalenze su cripto: compensano solo plusvalenze su cripto</small></div>` : ''}
     </div>
     <ul class="zx-notes">${first}</ul>
     ${rest ? `<details class="zx-more"><summary>Altre note (${notes.length - NOTES_SHOWN})</summary><ul class="zx-notes">${rest}</ul></details>` : ''}

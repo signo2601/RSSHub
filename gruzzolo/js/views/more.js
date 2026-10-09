@@ -13,11 +13,11 @@ import { PRESETS, parseCsv, detectPreset, guessMapping, buildTxns } from '../imp
 import { CATALOG, findInCatalog } from '../catalog.js';
 import { fiscalBackpack } from '../costs.js';
 import { infoBtn } from '../info.js';
-import { demoBanner, txAmount, txFx } from './home.js';
+import { avatar, demoBanner, txAmount, txFx } from './home.js';
 import { tickerOf } from './sheets.js';
 import { benchShort } from './report.js';
 import {
-  esc, icon, ICONS, money, moneyLocal, pct, num, numInput, parseNum, fmtDate, fmtTime, todayISO, iso, newId, hashHue, saveFile,
+  esc, icon, ICONS, money, moneyLocal, pct, num, numInput, parseNum, fmtDate, fmtTime, todayISO, iso, newId, hashHue, saveFile, clone,
 } from '../util.js';
 
 /* ======================================================================
@@ -524,6 +524,17 @@ export function importBatches(data = D()) {
   return [...by.values()].sort((a, b) => b.time - a.time || (a.last < b.last ? 1 : -1));
 }
 
+// Empty data for «Cancella tutti i dati»: preferences survive (rates, benchmark, server, theme),
+// everything the user entered (accounts, transactions, assets, prices, watchlist, external P&L) goes
+export const KEEP_ON_WIPE = ['riskFree', 'benchmark', 'taxRate', 'govTaxRate', 'stampDuty', 'apiBase', 'theme'];
+export function wipedData(prev = {}) {
+  const d = blankData();
+  const st = (prev && prev.settings) || {};
+  for (const k of KEEP_ON_WIPE) if (st[k] !== undefined && st[k] !== null) d.settings[k] = clone(st[k]);
+  d.settings.started = true;
+  return d;
+}
+
 const newBatchId = () => `imp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 
 /* ======================================================================
@@ -547,13 +558,15 @@ function accountsGroup() {
   const rows = D().accounts.map((a) => {
     const n = counts[a.id] || 0;
     const v = n ? lastValue(a.id) : null;
-    const sub = [a.broker && a.broker !== 'Altro' ? a.broker : 'Altro intermediario', CASH_MODES[cashModeOf(a)].short, plural(n, 'operazione', 'operazioni')];
+    // the broker is left out when it is already the account's name ("DEGIRO · DEGIRO")
+    const broker = a.broker && a.broker !== 'Altro' ? a.broker : 'Altro intermediario';
+    const sub = [broker.toLowerCase() === String(a.name).toLowerCase() ? '' : broker, CASH_MODES[cashModeOf(a)].short, plural(n, 'operazione', 'operazioni')].filter(Boolean);
     return navRow({
       act: 'more-account',
       attrs: ` data-id="${esc(a.id)}"`,
       avatarHtml: accAvatar(a),
-      title: `${esc(a.name)}${a.demo ? ' <span class="tag">esempio</span>' : ''}`,
-      sub: esc(sub.join(' · ')),
+      title: esc(a.name),
+      sub: `${a.demo ? '<span class="tag">esempio</span> ' : ''}${esc(sub.join(' · '))}`,
       end: `<span class="row-value">${v === null ? '—' : money(v)}</span>`,
     });
   });
@@ -832,8 +845,8 @@ function defaultAccFor(preset) {
   return accs.length === 1 ? accs[0].id : NEW_ACC;
 }
 
-// Name of the account an import would create
-function newAccName(preset, accounts = D().accounts) {
+// Name of the account an import would create. Example accounts do not count: the import removes them.
+function newAccName(preset, accounts = realAccounts()) {
   const broker = presetBroker(preset);
   const base = broker !== 'Altro' ? broker : 'Conto importato';
   let name = base;
@@ -973,9 +986,12 @@ function previewHtml() {
   const res = imp.result;
   const list = res ? res.txns : [];
   if (!list.length) {
-    const why = res && res.duplicates && !res.txns.length ? 'Tutte le operazioni del file sono già presenti nel conto.' : 'Nessuna operazione riconosciuta con queste impostazioni.';
+    if (res && res.duplicates) {
+      const target = account(imp.acc);
+      return `<div class="empty compact imp-none"><p><b>${esc(`${res.duplicates === 1 ? 'L\'operazione del file è già presente' : `Le ${num(res.duplicates, 0)} operazioni del file sono già presenti`}${target ? ` nel conto «${target.name}»` : ''}.`)}</b> Non c'è niente di nuovo da importare: per aggiungere le operazioni più recenti esporta dal broker un file aggiornato.</p></div>`;
+    }
     const warn = res && res.warnings && res.warnings.length ? `<ul class="imp-list warn">${res.warnings.slice(0, 4).map((w) => `<li>${esc(w)}</li>`).join('')}</ul>` : '';
-    return `<div class="empty compact imp-none"><p><b>${esc(why)}</b>${imp.preset === 'generic' ? ' Controlla le colonne qui sopra.' : ' Controlla il tipo di file al passo 1.'}</p></div>${warn}${imp.preset === 'generic' ? rawPreview() : ''}`;
+    return `<div class="empty compact imp-none"><p><b>Nessuna operazione riconosciuta con queste impostazioni.</b>${imp.preset === 'generic' ? ' Controlla le colonne qui sopra.' : ' Controlla il tipo di file al passo 1.'}</p></div>${warn}${imp.preset === 'generic' ? rawPreview() : ''}`;
   }
   const items = new Map((res.assets || []).map((a) => [a.key, a]));
   const rows = list.slice(0, 10).map((t) => {
@@ -997,7 +1013,7 @@ function importStep2() {
   return `${imp.preset === 'generic' ? mappingTable() : ''}
     <h3 class="imp-h">Anteprima</h3>
     <div id="imp-preview" aria-live="polite">${previewHtml()}</div>
-    <div class="sheet-actions">
+    <div class="sheet-actions more-sticky">
       <button class="btn" type="button" data-act="more-import-back">${icon('chevLeft')}Indietro</button>
       <button class="btn primary" id="imp-next" type="button" data-act="more-import-next"${n ? '' : ' disabled'}>Avanti${icon('chevRight')}</button>
     </div>`;
@@ -1055,7 +1071,7 @@ function importStep3() {
     ${reasons ? `<details class="imp-details"><summary>Righe non importate</summary><ul class="imp-list">${reasons}</ul></details>` : ''}
     <ul class="imp-list notes">${notes.map((t) => `<li>${t}</li>`).join('')}</ul>
     <p class="imp-progress" id="imp-progress" aria-live="polite"${imp.busy ? '' : ' hidden'}>${imp.busy ? 'Importo…' : ''}</p>
-    <div class="sheet-actions">
+    <div class="sheet-actions more-sticky">
       <button class="btn" type="button" data-act="more-import-back"${imp.busy ? ' disabled' : ''}>${icon('chevLeft')}Indietro</button>
       <button class="btn primary" id="imp-run" type="button" data-act="more-import-run"${n && !imp.busy ? '' : ' disabled'}>${icon('check')}${n ? `Importa ${esc(plural(n, 'operazione', 'operazioni'))}` : 'Niente da importare'}</button>
     </div>`;
@@ -1172,7 +1188,10 @@ async function runImport() {
       onProgress: (done, total) => progress(`Cerco i titoli${online ? ' su Yahoo Finance' : ''}… ${done} di ${total}`),
     });
     // The data may have changed while searching: apply everything to the current data now
-    if (hasDemo()) S.data = migrate(removeDemo(D()));
+    if (hasDemo()) {
+      S.data = migrate(removeDemo(D()));
+      if (S.ui.scope !== 'all' && !account(S.ui.scope)) S.ui.scope = 'all';
+    }
     const d = D();
     for (const [key, aid] of Object.entries(resolved.map)) {
       if (d.assets[aid] || resolved.created.some((a) => a.id === aid)) continue;
@@ -1235,9 +1254,9 @@ SHEETS['more-rates'] = (args = {}) => {
     title: 'Tassi e aliquote',
     body: `<form class="form more-form" data-form="more-rates" novalidate>
       ${fields}
-      <p class="form-error" data-error role="alert" hidden></p>
-      <button class="btn primary block" type="submit">Salva</button>
       <button class="btn ghost block" type="button" data-act="more-rates-reset">Ripristina i valori italiani standard</button>
+      <p class="form-error" data-error role="alert" hidden></p>
+      <div class="sheet-actions more-sticky"><button class="btn primary" type="submit">Salva</button></div>
     </form>`,
   };
 };
@@ -1309,7 +1328,7 @@ SHEETS['more-extpl'] = (args = {}) => {
       <div class="ext-list">${rows}</div>
       <p class="hint">Le perdite si possono usare fino al quarto anno successivo, poi scadono. Lascia vuoto un anno senza movimenti.</p>
       <p class="form-error" data-error role="alert" hidden></p>
-      <button class="btn primary block" type="submit">Salva</button>
+      <div class="sheet-actions more-sticky"><button class="btn primary" type="submit">Salva</button></div>
     </form>`,
   };
 };
@@ -1351,7 +1370,7 @@ SHEETS['more-ter'] = (args = {}) => {
     const name = `t:${a.id}`;
     const val = dr[name] ?? (Number.isFinite(a.ter) ? pctInput(a.ter) : '');
     return `<div class="row ter-row">
-      <span class="avatar sm" style="background:hsl(${hashHue(a.ticker || a.symbol || a.name)} 42% 44%)" aria-hidden="true">${esc((assetCode(a) || a.name).replace(/[^A-Za-z0-9]/g, '').slice(0, 4).toUpperCase() || '?')}</span>
+      ${avatar(a, 'sm')}
       <span class="row-main"><label class="row-title" for="ter-${esc(a.id)}">${esc(a.name)}</label><span class="row-sub">${esc([assetCode(a), TYPE_LABEL[a.type], catTer !== null ? `catalogo: ${pct(catTer)}` : ''].filter(Boolean).join(' · '))}</span></span>
       <span class="unit-input ter-input"><input id="ter-${esc(a.id)}" name="${esc(name)}" data-aid="${esc(a.id)}"${catTer !== null ? ` data-cat="${esc(pctInput(catTer))}"` : ''} inputmode="decimal" autocomplete="off" value="${esc(val)}" placeholder="${catTer !== null ? esc(pctInput(catTer)) : '0,20'}" aria-label="TER di ${esc(a.name)} in percentuale"><span aria-hidden="true">%</span></span>
     </div>`;
@@ -1364,7 +1383,7 @@ SHEETS['more-ter'] = (args = {}) => {
       <div class="list">${rows}</div>
       <p class="hint">Scrivi la percentuale, per esempio 0,22. Lascia vuoto se non lo conosci.</p>
       <p class="form-error" data-error role="alert" hidden></p>
-      <button class="btn primary block" type="submit">Salva</button>
+      <div class="sheet-actions more-sticky"><button class="btn primary" type="submit">Salva</button></div>
     </form>`,
   };
 };
@@ -1895,16 +1914,11 @@ Object.assign(ACTIONS, {
   },
   'more-wipe': () => app.askConfirm({
     title: 'Cancellare tutti i dati?',
-    text: 'Conti, operazioni, titoli, prezzi manuali e watchlist verranno eliminati. Non si può annullare: se vuoi conservarli, esporta prima un backup.'
+    text: 'Conti, operazioni, titoli, prezzi manuali, watchlist e plus/minusvalenze esterne verranno eliminati; aliquote, benchmark e tema restano. Non si può annullare: se vuoi conservarli, esporta prima un backup.'
       + (sync.enabled() ? '\nLa sincronizzazione è attiva: verranno cancellati anche dall\'altro dispositivo.' : ''),
     ok: 'Cancella tutto',
     onOk: () => {
-      const prev = D().settings || {};
-      const d = blankData();
-      d.settings.started = true;
-      d.settings.apiBase = prev.apiBase || '';
-      d.settings.theme = prev.theme || 'auto';
-      S.data = d;
+      S.data = wipedData(D());
       S.ui.scope = 'all';
       resetImport();
       app.closeSheets();

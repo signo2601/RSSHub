@@ -5,17 +5,71 @@ import { D, S, asset, cached } from './state.js';
 import { market } from './market.js';
 import { todayISO, addDays, dayDiff, iso } from './util.js';
 
-const TYPE_ORDER = { deposit: 0, buy: 1, div: 2, interest: 3, fee: 4, tax: 5, sell: 6, withdraw: 7 };
+// Order of the transactions of one day. Buys and sells share a rank, so they keep the order they
+// were recorded in (imports are chronological): a sell-all-and-buy-back keeps its real average cost.
+const TYPE_ORDER = { deposit: 0, buy: 1, sell: 1, div: 2, interest: 3, fee: 4, tax: 5, withdraw: 7 };
 // Used only when no FX data exists at all (no market data, no trade rates)
 const FX_FALLBACK = { USD: 1.1, GBP: 0.85, CHF: 0.95, JPY: 160, CAD: 1.5, AUD: 1.65, SEK: 11.3, NOK: 11.6, DKK: 7.46, HKD: 8.6, CNY: 7.9 };
+const MIN_CAPITAL = 0.5; // EUR: below this a day has no capital to measure a return on
 
 const keyOf = (accIds) => (accIds && accIds.length ? [...accIds].sort().join(',') : 'all');
 
+// Numbers of a transaction: strings or missing fields (old backups, hand-edited files) never become NaN
+const num = (x) => {
+  const v = +x;
+  return Number.isFinite(v) ? v : 0;
+};
+const qtyOf = (t) => Math.max(0, num(t.qty));
+const priceOf = (t) => Math.max(0, num(t.price));
+
 export function sortTxns(list) {
-  return list
+  const sorted = list
     .map((t, i) => [t, i])
     .sort((a, b) => (a[0].date < b[0].date ? -1 : a[0].date > b[0].date ? 1 : (TYPE_ORDER[a[0].type] ?? 9) - (TYPE_ORDER[b[0].type] ?? 9) || a[1] - b[1]))
     .map((x) => x[0]);
+  return sameDaySellsAfterBuys(sorted);
+}
+
+// A sell never runs before a same-day buy it needs: when the shares held so far in that account do
+// not cover it, it waits for the last buy of that security on the same day (a day trade typed
+// in the wrong order, or a buy added later).
+function sameDaySellsAfterBuys(list) {
+  const held = new Map();
+  const out = [];
+  const holdKey = (t) => t.acc + '|' + t.aid;
+  const apply = (t) => {
+    if (t.type !== 'buy' && t.type !== 'sell') return;
+    const k = holdKey(t);
+    const q = held.get(k) || 0;
+    held.set(k, t.type === 'buy' ? q + qtyOf(t) : Math.max(0, q - qtyOf(t)));
+  };
+  for (let i = 0; i < list.length;) {
+    let j = i;
+    while (j < list.length && list[j].date === list[i].date) j++;
+    const lastBuy = new Map();
+    for (let k = i; k < j; k++) if (list[k].type === 'buy') lastBuy.set(holdKey(list[k]), k);
+    const waiting = new Map();
+    for (let k = i; k < j; k++) {
+      const t = list[k];
+      const hk = t.type === 'buy' || t.type === 'sell' ? holdKey(t) : null;
+      if (t.type === 'sell' && (lastBuy.get(hk) ?? -1) > k && qtyOf(t) > (held.get(hk) || 0) + 1e-9) {
+        if (!waiting.has(hk)) waiting.set(hk, []);
+        waiting.get(hk).push(t);
+        continue;
+      }
+      out.push(t);
+      apply(t);
+      if (t.type === 'buy' && lastBuy.get(hk) === k && waiting.has(hk)) {
+        for (const s of waiting.get(hk)) {
+          out.push(s);
+          apply(s);
+        }
+        waiting.delete(hk);
+      }
+    }
+    i = j;
+  }
+  return out;
 }
 
 export function txnsFor(accIds = null) {
@@ -65,11 +119,11 @@ export function priceSeries(aid) {
       }
     }
     for (const t of D().txns) {
-      if (t.aid !== aid || (t.type !== 'buy' && t.type !== 'sell') || !(t.price > 0)) continue;
+      if (t.aid !== aid || (t.type !== 'buy' && t.type !== 'sell') || !(priceOf(t) > 0)) continue;
       if (firstMarket && t.date >= firstMarket) continue;
-      if (!map.has(t.date)) map.set(t.date, t.price);
+      if (!map.has(t.date)) map.set(t.date, priceOf(t));
     }
-    for (const [d, p] of D().prices[aid] || []) if (p > 0) map.set(d, p);
+    for (const [d, p] of D().prices[aid] || []) if (num(p) > 0) map.set(d, num(p));
     return [...map.entries()].sort((x, y) => (x[0] < y[0] ? -1 : 1));
   });
 }
@@ -85,8 +139,8 @@ export function fxSeries(ccy) {
   return cached('fx:' + ccy, () => {
     const map = new Map();
     for (const t of D().txns) {
-      if (!(t.fx > 0) || (t.type !== 'buy' && t.type !== 'sell')) continue;
-      if (asset(t.aid).currency === ccy) map.set(t.date, t.fx);
+      if (!(num(t.fx) > 0) || (t.type !== 'buy' && t.type !== 'sell')) continue;
+      if (asset(t.aid).currency === ccy) map.set(t.date, num(t.fx));
     }
     const h = historyFor(market.fxSymbol(ccy));
     if (h) {
@@ -105,22 +159,27 @@ export function fxOn(ccy, date) {
   return i >= 0 ? s[i][1] : s[0][1];
 }
 
-const txFx = (t) => (t.fx > 0 ? t.fx : fxOn(asset(t.aid).currency, t.date));
+const txFx = (t) => (num(t.fx) > 0 ? num(t.fx) : fxOn(asset(t.aid).currency, t.date));
 
-// Latest price and change versus the previous point, in the asset currency
+// Latest price and change versus the previous point, in the asset currency. Points dated after
+// today (a trade typed with a future date) are not quotes yet. prevDate: date of the previous point.
 export function lastQuote(aid) {
   return cached('quote:' + aid, () => {
     const a = asset(aid);
-    if (a.type === 'cash') return { price: 1, date: null, prev: 1, change: 0, changePct: 0, currency: a.currency || 'EUR', source: 'cash' };
-    const s = priceSeries(aid);
-    if (!s.length) return null;
-    const [date, price] = s[s.length - 1];
+    if (a.type === 'cash') return { price: 1, date: null, prev: 1, prevDate: null, change: 0, changePct: 0, currency: a.currency || 'EUR', source: 'cash' };
+    const all = priceSeries(aid);
+    const today = todayISO();
+    let end = all.length;
+    while (end > 0 && all[end - 1][0] > today) end--;
+    if (!end) return null;
+    const [date, price] = all[end - 1];
     const h = assetHistory(a);
-    let prev = s.length > 1 ? s[s.length - 2][1] : price;
+    let prev = end > 1 ? all[end - 2][1] : price;
+    const prevDate = end > 1 ? all[end - 2][0] : date;
     if (h && h.prev > 0 && h.time && iso(new Date(h.time)) === date) prev = h.prev;
     const manual = (D().prices[aid] || []).some((p) => p[0] === date);
     return {
-      price, date, prev,
+      price, date, prev, prevDate,
       change: price - prev,
       changePct: prev > 0 ? price / prev - 1 : 0,
       currency: a.currency || 'EUR',
@@ -131,13 +190,13 @@ export function lastQuote(aid) {
 
 /* ---------- Cash effect of a transaction ---------- */
 function cashDelta(t, fx) {
-  const fee = +t.fee || 0;
-  const fxFee = +t.fxFee || 0;
-  const tax = +t.tax || 0;
-  const amount = +t.amount || 0;
+  const fee = num(t.fee);
+  const fxFee = num(t.fxFee);
+  const tax = num(t.tax);
+  const amount = num(t.amount);
   switch (t.type) {
-    case 'buy': return -((t.qty * t.price) / fx + fee + fxFee);
-    case 'sell': return (t.qty * t.price) / fx - fee - fxFee - tax;
+    case 'buy': return -((qtyOf(t) * priceOf(t)) / fx + fee + fxFee);
+    case 'sell': return (qtyOf(t) * priceOf(t)) / fx - fee - fxFee - tax;
     case 'div':
     case 'interest':
     case 'deposit': return amount;
@@ -153,6 +212,11 @@ export function getSeries(key = 'all') {
   return cached('series:' + key, () => computeSeries(key === 'all' ? null : [key], key));
 }
 
+// External flows of a day are netted: a sale and a purchase on the same day in an 'auto' account
+// (a switch from one security to another) is money that stays invested, not a deposit plus a
+// withdrawal. Two more cases count as money from outside: shares sold beyond those recorded
+// (they enter at the sale price) and the overdraft of a tracked account (its cash is valued at
+// 0 and the shortfall is money that must have come in; a later deposit pays it back).
 function computeSeries(accIds, key) {
   const txns = txnsFor(accIds);
   if (!txns.length) return null;
@@ -171,7 +235,8 @@ function computeSeries(accIds, key) {
   const qty = new Float64Array(aids.length);
   const costLocal = new Float64Array(aids.length);
   const holdings = new Map(); // `${acc}|${aid}` → { qty, cost, costLocal }
-  const cashByAcc = new Map();
+  const cashByAcc = new Map(); // ledger cash of tracked accounts (can be negative)
+  const overdraft = new Map(); // tracked account → shortfall already counted as an inflow
   let investedTotal = 0;
 
   const value = new Float64Array(n);
@@ -190,8 +255,8 @@ function computeSeries(accIds, key) {
   let d = start;
   for (let k = 0; k < n; k++) {
     dates[k] = d;
-    let fin = 0;
-    let fout = 0;
+    let ext = 0; // net external flow of the day: > 0 money in, < 0 money out
+    let bought = 0; // EUR spent on purchases (capital at risk on a day that starts empty)
     let inc = 0;
     while (ti < txns.length && txns[ti].date <= d) {
       const t = txns[ti++];
@@ -203,43 +268,47 @@ function computeSeries(accIds, key) {
         const hk = t.acc + '|' + t.aid;
         const h = holdings.get(hk) || { qty: 0, cost: 0, costLocal: 0 };
         const i = aIdx.get(t.aid);
+        const tq = qtyOf(t);
         if (t.type === 'buy') {
-          h.qty += t.qty;
+          h.qty += tq;
           h.cost += -delta;
-          h.costLocal += t.qty * t.price;
-          qty[i] += t.qty;
-          costLocal[i] += t.qty * t.price;
+          h.costLocal += tq * priceOf(t);
+          qty[i] += tq;
+          costLocal[i] += tq * priceOf(t);
           investedTotal += -delta;
-        } else if (h.qty > 0) {
-          const q = Math.min(t.qty, h.qty);
-          const ratio = q / h.qty;
-          const out = h.cost * ratio;
-          const outLocal = h.costLocal * ratio;
-          h.qty -= q;
-          h.cost -= out;
-          h.costLocal -= outLocal;
-          qty[i] -= q;
-          costLocal[i] -= outLocal;
-          investedTotal -= out;
-          if (h.qty < 1e-9) {
-            h.qty = 0;
-            h.cost = 0;
-            h.costLocal = 0;
-          }
-          if (qty[i] < 1e-9) {
-            qty[i] = 0;
-            costLocal[i] = 0;
+          bought += -delta;
+        } else {
+          const q = Math.min(tq, h.qty);
+          if (tq - q > 1e-9) ext += ((tq - q) * priceOf(t)) / fx; // unrecorded shares, valued at the sale price
+          if (h.qty > 0) {
+            const ratio = q / h.qty;
+            const out = h.cost * ratio;
+            const outLocal = h.costLocal * ratio;
+            h.qty -= q;
+            h.cost -= out;
+            h.costLocal -= outLocal;
+            qty[i] -= q;
+            costLocal[i] -= outLocal;
+            investedTotal -= out;
+            if (h.qty < 1e-9) {
+              h.qty = 0;
+              h.cost = 0;
+              h.costLocal = 0;
+            }
+            if (qty[i] < 1e-9) {
+              qty[i] = 0;
+              costLocal[i] = 0;
+            }
           }
         }
         holdings.set(hk, h);
       }
-      if (t.type === 'div' || t.type === 'interest') inc += +t.amount || 0;
+      if (t.type === 'div' || t.type === 'interest') inc += num(t.amount);
       if (mode === 'track') {
         cashByAcc.set(t.acc, (cashByAcc.get(t.acc) || 0) + delta);
-        if (t.type === 'deposit') fin += +t.amount || 0;
-        if (t.type === 'withdraw') fout += +t.amount || 0;
-      } else if (delta < 0) fin += -delta;
-      else fout += delta;
+        if (t.type === 'deposit') ext += num(t.amount);
+        if (t.type === 'withdraw') ext -= num(t.amount);
+      } else ext -= delta; // auto: the investor pays for purchases and costs, and receives proceeds and income
     }
 
     let v = 0;
@@ -254,11 +323,19 @@ function computeSeries(accIds, key) {
       v += val;
       byType[m.type][k] += val;
     }
+    // Tracked cash: a negative balance is valued at 0 and its change is an external flow
     let c = 0;
-    for (const x of cashByAcc.values()) c += x;
+    for (const [acc, x] of cashByAcc) {
+      const short = x < 0 ? -x : 0;
+      ext += short - (overdraft.get(acc) || 0);
+      overdraft.set(acc, short);
+      if (x > 0) c += x;
+    }
     v += c;
-    byType.cash[k] += Math.max(c, 0);
+    byType.cash[k] += c;
 
+    const fin = ext > 0 ? ext : 0;
+    const fout = ext < 0 ? -ext : 0;
     value[k] = v;
     cash[k] = c;
     invested[k] = investedTotal;
@@ -266,7 +343,9 @@ function computeSeries(accIds, key) {
     flowOut[k] = fout;
     income[k] = inc;
     const denom = prevValue + fin;
-    ret[k] = denom > 0.5 ? (v + fout) / denom - 1 : 0;
+    if (denom > MIN_CAPITAL) ret[k] = (v + fout) / denom - 1;
+    else if (bought > MIN_CAPITAL) ret[k] = (v - prevValue - ext) / bought; // bought and sold within a day that started empty
+    else ret[k] = 0;
     prevValue = v;
     d = addDays(d, 1);
   }
@@ -293,22 +372,27 @@ function replay(accIds, date) {
     if (!t.aid) continue;
     const hk = t.acc + '|' + t.aid;
     const p = per.get(hk) || { acc: t.acc, aid: t.aid, qty: 0, cost: 0, costLocal: 0, costNoFee: 0, realized: 0, income: 0, fees: 0, taxes: 0 };
-    const fee = +t.fee || 0;
-    const fxFee = +t.fxFee || 0;
-    const tax = +t.tax || 0;
+    const fee = num(t.fee);
+    const fxFee = num(t.fxFee);
+    const tax = num(t.tax);
+    const tq = qtyOf(t);
+    const price = priceOf(t);
     if (t.type === 'buy') {
-      p.qty += t.qty;
-      p.cost += (t.qty * t.price) / fx + fee + fxFee;
-      p.costLocal += t.qty * t.price;
-      p.costNoFee += (t.qty * t.price) / fx;
+      p.qty += tq;
+      p.cost += (tq * price) / fx + fee + fxFee;
+      p.costLocal += tq * price;
+      p.costNoFee += (tq * price) / fx;
       p.fees += fee + fxFee;
     } else if (t.type === 'sell') {
-      const q = Math.min(t.qty, p.qty);
+      const q = Math.min(tq, p.qty);
       const ratio = p.qty > 0 ? q / p.qty : 0;
-      const out = p.cost * ratio;
-      const proceeds = (t.qty * t.price) / fx - fee - fxFee;
+      // Shares sold beyond those recorded (e.g. bought before the imported period): their cost is
+      // unknown, so they count at the sale price and only the fees show up as a loss on them
+      const missingQty = tq - q > 1e-9 ? tq - q : 0;
+      const out = p.cost * ratio + (missingQty * price) / fx;
+      const proceeds = (tq * price) / fx - fee - fxFee;
       const pl = proceeds - out;
-      realized.push({ date: t.date, acc: t.acc, aid: t.aid, qty: t.qty, proceeds, cost: out, pl, fee, fxFee, tax, txId: t.id });
+      realized.push({ date: t.date, acc: t.acc, aid: t.aid, qty: tq, proceeds, cost: out, pl, fee, fxFee, tax, txId: t.id, missingQty });
       p.realized += pl;
       p.fees += fee + fxFee;
       p.taxes += tax;
@@ -323,13 +407,13 @@ function replay(accIds, date) {
         p.costNoFee = 0;
       }
     } else if (t.type === 'div' || t.type === 'interest') {
-      p.income += +t.amount || 0;
+      p.income += num(t.amount);
       p.taxes += tax;
       p.fees += fxFee;
     } else if (t.type === 'fee') {
-      p.fees += +t.amount || 0;
+      p.fees += num(t.amount);
     } else if (t.type === 'tax') {
-      p.taxes += +t.amount || 0;
+      p.taxes += num(t.amount);
     }
     per.set(hk, p);
   }
@@ -369,7 +453,9 @@ export function positions({ accIds = null, date = null } = {}) {
       const value = valueLocal / fx;
       const unreal = x.qty > 0 ? value - x.cost : 0;
       const fxPL = x.qty > 0 && x.costLocal > 0 ? value - valueLocal * (x.costNoFee / x.costLocal) : 0;
-      const dayChange = isToday && qp && x.qty > 0 ? (x.qty * qp.change) / fx : 0;
+      // EUR change versus the previous close, exchange-rate move included
+      const fxPrev = qp && qp.prevDate ? fxOn(ccy, qp.prevDate) : fx;
+      const dayChange = isToday && qp && x.qty > 0 ? x.qty * (qp.price / fx - qp.prev / fxPrev) : 0;
       out.push({
         aid: x.aid, asset: a, qty: x.qty, priceLocal, priceDate, currency: ccy, fx,
         value, cost: x.cost, costLocal: x.costLocal, avgLocal, avgEUR: x.qty > 0 ? x.cost / x.qty : 0,
@@ -397,9 +483,9 @@ export function incomeEvents(accIds = null) {
       if (t.type !== 'div' && t.type !== 'interest') continue;
       const type = t.aid ? asset(t.aid).type : 'cash';
       const kind = t.type === 'interest' || type === 'cash' ? 'interest' : type === 'bond' ? 'coupon' : 'dividend';
-      const net = +t.amount || 0;
-      const tax = +t.tax || 0;
-      out.push({ date: t.date, acc: t.acc, aid: t.aid || null, kind, net, tax, gross: t.gross > 0 ? t.gross : net + tax, fxFee: +t.fxFee || 0, txId: t.id });
+      const net = num(t.amount);
+      const tax = num(t.tax);
+      out.push({ date: t.date, acc: t.acc, aid: t.aid || null, kind, net, tax, gross: num(t.gross) > 0 ? num(t.gross) : net + tax, fxFee: num(t.fxFee), txId: t.id });
     }
     return out;
   });
@@ -411,15 +497,15 @@ export function costEvents(accIds = null) {
     for (const t of txnsFor(accIds)) {
       const name = t.aid ? asset(t.aid).name : '';
       const label = { buy: 'Acquisto', sell: 'Vendita', div: 'Dividendo' }[t.type] || '';
-      if ((t.type === 'buy' || t.type === 'sell') && +t.fee > 0) {
-        out.push({ date: t.date, acc: t.acc, aid: t.aid, kind: 'transaction', amount: +t.fee, txId: t.id, ref: t.ref || '', desc: `${label} ${name}`.trim() });
+      if ((t.type === 'buy' || t.type === 'sell') && num(t.fee) > 0) {
+        out.push({ date: t.date, acc: t.acc, aid: t.aid, kind: 'transaction', amount: num(t.fee), txId: t.id, ref: t.ref || '', desc: `${label} ${name}`.trim() });
       }
-      if ((t.type === 'buy' || t.type === 'sell' || t.type === 'div') && +t.fxFee > 0) {
-        out.push({ date: t.date, acc: t.acc, aid: t.aid, kind: 'autofx', amount: +t.fxFee, txId: t.id, ref: t.ref || '', desc: `Cambio valuta · ${label} ${name}`.trim() });
+      if ((t.type === 'buy' || t.type === 'sell' || t.type === 'div') && num(t.fxFee) > 0) {
+        out.push({ date: t.date, acc: t.acc, aid: t.aid, kind: 'autofx', amount: num(t.fxFee), txId: t.id, ref: t.ref || '', desc: `Cambio valuta · ${label} ${name}`.trim() });
       }
       if (t.type === 'fee') {
         const kind = ['transaction', 'autofx', 'connectivity'].includes(t.kind) ? t.kind : 'other';
-        out.push({ date: t.date, acc: t.acc, aid: t.aid || null, kind, amount: +t.amount || 0, txId: t.id, ref: t.ref || '', desc: t.note || name || '' });
+        out.push({ date: t.date, acc: t.acc, aid: t.aid || null, kind, amount: num(t.amount), txId: t.id, ref: t.ref || '', desc: t.note || name || '' });
       }
     }
     return out;
@@ -430,11 +516,11 @@ export function taxEvents(accIds = null) {
   return cached('taxes:' + keyOf(accIds), () => {
     const out = [];
     for (const t of txnsFor(accIds)) {
-      if (t.type === 'sell' && +t.tax > 0) out.push({ date: t.date, acc: t.acc, aid: t.aid, kind: 'capital', amount: +t.tax, txId: t.id });
-      if ((t.type === 'div' || t.type === 'interest') && +t.tax > 0) out.push({ date: t.date, acc: t.acc, aid: t.aid || null, kind: 'income', amount: +t.tax, txId: t.id });
+      if (t.type === 'sell' && num(t.tax) > 0) out.push({ date: t.date, acc: t.acc, aid: t.aid, kind: 'capital', amount: num(t.tax), txId: t.id });
+      if ((t.type === 'div' || t.type === 'interest') && num(t.tax) > 0) out.push({ date: t.date, acc: t.acc, aid: t.aid || null, kind: 'income', amount: num(t.tax), txId: t.id });
       if (t.type === 'tax') {
         const kind = ['capital', 'income', 'stamp'].includes(t.kind) ? t.kind : 'other';
-        out.push({ date: t.date, acc: t.acc, aid: t.aid || null, kind, amount: +t.amount || 0, txId: t.id });
+        out.push({ date: t.date, acc: t.acc, aid: t.aid || null, kind, amount: num(t.amount), txId: t.id });
       }
     }
     return out;
@@ -453,8 +539,8 @@ export function qtyAt(accIds, aid, date) {
   for (const t of txnsFor(accIds)) {
     if (t.date > date) break;
     if (t.aid !== aid) continue;
-    if (t.type === 'buy') q += t.qty;
-    else if (t.type === 'sell') q = Math.max(0, q - t.qty);
+    if (t.type === 'buy') q += qtyOf(t);
+    else if (t.type === 'sell') q = Math.max(0, q - qtyOf(t));
   }
   return q;
 }
@@ -476,4 +562,4 @@ export function trackedSymbols() {
   return [...syms];
 }
 
-export const _test = { cashDelta, computeSeries, replay, S };
+export const _test = { cashDelta, computeSeries, replay, S, num };

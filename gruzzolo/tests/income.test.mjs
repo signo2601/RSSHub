@@ -64,11 +64,13 @@ test('period totals, trailing yield, return decomposition and currencies', () =>
   close(r.taxes, 10 + 2 + 1);
   assert.equal(r.count, 4);
 
-  // Trailing 12 months: everything but the d(400) dividend, over today's value of open positions
+  // Trailing 12 months: dividends and coupons but the d(400) dividend, over today's value of the
+  // securities; the 5 € of interest on cash stays out (the cash is not in the value either)
   const value = 100 * 12 + 10 * 100 + (10 * 22) / 1.1;
   close(r.value, value);
-  close(r.income12m, 54);
-  close(r.yield12m, 54 / value);
+  close(r.securitiesValue, value);
+  close(r.income12m, 49);
+  close(r.yield12m, 49 / value);
 
   // Decomposition of the period TWR
   const s = getSeries('all');
@@ -244,4 +246,28 @@ test('missing dividends respect the account scope', () => {
   // Demo assets use their synthetic history for the forecast too
   const fa = incomeStats({ accIds: ['b'], from: null, to: T, today: T }).forecastByAsset[0];
   close(fa.amount, 0.2 * 30 * 0.74);
+});
+
+test('12-month yield: dividends and coupons over the securities, cash interest left out', () => {
+  const data = blankData();
+  data.accounts = [{ id: 'b', name: 'Broker', broker: 'DEGIRO', cashMode: 'track' }];
+  data.assets.s = stock('s');
+  data.assets.cd = stock('cd', { type: 'cash', name: 'Conto deposito' });
+  data.txns = [
+    { id: 'd0', acc: 'b', type: 'deposit', date: d(300), amount: 30000 },
+    { id: 'b1', acc: 'b', type: 'buy', aid: 's', date: d(300), qty: 100, price: 100 },
+    { id: 'b2', acc: 'b', type: 'buy', aid: 'cd', date: d(300), qty: 5000, price: 1 },
+    { id: 'v1', acc: 'b', type: 'div', aid: 's', date: d(100), amount: 300, tax: 105 },
+    { id: 'i1', acc: 'b', type: 'interest', date: d(50), amount: 400 }, // on 15 000 € of idle cash
+    { id: 'i2', acc: 'b', type: 'div', aid: 'cd', date: d(40), amount: 100 }, // conto deposito interest
+  ];
+  data.prices.s = [[d(300), 100]];
+  load(data);
+  const r = incomeStats({ accIds: null, from: null, to: T, today: T });
+  close(r.interest, 500);
+  close(r.dividends, 300);
+  close(r.income12m, 300);
+  close(r.securitiesValue, 10000);
+  close(r.yield12m, 0.03); // not (300 + 500) / 15 000
+  close(r.value, 15000); // all open positions, for "has open positions" checks
 });

@@ -231,10 +231,14 @@ function computeIncome(accIds, from, to, today, settings) {
   }
 
   /* ---------- Yields and return decomposition ---------- */
+  // Trailing yield: dividends and coupons of the last 12 months over the current value of the
+  // securities. Interest is left out on both sides: the cash that earns it is not in the value,
+  // so counting it would inflate the yield of a portfolio with idle cash.
   const lo12 = addDays(today, -YEAR_DAYS);
   let income12m = 0;
-  for (const e of events) if (e.date > lo12 && e.date <= today) income12m += e.net;
-  const yield12m = value > EPS ? income12m / value : 0;
+  for (const e of events) if (e.date > lo12 && e.date <= today && e.kind !== 'interest') income12m += e.net;
+  const securitiesValue = open.reduce((s, p) => s + (p.asset.type === 'cash' ? 0 : fin(p.value)), 0);
+  const yield12m = securitiesValue > EPS ? income12m / securitiesValue : 0;
 
   let twr = 0;
   let avgValue = 0;
@@ -359,7 +363,7 @@ function computeIncome(accIds, from, to, today, settings) {
   return {
     from: pFrom, to: pTo, days,
     total, gross, dividends, coupons, interest, taxes, count,
-    value, income12m,
+    value, securitiesValue, income12m,
     yield12m, yieldPeriod,
     twr, priceReturn, incomeReturn,
     forecast12m, forecastByAsset,

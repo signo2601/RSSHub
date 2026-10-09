@@ -154,8 +154,19 @@ export function periodStats(series, from, to, { rf = 0, benchRet = null } = {}) 
   const dd = downsideDeviation(bd.ret, rf);
   const sharpe = vol > 0 && cagr !== null ? (cagr - rf) / vol : null;
   const sortino = dd > 0 && cagr !== null ? (cagr - rf) / dd : null;
-  const cum = cumulative(dates, ret, effFrom, effTo);
-  const mdd = maxDrawdown(cum.cum, cum.dates);
+  // Drawdown on the wealth index: the base (1) is the close before `from` and every close of the
+  // period follows, the first day included (cumulative() folds that day into its second point).
+  // A drawdown that starts from the base is dated `from`, like the base point of the charts.
+  const wealth = new Array(i1 - i0 + 2);
+  const wealthDates = new Array(i1 - i0 + 2);
+  wealth[0] = 0;
+  wealthDates[0] = effFrom;
+  for (let k = i0, g = 1; k <= i1; k++) {
+    g *= 1 + num0(ret[k]);
+    wealth[k - i0 + 1] = g - 1;
+    wealthDates[k - i0 + 1] = dates[k];
+  }
+  const mdd = maxDrawdown(wealth, wealthDates);
 
   let benchTwr = null;
   let activeVsBench = null;
@@ -218,7 +229,8 @@ export function drawdowns(cum) {
 }
 
 // Deepest drawdown of a cumulative-return array: depth (<= 0), peak and trough positions,
-// and the first date the previous peak was regained (null if not yet)
+// and the first date the previous peak was regained (null if not yet). The peak is the first
+// point at the highest level (a flat weekend after a top does not move it to Sunday).
 export function maxDrawdown(cum, dates = null) {
   let peak = 1;
   let peakIdx = -1;
@@ -229,7 +241,7 @@ export function maxDrawdown(cum, dates = null) {
     const c = cum[k];
     if (c === null || c === undefined || !Number.isFinite(c)) continue;
     const g = 1 + c;
-    if (g >= peak) {
+    if (g > peak || (peakIdx < 0 && g >= peak)) {
       peak = g;
       peakIdx = k;
     }

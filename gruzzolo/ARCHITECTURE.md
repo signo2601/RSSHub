@@ -365,3 +365,17 @@ These modules are finished and tested; the notes list behavior beyond the contra
 - **income.js**: `incomeStats({ accIds, from, to, today, settings? })`. Calendar items with `aid: null` are cash interest ("Interessi"); `forecast: true` items are estimates; use `years` for the year switch; `forecastByAsset[].perShare` is in `currency` (gross local for market data, net EUR for recorded). `missing[]` items carry `currency` and `kind`. Extras: `gross, count, value, income12m, twr, years`.
 - **costs.js**: `costStats` extras: `stampTaxes, otherTaxes, totalTaxes, prevYear, prevYearTaxes, estimatedStamp` (> 0 means estimated, not recorded), `stampDuty.{ year, rate, note }`, `ter.{ value, date, byAsset }`; `monthly` is newest first. `fiscalBackpack` row statuses also include `'nessun movimento'`; rows have `gains, losses, ignored, offset, used, usedBy`; `expired` sums only displayed rows.
 - **charts.js**: call `initCharts()` once at boot (injects chart CSS and listeners). Pass `w` as the exact inner pixel width (charts are not stretched; never give `.chart-svg` width:100%). Pass raw strings (charts escape them). `'YYYY-MM'` bar labels are formatted as months automatically. Benchmark style `{ color: 'var(--muted)', dash: true }`. `chartScrubHandlers(id, …)` must be re-attached after each render (push a function to `MOUNTS`). Hero chart on the page background: set `--chart-ring: var(--bg)` on its container. Donut next to its own list: `legend: false`; non-EUR donut: `format`. Scatter: frontier and CML as `lines` (CML `dash: true`), assets as points with `group: 'Titoli'`, special portfolios with `special: true` and a `group`; `tooltipX/tooltipY` formatters. `sparkline()` returns a bare `<svg class="spark">` (no tooltip). Extras: `niceTicks, logTicks, dateTicks, chartData, CHART_CSS`; `tooltipValue(v, seriesIndex, i)` on line/bar/stacked charts.
+
+## Calculation rules refined by the independent audit
+
+An independent re-implementation (`tests/crosscheck.test.mjs`, 3950 comparisons on the demo and 8 edge cases) now protects these rules:
+
+- External flows are **netted per day** (a same-day sell A / buy B in an `auto` account is not a deposit plus a withdrawal). A day that starts empty measures its return on the money spent on buys.
+- Same-day buys and sells keep the **recorded order** (Italian average cost); a sell that would oversell waits for that day's buy.
+- A `track` account overdraft is an external inflow repaid by later deposits; cash is valued at 0 per account while negative (`cashAt` still returns the ledger balance).
+- Shares sold beyond those recorded enter at the sale price; `realizedEvents[].missingQty` reports them.
+- Transaction numbers are sanitized in the engine (strings, missing fields): no NaN reaches series or views.
+- `lastQuote` ignores future-dated points and returns `prevDate`; `positions().dayChange` includes the FX move.
+- `periodStats.maxDD` includes the first day of the period (wealth index with a base); drawdown peaks are dated on the first day at the peak level.
+- `incomeStats.yield12m` = dividends + coupons over the value of non-cash securities (`securitiesValue`); cash interest is excluded.
+- `fiscalBackpack.crypto` (`{ rows, available, expired, lots, active }`): since 2023 crypto-assets (art. 67 c-sexies TUIR) offset only crypto gains, so they have their own silo.

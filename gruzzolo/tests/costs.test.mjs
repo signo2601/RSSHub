@@ -319,3 +319,71 @@ test('TER snapshots: the incremental valuation matches engine.positions()', () =
   const rb = costStats({ accIds: ['b'], from: '2025-01-01', to: '2025-06-30', today: '2025-06-30' });
   rb.ter.series.dates.forEach((d, i) => close(rb.ter.series.ter[i], terSnapshot(positions({ accIds: ['b'], date: d })).ter, 1e-12));
 });
+
+test('fiscal backpack: crypto-assets have their own backpack', async () => {
+  const { fmt } = await import('../js/util.js');
+  assert.equal(FISCAL_CLASS.crypto, 'cripto');
+  const data = blankData();
+  data.assets.st = mk('st');
+  data.assets.bt = mk('bt', 'crypto');
+  data.txns = [
+    { id: 'c1', acc: 'acc1', type: 'buy', aid: 'bt', date: '2024-01-10', qty: 1, price: 40000 },
+    { id: 'c2', acc: 'acc1', type: 'sell', aid: 'bt', date: '2024-08-01', qty: 1, price: 39000 }, // −1000 crypto (2024)
+    { id: 's1', acc: 'acc1', type: 'buy', aid: 'st', date: '2025-01-10', qty: 10, price: 100 },
+    { id: 's2', acc: 'acc1', type: 'sell', aid: 'st', date: '2025-03-01', qty: 10, price: 160 }, // +600 stocks (2025)
+    { id: 'c3', acc: 'acc1', type: 'buy', aid: 'bt', date: '2026-02-01', qty: 1, price: 50000 },
+    { id: 'c4', acc: 'acc1', type: 'sell', aid: 'bt', date: '2026-05-01', qty: 1, price: 50300 }, // +300 crypto (2026)
+    { id: 's3', acc: 'acc1', type: 'buy', aid: 'st', date: '2026-02-01', qty: 10, price: 100 },
+    { id: 's4', acc: 'acc1', type: 'sell', aid: 'st', date: '2026-06-01', qty: 10, price: 80 }, // −200 stocks (2026)
+  ];
+  data.settings.externalPL = {};
+  load(data);
+  const r = fiscalBackpack({ accIds: null, today: '2026-10-08' });
+  const row = Object.fromEntries(r.rows.map((x) => [x.year, x]));
+  // Stocks: the crypto loss does not offset the 2025 gain, the crypto gain does not use the 2026 loss
+  close(row[2024].net, 0);
+  assert.equal(row[2024].status, 'nessun movimento');
+  close(row[2025].net, 600);
+  close(row[2025].offset, 0);
+  close(row[2026].net, -200);
+  close(r.available, 200);
+  // Crypto: own lots, the 2026 gain uses 300 of the 2024 loss
+  assert.equal(r.crypto.active, true);
+  const crow = Object.fromEntries(r.crypto.rows.map((x) => [x.year, x]));
+  close(crow[2024].net, -1000);
+  close(crow[2024].remaining, 700);
+  close(crow[2026].net, 300);
+  close(r.crypto.available, 700);
+  assert.ok(r.notes.some((n) => n.includes('zaino cripto') && n.includes('700,00')));
+  // The note is formatted on every call: privacy mode hides the amount
+  fmt.hide = true;
+  try {
+    const hidden = fiscalBackpack({ accIds: null, today: '2026-10-08' });
+    const line = hidden.notes.find((n) => n.includes('zaino cripto'));
+    assert.ok(line && !line.includes('700'));
+  } finally {
+    fmt.hide = false;
+  }
+  // Without crypto sales there is no crypto line
+  data.txns = data.txns.filter((t) => t.aid !== 'bt');
+  load(data);
+  const plain = fiscalBackpack({ accIds: null, today: '2026-10-08' });
+  assert.equal(plain.crypto.active, false);
+  assert.ok(!plain.notes.some((n) => n.includes('zaino cripto')));
+});
+
+test('TER walker: quantities stored as text still value the holdings', () => {
+  const data = blankData();
+  data.assets.e = mk('e', 'etf', { ter: 0.002 });
+  data.txns = [
+    { id: 'b1', acc: 'acc1', type: 'buy', aid: 'e', date: '2025-01-02', qty: '10', price: '100' },
+    { id: 'b2', acc: 'acc1', type: 'buy', aid: 'e', date: '2025-02-03', qty: '5', price: '100' },
+  ];
+  data.prices.e = [['2025-01-02', 100]];
+  load(data);
+  const walk = _test.holdingsWalker(null);
+  const snap = walk('2025-03-01');
+  assert.equal(snap.length, 1);
+  close(snap[0].qty, 15);
+  close(snap[0].value, 1500);
+});

@@ -475,3 +475,30 @@ test('backProjected: window starts at the latest first date among included asset
   assert.deepEqual(none.missing, ['M']);
   assert.equal(riskStats(none.ret, {}).vol, null);
 });
+
+test('periodStats drawdown: the first day of the period counts, the peak is dated on its first day', () => {
+  // Day 1 of the period +5%, day 2 −10%: the fall from the day-1 close is −10%
+  // (cumulative() draws its base on day 1, which would only show −5,5%)
+  const s = makeSeries('2025-03-01', [0.01, 0.05, -0.1, 0.01]);
+  const st = periodStats(s, '2025-03-02', '2025-03-04', { rf: 0 });
+  close(st.maxDD, -0.1, 1e-12);
+  assert.equal(st.maxDDFrom, '2025-03-02');
+  assert.equal(st.maxDDTo, '2025-03-03');
+  // A loss on the first day itself counts against the base (the close before the period)
+  const s2 = makeSeries('2025-03-01', [0.01, -0.08, 0.03]);
+  const st2 = periodStats(s2, '2025-03-02', '2025-03-03', { rf: 0 });
+  close(st2.maxDD, -0.08, 1e-12);
+  assert.equal(st2.maxDDFrom, '2025-03-02'); // the base is labelled with the period start
+  assert.equal(st2.maxDDTo, '2025-03-02');
+  // A flat weekend after a top: the peak is the Friday, not the Sunday
+  // 2025-01-03 is a Friday; Saturday and Sunday are flat, Monday falls
+  const s3 = makeSeries('2025-01-01', [0, 0.02, 0.03, 0, 0, -0.04, 0.01]);
+  const st3 = periodStats(s3, null, null, { rf: 0 });
+  close(st3.maxDD, -0.04, 1e-12);
+  assert.equal(st3.maxDDFrom, '2025-01-03');
+  assert.equal(st3.maxDDTo, '2025-01-06');
+  // maxDrawdown alone: ties keep the first peak, a base-level start is index 0
+  const m = maxDrawdown([0, 0, -0.1], ['a', 'b', 'c']);
+  assert.equal(m.from, 'a');
+  assert.equal(m.to, 'c');
+});

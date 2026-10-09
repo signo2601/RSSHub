@@ -553,6 +553,10 @@ button.row:active, a.row:active { background: var(--surface-2); }
   animation: toast-in .22s cubic-bezier(.2, .8, .2, 1);
 }
 
+@media (max-width: 899px) {
+  .sheet-layer:not([hidden]) ~ .toast { top: calc(12px + env(safe-area-inset-top, 0px)); bottom: auto; }
+}
+
 /* ---------- Desktop (≥ 900px): sidebar, top bar inside content, dialogs ---------- */
 @media (min-width: 900px) {
   .sidebar {
