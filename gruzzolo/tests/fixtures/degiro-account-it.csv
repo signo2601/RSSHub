@@ -1,0 +1,25 @@
+Data,Ora,Data valore,Prodotto,ISIN,Descrizione,Tasso di cambio,Variazione,,Saldo,,ID Ordine
+01-10-2024,08:14,30-09-2024,,,Interessi,,EUR,"0,42",EUR,"2215,92",
+20-08-2024,09:00,20-08-2024,,,Prelievo,,EUR,"-300,00",EUR,"2215,50",
+24-07-2024,07:52,24-07-2024,ENEL,IT0003128367,Dividendo,,EUR,"86,00",EUR,"2515,50",
+24-07-2024,07:52,24-07-2024,ENEL,IT0003128367,Ritenuta sul dividendo,,EUR,"-22,36",EUR,"2429,50",
+16-07-2024,17:31,16-07-2024,ENEL,IT0003128367,"Vendita 150 Enel SpA@6,712 EUR (IT0003128367)",,EUR,"1006,80",EUR,"2451,86",0a1b2c3d-4e5f-4a6b-9c7d-8e9f0a1b2c3d
+16-07-2024,17:31,16-07-2024,ENEL,IT0003128367,Costi di transazione e/o costi di terze parti DEGIRO,,EUR,"-4,90",EUR,"1445,06",0a1b2c3d-4e5f-4a6b-9c7d-8e9f0a1b2c3d
+28-06-2024,06:30,27-06-2024,,,Variazione del prezzo del fondo del mercato monetario,,EUR,"0,01",EUR,"1449,96",
+16-05-2024,08:03,15-05-2024,APPLE INC. - COMMON STOCK,US0378331005,Dividendo,,USD,"1,92",USD,"1,92",
+16-05-2024,08:03,15-05-2024,APPLE INC. - COMMON STOCK,US0378331005,Ritenuta sul dividendo,,USD,"-0,29",USD,"1,63",
+16-05-2024,14:41,16-05-2024,,,Cambio valuta (Accredito),,EUR,"1,50",EUR,"1449,95",
+16-05-2024,14:41,16-05-2024,,,Cambio valuta (Addebito),"1,0867",USD,"-1,63",USD,"0,00",
+14-03-2024,15:42,14-03-2024,,,Costi di cambio valuta AutoFX,,EUR,"-1,98",EUR,"1448,45",
+14-03-2024,10:00,14-03-2024,,,Interessi,,EUR,"-0,05",EUR,"1450,43",
+05-03-2024,08:00,04-03-2024,,,Imposta di bollo,,EUR,"-3,40",EUR,"1450,48",
+01-03-2024,07:40,01-03-2024,"BTP 3,5% MZ30",IT0005024234,Cedola,,EUR,"35,00",EUR,"1453,88",
+01-03-2024,07:40,01-03-2024,"BTP 3,5% MZ30",IT0005024234,Ritenuta sul dividendo,,EUR,"-4,38",EUR,"1418,88",
+12-02-2024,09:00,12-02-2024,,,Degiro Cash Sweep Transfer,,EUR,"-500,00",EUR,"1423,26",
+05-02-2024,09:00,05-02-2024,,,Bonifico in entrata,,EUR,"1000,00",EUR,"1923,26",
+03-01-2024,09:31,03-01-2024,VANGUARD FTSE ALL-WORLD UCITS ETF USD ACC,IE00BK5BQT80,"Acquisto 10 Vanguard FTSE All-World UCITS ETF USD Acc@104,86 EUR (IE00BK5BQT80)",,EUR,"-1048,60",EUR,"923,26",6b5a4c3d-2e1f-4a0b-9c8d-7e6f5a4b3c2d
+03-01-2024,09:31,03-01-2024,VANGUARD FTSE ALL-WORLD UCITS ETF USD ACC,IE00BK5BQT80,Costi di transazione e/o costi di terze parti DEGIRO,,EUR,"-1,00",EUR,"1971,86",6b5a4c3d-2e1f-4a0b-9c8d-7e6f5a4b3c2d
+02-01-2024,10:01,02-01-2024,,,Commissione di connessione alla borsa 2024 (Euronext Milan - MIL),,EUR,"-2,50",EUR,"1972,86",
+02-01-2024,10:01,02-01-2024,,,Commissione di connessione alla borsa 2024 (Xetra - XET),,EUR,"-2,50",EUR,"1975,36",
+02-01-2024,09:00,02-01-2024,,,Deposito,,EUR,"2000,00",EUR,"1977,86",
+01-01-2024,09:00,01-01-2024,ABC HOLDING,XX0000000001,Spin-off ABC Holding,,EUR,"12,30",EUR,"12,30",

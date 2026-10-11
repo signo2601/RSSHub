@@ -1,0 +1,382 @@
+/* Gruzzolo — portfolio views: tab "Portafoglio" (home.js), the transactions page, tab "Mercati" (market.js)
+   and the portfolio sheets (sheets.js: asset, quote, transaction detail and form, prices, watchlist).
+   Shared components (cards, rows, chips, seg, fields, stats…) come from app.css: this file only adds
+   what those views need on top. Phone first; desktop from 900px. */
+
+/* ======================================================================
+   Bigger touch targets for chips and segmented buttons in these views (44px on iPhone)
+   The visible pill stays 36px/38px; an invisible ::after extends the hit area.
+   ====================================================================== */
+.home .chips, .tx-page .chips, .mkt-page .chips, .price-chart .chips { padding: 4px 1px; margin: -4px 0; }
+.home .chip, .tx-page .chip, .mkt-page .chip, .price-chart .chip { position: relative; }
+.home .chip::after, .tx-page .chip::after, .mkt-page .chip::after, .price-chart .chip::after {
+  content: ""; position: absolute; inset: -4px 0;
+}
+.home-controls .seg button { position: relative; }
+.home-controls .seg button::after { content: ""; position: absolute; inset: -3px 0; }
+/* Text links and small buttons (36px tall in app.css) */
+.home .link-btn, .tx-page .link-btn, .mkt-page .link-btn, .pf-sheet .link-btn,
+.home .btn.sm, .tx-page .btn.sm, .mkt-page .btn.sm, .pf-sheet .btn.sm { position: relative; }
+.home .link-btn::after, .tx-page .link-btn::after, .mkt-page .link-btn::after, .pf-sheet .link-btn::after,
+.home .btn.sm::after, .tx-page .btn.sm::after, .mkt-page .btn.sm::after, .pf-sheet .btn.sm::after {
+  content: ""; position: absolute; inset: -4px -2px;
+}
+
+/* ======================================================================
+   Tab "Portafoglio"
+   ====================================================================== */
+.home-top { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+
+/* Hero: scope, label, BIG value, gain chip, today's change */
+.home-top > .hero { display: flex; flex-direction: column; min-width: 0; padding-top: 4px; }
+.home .hero-scope { margin: 0 0 2px; }
+.home .hero-label {
+  min-height: 21px; font-size: 14.5px; font-weight: 700; color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+.home .hero-value {
+  margin: 2px 0 8px;
+  font-family: var(--font-display); font-weight: 700; font-size: 40px; line-height: 1.04;
+  letter-spacing: -.02em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
+}
+.home .hero-delta {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-height: 30px;
+  font-size: 14px;
+}
+.home .hero-delta .delta { padding: 4px 9px; }
+.home .hero-delta .muted { font-size: 13.5px; font-weight: 600; }
+.home .hero-day { min-height: 22px; margin-top: 6px; font-size: 13.5px; }
+.home .hero-today { font-weight: 700; font-variant-numeric: tabular-nums; }
+.home .hero-today.flat { color: var(--muted); }
+
+/* One line about prices loading or the server being offline */
+.price-status {
+  display: flex; align-items: center; gap: 8px; margin: 0;
+  font-size: 13px; font-weight: 600; color: var(--muted);
+}
+.price-status .ico { width: 17px; height: 17px; }
+.price-status .dot { margin: 0 4px 0 5px; }
+
+/* Hero chart: drawn on the page background, full content width */
+.home-chart { --chart-ring: var(--bg); min-width: 0; min-height: 196px; margin-top: 2px; }
+.home-chart .chart-empty-note {
+  display: grid; place-items: center; min-height: 196px; padding: 16px;
+  border: 1px dashed var(--line); border-radius: var(--radius);
+  color: var(--muted); font-size: 13.5px; font-weight: 600; text-align: center;
+}
+
+/* Range chips (equal widths on phones) and the value/return switch */
+.home-controls { display: flex; flex-direction: column; align-items: stretch; gap: 10px; min-width: 0; }
+.home-controls .range-chips .chip, .price-chart .range-chips .chip { flex: 1 1 0; justify-content: center; min-width: 0; padding: 0 4px; font-variant-numeric: tabular-nums; }
+.home-controls .seg { align-self: flex-start; }
+.home-chart-note { margin: 0; max-width: 72ch; }
+
+/* KPI row */
+.home-kpis .kpi { justify-content: flex-start; }
+.home-kpis .kpi-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 24px; }
+.home-kpis .kpi-label { min-width: 0; line-height: 1.3; }
+.home-kpis .kpi-value { margin-top: 2px; }
+
+/* Accounts strip: one card per account, side by side, scrolls sideways with 3+ accounts */
+.acc-strip {
+  display: grid; grid-auto-flow: column; grid-auto-columns: minmax(158px, 1fr); gap: 10px;
+  overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none;
+  -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain;
+  padding: 1px; margin: -1px;
+}
+.acc-strip::-webkit-scrollbar { display: none; }
+.acc-strip .acc-card {
+  --acc: var(--accent);
+  position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0;
+  padding: 13px 14px 14px; min-height: 44px; overflow: hidden;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  text-align: left; scroll-snap-align: start;
+  transition: transform .12s, border-color .15s;
+}
+.acc-strip .acc-card::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px;
+  background: var(--acc); opacity: .85;
+}
+.acc-strip .acc-card:active { transform: scale(.98); }
+.acc-strip .acc-name {
+  display: flex; align-items: center; gap: 7px; max-width: 100%;
+  font-size: 14.5px; font-weight: 800; letter-spacing: -.01em;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.acc-strip .acc-name i { flex-shrink: 0; width: 9px; height: 9px; border-radius: 50%; background: var(--acc); }
+.acc-strip .acc-broker {
+  max-width: 100%; font-size: 12.5px; font-weight: 600; color: var(--muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.acc-strip .acc-value {
+  margin: 8px 0 4px; font-size: 18px; font-weight: 800; letter-spacing: -.01em;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+
+/* Positions and recent activity */
+.home-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-items: start; }
+.home-grid > .section > .link-btn { align-self: flex-start; }
+.home .sec-head h2 .muted, .mkt-page .sec-head h2 .muted { font-weight: 700; margin-left: 2px; }
+.pos-row .row-end { gap: 2px; }
+.row-today { font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pos-row.closed .avatar { filter: grayscale(1); opacity: .6; }
+.pos-row.closed .row-title { color: var(--ink-2); }
+.pos-list > .row.muted { justify-content: center; text-align: center; font-size: 14px; }
+.stale-hint .btn { flex-shrink: 0; }
+
+/* ======================================================================
+   Transactions page (tab 'tx')
+   ====================================================================== */
+.tx-page .back-link { align-self: flex-start; margin: -4px 0 -14px -4px; min-height: 44px; padding: 0 4px; }
+.tx-page .tx-filters { margin-bottom: -8px; }
+.tx-page .tx-count { margin: 0; }
+.tx-page .tx-group { display: flex; flex-direction: column; min-width: 0; }
+.tx-page .tx-group .group-label { display: flex; align-items: baseline; gap: 8px; margin: 0 4px 8px; }
+.tx-page .tx-group .group-label span {
+  font-size: 11px; font-weight: 800; letter-spacing: 0; color: var(--muted);
+  background: var(--surface-2); border-radius: 999px; padding: 0 7px; line-height: 18px;
+}
+.tx-row .row-end .row-sub { max-width: 130px; }
+
+/* ======================================================================
+   Tab "Mercati"
+   ====================================================================== */
+.search-box {
+  position: relative; display: flex; align-items: center; gap: 10px; min-width: 0; min-height: 52px;
+  padding: 0 4px 0 15px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 16px;
+  transition: border-color .15s, box-shadow .15s;
+}
+.search-box > .ico { width: 20px; height: 20px; color: var(--muted); }
+.search-box:focus-within { border-color: var(--accent-line); box-shadow: 0 0 0 1px var(--accent-line); }
+.search-box input,
+.field .search-box input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]) {
+  flex: 1 1 auto; width: auto; min-width: 0; height: 48px; min-height: 0; margin: 0; padding: 0;
+  border: 0; border-radius: 0; background: transparent; box-shadow: none; outline: none;
+  font-size: 16px; font-weight: 600; color: var(--ink);
+  -webkit-appearance: none; appearance: none;
+}
+.field .search-box input:focus { outline: none; }
+.search-box input::placeholder { color: var(--muted); font-weight: 500; opacity: .85; }
+.search-box input::-webkit-search-cancel-button,
+.search-box input::-webkit-search-decoration { -webkit-appearance: none; appearance: none; display: none; }
+.search-box .clear-btn { width: 44px; height: 44px; color: var(--muted); }
+.search-box .clear-btn .ico { width: 18px; height: 18px; }
+.search-box.sm { min-height: 48px; padding: 0 12px 0 13px; border-radius: 12px; }
+.search-box.sm > .ico { width: 18px; height: 18px; }
+.search-box.sm input,
+.field .search-box.sm input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]) { height: 46px; }
+
+.mkt-note {
+  display: flex; align-items: center; gap: 8px; margin: 0;
+  font-size: 13px; font-weight: 600; color: var(--muted);
+}
+.mkt-note .ico { width: 17px; height: 17px; flex-shrink: 0; }
+.mkt-note .dot { margin: 0 4px 0 5px; }
+#mkt-results > .section { gap: 10px; }
+
+.mkt-home { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.mkt-cols { display: grid; grid-template-columns: minmax(0, 1fr); gap: 22px; align-items: start; }
+.mkt-col { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+.mkt-col .section > .hint { margin: 0 4px; }
+.mkt-page .sec-head { align-items: center; min-height: 36px; }
+
+.result-row .tag { flex-shrink: 0; }
+.own-dot { display: inline-block; margin-left: 3px; font-size: 9px; vertical-align: 2px; color: var(--accent-line); }
+.watch-row { gap: 10px; }
+.watch-row .spark-wrap { display: flex; align-items: center; flex-shrink: 0; height: 28px; }
+.watch-row .row-end { min-width: 78px; }
+.empty.compact { padding: 18px 16px; }
+.empty.compact p { margin: 0 auto; font-size: 14px; }
+.pop-more { margin-top: 2px; }
+.pop-more .ico { width: 16px; height: 16px; color: var(--muted); }
+
+/* ======================================================================
+   Sheets: asset and quote detail
+   ====================================================================== */
+.pf-sheet .detail-title { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.pf-sheet .detail-title h3 { overflow-wrap: anywhere; text-wrap: balance; }
+.pf-sheet .tags { display: flex; flex-wrap: wrap; gap: 4px; }
+
+.pf-sheet .quote-price { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 0 0 2px; }
+.pf-sheet .quote-price .price-big { line-height: 1.1; }
+.pf-sheet .price-change { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; }
+.pf-sheet .price-change:empty { display: none; }
+.pf-sheet .src-line { margin: 4px 0 14px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.pf-sheet .skel-price { height: 38px; width: 46%; margin: 0 0 12px; }
+.pf-sheet .chart-skel { height: 220px; margin: 0 0 16px; border-radius: 14px; }
+
+.price-chart { --chart-ring: var(--bg); margin: 0 0 18px; min-width: 0; }
+.price-chart-head { margin: 0 0 6px; font-size: 13.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.price-chart .chart-box { min-width: 0; }
+.price-chart .range-chips { margin-top: 6px; }
+.price-chart .chart-note {
+  display: block; min-height: 0; margin: 0 0 8px; padding: 18px 16px; text-align: center;
+  border: 1px dashed var(--line); border-radius: 14px;
+  color: var(--muted); font-size: 13.5px; font-weight: 600;
+}
+
+/* A single row used as a card ("Nel tuo portafoglio", asset of a transaction) */
+.pf-sheet .own-row,
+.pf-sheet .asset-link {
+  margin: 0 0 14px; border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--surface);
+}
+.chev-wrap { display: grid; place-items: center; flex-shrink: 0; color: var(--muted); }
+.chev-wrap .ico { width: 18px; height: 18px; }
+
+.pos-stats, .quote-stats, .tx-stats { margin: 0 0 10px; }
+.pf-sheet > .hint { margin: 0 4px 10px; }
+.pf-watchForm > .form { margin-top: 18px; }
+.pf-sheet > .muted { margin: 0 4px; font-size: 14px; }
+
+.quote-actions, .asset-actions { margin-top: 16px; }
+.quote-actions > .btn { flex: 1 1 200px; }
+.asset-actions > .btn { flex: 1 1 0; min-width: 0; padding: 0 8px; white-space: nowrap; }
+.pf-sheet .bench-btn { margin-top: 6px; color: var(--ink-2); }
+.pf-sheet .bench-btn:disabled { opacity: .7; }
+.pf-sheet .bench-btn .ico { color: var(--muted); }
+.sheet-foot-actions { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--line); }
+.pf-sheet > .group-label { margin-top: 24px; }
+.pf-sheet > .section { margin-top: 18px; }
+.pf-sheet > .section .sec-head h2 { font-size: 16px; }
+.tx-note {
+  margin: 0 0 4px; padding: 10px 12px; border-radius: 12px;
+  background: var(--surface-2); color: var(--ink-2); font-size: 14px; overflow-wrap: anywhere;
+}
+
+/* Collapsible block: manual price on a linked asset, note and reference in the form */
+.pf-sheet .disclosure { margin-top: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; min-width: 0; }
+.pf-sheet .form > .disclosure { margin-top: 0; }
+.pf-sheet .disclosure > summary {
+  display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 14px;
+  list-style: none; cursor: pointer; border-radius: 14px;
+  font-size: 14px; font-weight: 700; color: var(--ink-2);
+  -webkit-user-select: none; user-select: none;
+}
+.pf-sheet .disclosure > summary::-webkit-details-marker { display: none; }
+.pf-sheet .disclosure > summary .ico { width: 17px; height: 17px; color: var(--accent-line); }
+.pf-sheet .disclosure > summary::after {
+  content: ""; flex-shrink: 0; margin-left: auto; width: 8px; height: 8px;
+  border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted);
+  transform: translateY(-2px) rotate(45deg); transition: transform .2s;
+}
+.pf-sheet .disclosure[open] > summary::after { transform: translateY(2px) rotate(-135deg); }
+.pf-sheet .disclosure[open] { padding-bottom: 14px; }
+.pf-sheet .disclosure > :not(summary) { margin-left: 14px; margin-right: 14px; }
+.pf-sheet .disclosure > .hint { margin-top: 0; margin-bottom: 12px; }
+.pf-sheet .disclosure .field input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+.pf-sheet .disclosure .field select { background: var(--bg); }
+
+/* ======================================================================
+   Sheets: forms (transaction, asset editor, watchlist)
+   ====================================================================== */
+.tx-form .seg.full { overflow: hidden; }
+.type-seg .seg-lbl { padding: 0 4px; min-height: 40px; font-size: 13.5px; }
+.tx-form .hint:empty { display: none; }
+.tx-form .stack { gap: 14px; }
+
+/* Asset search (combobox) */
+.pf-sheet .combo { position: relative; }
+.combo-results { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.combo-results:empty { display: none; }
+.combo-results > .list { margin-top: 2px; }
+.combo-note {
+  display: flex; align-items: center; gap: 8px; margin: 4px 2px 0;
+  font-size: 12.5px; font-weight: 600; color: var(--muted);
+}
+.combo-note .dot { margin: 0 2px; }
+.combo-list .row { min-height: 52px; padding: 8px 12px; gap: 10px; }
+.combo-list .row-title { font-size: 14.5px; }
+.combo-list .tag { flex-shrink: 0; }
+.manual-row .tx-ico { width: 34px; height: 34px; border-radius: 10px; }
+.manual-row .tx-ico .ico { width: 17px; height: 17px; }
+.manual-row .row-title { color: var(--accent-line); }
+
+/* The chosen asset */
+.picked {
+  display: flex; align-items: center; gap: 10px; min-width: 0; min-height: 60px;
+  padding: 9px 10px 9px 12px;
+  background: var(--surface); border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line)); border-radius: 14px;
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.picked .row-main { gap: 1px; }
+.picked .btn { flex-shrink: 0; }
+
+/* Asset editor: link to Yahoo Finance */
+.linked-line { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 10px; min-height: 36px; font-size: 14px; }
+.linked-line > span { display: inline-flex; align-items: center; gap: 7px; min-width: 0; font-weight: 600; }
+.linked-line .ico { width: 18px; height: 18px; flex-shrink: 0; }
+.linked-ok .ico { color: var(--up); }
+.linked-ok b { font-weight: 800; }
+
+/* Prices sheet: one input per asset */
+.price-row { gap: 10px; min-height: 64px; }
+.price-row .row-title { display: block; cursor: pointer; }
+.pf-sheet .warn-text { color: var(--warn); font-weight: 600; }
+.price-input { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.price-input input {
+  width: 116px; min-height: 44px; padding: 8px 10px;
+  background: var(--surface); border: 1px solid color-mix(in srgb, var(--line) 70%, var(--muted)); border-radius: 10px; color: var(--ink);
+  font-size: 16px; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums;
+  -webkit-appearance: none; appearance: none;
+}
+.price-input input::placeholder { color: var(--muted); font-weight: 500; opacity: .8; }
+.price-input input:focus { outline: 2px solid var(--accent-line); outline-offset: 0; border-color: transparent; }
+.price-input input[aria-invalid="true"] { border-color: var(--down); }
+.price-input small { width: 30px; font-size: 11.5px; font-weight: 800; color: var(--muted); }
+
+/* ======================================================================
+   Desktop (≥ 900px)
+   ====================================================================== */
+@media (min-width: 900px) {
+  .home .hero-value { font-size: 48px; margin-bottom: 10px; }
+  .home-chart { min-height: 260px; }
+  .home-chart .chart-empty-note { min-height: 260px; }
+  .home-controls { flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
+  .home-controls .seg { align-self: auto; }
+  .home-controls .range-chips .chip, .price-chart .range-chips .chip { flex: 0 0 auto; padding: 0 13px; }
+
+  .acc-strip { grid-auto-flow: row; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; overflow: visible; }
+  .acc-strip .acc-value { font-size: 20px; }
+
+  .home-grid { grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: 24px; }
+
+  .tx-page { max-width: 880px; }
+  .tx-page .tx-filters { margin-bottom: -10px; }
+
+  .mkt-page .search-box.mkt-search { max-width: 720px; }
+  .mkt-cols { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+
+  .pf-sheet .combo-list { max-height: 352px; overflow-y: auto; overscroll-behavior: contain; }
+}
+
+/* Wide desktop: hero on the left, chart controls on the right of it; 5 KPIs on one row */
+@media (min-width: 1180px) {
+  .home-top {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 24px; row-gap: 10px;
+    grid-template-areas: "hero controls" "status status" "chart chart" "note note";
+  }
+  .home-top > .hero { grid-area: hero; }
+  .home-top > .price-status { grid-area: status; }
+  .home-top > .home-chart { grid-area: chart; }
+  .home-top > .home-controls { grid-area: controls; align-self: end; flex-wrap: nowrap; margin-bottom: 6px; }
+  .home-top > .home-chart-note { grid-area: note; }
+  .home-kpis:has(> .kpi:nth-child(5)) { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .home-kpis:has(> .kpi:nth-child(5)) > .kpi.wide { grid-column: auto; }
+}
+
+/* Mouse only: hover feedback (never sticky on iPhone) */
+@media (hover: hover) and (pointer: fine) {
+  .acc-strip .acc-card:hover { border-color: var(--muted); }
+  .pf-sheet .disclosure > summary:hover { color: var(--ink); }
+  .search-box:hover:not(:focus-within) { border-color: var(--muted); }
+}
+
+/* Narrow phones */
+@media (max-width: 374px) {
+  .home .hero-value { font-size: 34px; }
+  .watch-row .spark-wrap { display: none; }
+  .price-input input { width: 96px; }
+  .acc-strip { grid-auto-columns: minmax(148px, 1fr); }
+}
