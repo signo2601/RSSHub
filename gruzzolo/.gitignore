@@ -1,4 +1,2 @@
 dist/
-dev/.kv.json
-dev/.kv.json.tmp
 node_modules/

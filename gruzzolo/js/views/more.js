@@ -1,13 +1,14 @@
-// Tab "Altro": accounts, broker CSV import, report and tax settings, iPhone ↔ PC sync,
-// price server, appearance, backup and data, guide. Every group is a list of rows (iOS settings
-// feel on phones, two columns of cards on desktop); rows that need input open a sheet.
+// Tab "Altro": accounts, broker CSV import, report and tax settings, appearance, where the data is
+// (privacy and storage), backup and data, price server, guide. Every group is a list of rows (iOS
+// settings feel on phones, two columns of cards on desktop); rows that need input open a sheet.
+// The user's data never leaves the device: the only network traffic started here is public market
+// data from the app's own /api (prices, search, FX).
 // Also owns the 'demo-remove' and 'demo-load' actions used by the other views.
-import { S, D, migrate, blankData, bump, commit, persistence, account, hasDemo, assetCode, BROKERS, TYPE_KEYS, TYPE_LABEL, TX_LABEL, FEE_KINDS, TAX_KINDS } from '../state.js';
-import { ACTIONS, FORMS, INPUTS, SHEETS, FORM_SHEETS } from '../registry.js';
+import { S, D, migrate, blankData, bump, commit, account, hasDemo, assetCode, BROKERS, TYPE_KEYS, TYPE_LABEL, TX_LABEL, FEE_KINDS, TAX_KINDS } from '../state.js';
+import { ACTIONS, FORMS, INPUTS, SHEETS, FORM_SHEETS, MOUNTS } from '../registry.js';
 import { app } from '../app.js';
 import { market } from '../market.js';
 import { getSeries, fxOn, sortTxns } from '../engine.js';
-import { sync, hasUserContent, MESSAGES as SYNC_MESSAGES } from '../sync.js';
 import { demoData, installDemoMarket, removeDemo } from '../demo.js';
 import { PRESETS, parseCsv, detectPreset, guessMapping, buildTxns } from '../importer.js';
 import { CATALOG, findInCatalog } from '../catalog.js';
@@ -17,8 +18,10 @@ import { avatar, demoBanner, txAmount, txFx } from './home.js';
 import { tickerOf } from './sheets.js';
 import { benchShort } from './report.js';
 import {
-  esc, icon, ICONS, money, moneyLocal, pct, num, numInput, parseNum, fmtDate, fmtTime, todayISO, iso, newId, hashHue, saveFile, clone,
+  esc, icon, ICONS, money, moneyLocal, pct, num, numInput, parseNum, fmtDate, fmtTime, todayISO, iso, dayDiff, newId, hashHue, saveFile, clone,
 } from '../util.js';
+// Namespace import: optional helpers (storageStatus) are feature-detected
+import * as util from '../util.js';
 
 /* ======================================================================
    Constants
@@ -101,7 +104,6 @@ const byId = (id) => {
   const d = doc();
   return d ? d.getElementById(id) : null;
 };
-const isArtifact = () => typeof window !== 'undefined' && Boolean(window.claude || window.__GRUZZOLO_ARTIFACT__);
 const plural = (n, one, many) => `${num(n, 0)} ${n === 1 ? one : many}`;
 const pctInput = (v) => (Number.isFinite(v) ? numInput(+(v * 100).toFixed(4)) : '');
 const opt = (value, label, selected) => `<option value="${esc(value)}"${selected ? ' selected' : ''}>${esc(label)}</option>`;
@@ -118,6 +120,45 @@ const suffixOf = (symbol) => {
   const m = /\.([A-Z]{1,3})$/.exec(String(symbol || '').toUpperCase());
   return m ? m[1] : '';
 };
+
+// 'iPhone' or 'iPad' when the app runs on one, '' elsewhere (e.g. the preview inside Claude on a computer):
+// the copy names the phone only when it is true
+export function deviceName(ua = null) {
+  const nav = typeof navigator !== 'undefined' ? navigator : null;
+  const s = ua ?? String((nav && nav.userAgent) || '');
+  if (/iPhone|iPod/.test(s)) return 'iPhone';
+  if (/iPad/.test(s) || (/Macintosh/.test(s) && nav && nav.maxTouchPoints > 1)) return 'iPad';
+  return '';
+}
+const onIos = () => Boolean(deviceName());
+const hereText = () => (deviceName() ? `questo ${deviceName()}` : 'questo dispositivo');
+// Opened from the Home Screen icon (standalone web app) rather than in a Safari tab
+function isStandalone() {
+  try {
+    if (typeof navigator !== 'undefined' && navigator.standalone === true) return true;
+    return typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(display-mode: standalone)').matches;
+  } catch {
+    return false;
+  }
+}
+
+// Anything the user entered (example data excluded): transactions, securities, watchlist items
+export function hasUserContent(d) {
+  if (!d || typeof d !== 'object') return false;
+  const txns = Array.isArray(d.txns) ? d.txns : [];
+  const assets = d.assets && typeof d.assets === 'object' ? Object.values(d.assets) : [];
+  const watch = Array.isArray(d.watch) ? d.watch : [];
+  return txns.some((t) => t && !t.demo) || assets.some((a) => a && !a.demo) || watch.some((w) => w && !w.demo);
+}
+
+// Italian file size, decimal units like the iPhone settings: 850 kB, 2,4 MB
+export function fmtBytes(n) {
+  if (!Number.isFinite(n) || n < 0) return '—';
+  if (n < 1e3) return `${num(n, 0)} byte`;
+  if (n < 1e6) return `${num(n / 1e3, 0)} kB`;
+  if (n < 1e9) return `${num(n / 1e6, 1)} MB`;
+  return `${num(n / 1e9, 1)} GB`;
+}
 
 function lead(name, tone = '') {
   return `<span class="more-ico${tone ? ' ' + tone : ''}">${icon(name)}</span>`;
@@ -139,6 +180,9 @@ function group(id, ico, title, body, foot = '') {
     ${foot ? `<p class="more-foot">${foot}</p>` : ''}
   </section>`;
 }
+
+// Numbered steps (guide sheets); items are HTML: callers escape their strings
+const stepsHtml = (steps) => `<ol class="more-steps">${steps.map((s) => `<li>${s}</li>`).join('')}</ol>`;
 
 function accAvatar(a) {
   const src = String((a.broker && a.broker !== 'Altro' ? a.broker : a.name) || '?');
@@ -163,7 +207,7 @@ function lastValue(key) {
   }
 }
 
-// Time of a sync or a refresh: "alle 14:32" today, "3 ott alle 14:32" otherwise
+// Time of a refresh or a backup: "alle 14:32" today, "3 ott alle 14:32" otherwise
 function whenText(ms, today = todayISO()) {
   if (!ms) return '';
   const day = iso(new Date(ms));
@@ -546,8 +590,8 @@ export function renderMore() {
     <div class="page-head"><div><p class="eyebrow">Impostazioni e strumenti</p><h1 class="page-title">Altro</h1></div></div>
     ${demoBanner()}
     <div class="more-cols">
-      <div class="more-col">${accountsGroup()}${importGroup(today)}${fiscalGroup()}${syncGroup(today)}</div>
-      <div class="more-col">${serverGroup(today)}${appearanceGroup()}${dataGroup(today)}${guideGroup()}</div>
+      <div class="more-col">${accountsGroup()}${importGroup(today)}${fiscalGroup()}${appearanceGroup()}</div>
+      <div class="more-col">${privacyGroup(today)}${dataGroup()}${serverGroup(today)}${guideGroup()}</div>
     </div>
   </div>`;
 }
@@ -584,7 +628,7 @@ function importGroup(today) {
     rows.push(navRow({ act: 'more-import-undo', attrs: ` data-src="${esc(b.src)}"`, ico: 'trash', title: 'Annulla un\'importazione', sub: esc(sub.join(' · ')), chev: false }));
   }
   return group('import', 'file', 'Importa da broker', `<div class="list">${rows.join('')}</div>`,
-    'Il file viene letto sul tuo dispositivo. Le operazioni già presenti vengono riconosciute e saltate: puoi reimportare un file aggiornato senza doppioni.');
+    esc(`Il file viene letto su ${hereText()}: al server dei prezzi arrivano solo gli ISIN dei titoli, per trovarne le quotazioni. Le operazioni già presenti vengono riconosciute e saltate: puoi reimportare un file aggiornato senza doppioni.`));
 }
 
 /* ---------- 3. Report and taxes ---------- */
@@ -614,50 +658,186 @@ function fiscalGroup() {
     'Valori usati dal Report: confronto con il benchmark, Sharpe, imposte, bollo, zaino fiscale e costo dei fondi.');
 }
 
-/* ---------- 4. Sync ---------- */
-const SYNC_STEPS = [
-  'Qui scegli una frase segreta e tocca «Attiva».',
-  'Sull\'altro dispositivo apri Gruzzolo → Altro → Sincronizzazione e scrivi la stessa frase.',
-  'Fatto: ogni modifica passa da un dispositivo all\'altro, cifrata. Il server non può leggerla.',
-];
-const stepsHtml = (steps) => `<ol class="more-steps">${steps.map((s) => `<li>${s}</li>`).join('')}</ol>`;
+/* ---------- 4. Appearance ---------- */
+function appearanceGroup() {
+  const theme = ['auto', 'light', 'dark'].includes(D().settings.theme) ? D().settings.theme : 'auto';
+  const tb = (k, label, ico) => `<button type="button" data-act="set-theme" data-theme="${k}" aria-pressed="${theme === k}">${icon(ico)}<span>${label}</span></button>`;
+  const hide = Boolean(S.ui.hide);
+  return group('look', 'sun', 'Aspetto', `<div class="list">
+    <div class="row more-static more-theme"><span class="row-main"><span class="row-title">Tema</span><span class="row-sub">«Automatico» segue l'aspetto chiaro o scuro scelto nelle impostazioni del telefono</span></span></div>
+    <div class="more-seg-wrap"><div class="seg full more-seg" role="group" aria-label="Tema">${tb('auto', 'Automatico', 'refresh')}${tb('light', 'Chiaro', 'sun')}${tb('dark', 'Scuro', 'moon')}</div></div>
+    <button class="row more-row more-switch" type="button" role="switch" aria-checked="${hide}" data-act="toggle-hide">
+      ${lead(hide ? 'eyeOff' : 'eye')}<span class="row-main"><span class="row-title">Nascondi gli importi</span><span class="row-sub">Utile in pubblico: gli euro diventano •••••, le percentuali restano visibili</span></span>
+      <span class="more-toggle" aria-hidden="true"></span>
+    </button>
+  </div>`);
+}
 
-function syncStatusLine(st, today) {
-  switch (st.state) {
-    case 'syncing': return { cls: 'busy', text: st.message || 'Sincronizzo…' };
-    case 'ok': return { cls: 'online', text: st.lastSync ? `Sincronizzata ${whenText(st.lastSync, today)}` : 'Sincronizzata' };
-    case 'error': return { cls: 'error', text: st.message || SYNC_MESSAGES.server };
-    case 'unavailable': return { cls: 'error', text: 'Sincronizzazione non attiva sul server' };
-    default: return { cls: 'online', text: st.lastSync ? `Attiva · ultima sincronizzazione ${whenText(st.lastSync, today)}` : 'Attiva · in attesa della prima sincronizzazione' };
+/* ---------- 5. Where your data is ---------- */
+// Storage state from util.storageStatus(), read after the page renders (MOUNTS) and patched in place.
+// persisted/usage/quota stay null when unknown (helper missing, unsupported, error).
+const storage = { known: false, persisted: null, usage: null, quota: null, at: 0, pending: null };
+const STORAGE_TTL = 30 * 1000;
+const STORAGE_TIMEOUT = 4000;
+const finiteOrNull = (v) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null);
+const canAskPersist = () => typeof navigator !== 'undefined' && Boolean(navigator.storage) && typeof navigator.storage.persist === 'function';
+
+// util.storageStatus() made safe: a missing helper, a throw, a hang or odd values all become nulls
+export async function readStorageStatus(fn = util.storageStatus) {
+  const none = { persisted: null, usage: null, quota: null };
+  if (typeof fn !== 'function') return none;
+  let timer = null;
+  try {
+    const r = await Promise.race([
+      Promise.resolve().then(() => fn()),
+      new Promise((resolve) => {
+        timer = setTimeout(() => resolve(null), STORAGE_TIMEOUT);
+      }),
+    ]);
+    if (!r || typeof r !== 'object') return none;
+    return { persisted: typeof r.persisted === 'boolean' ? r.persisted : null, usage: finiteOrNull(r.usage), quota: finiteOrNull(r.quota) };
+  } catch (e) {
+    console.warn('[gruzzolo] stato della memoria', e);
+    return none;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
-function syncGroup(today) {
-  if (isArtifact()) {
-    return group('sync', 'cloud', 'Sincronizzazione iPhone ↔ PC',
-      `<div class="list"><div class="row more-static"><span class="row-main"><span class="row-title">Non serve in questa versione</span><span class="row-sub">Qui dentro Claude i dati sono salvati nel tuo spazio privato e li ritrovi su ogni dispositivo con il tuo account.</span></span></div></div>`);
-  }
-  const st = sync.status();
-  const serverNo = Boolean(market.health && market.health.sync === false) || st.state === 'unavailable';
-  const rows = [];
-  if (st.state === 'off') {
-    rows.push(`<div class="row more-static">${stepsHtml(SYNC_STEPS.map(esc))}</div>`);
-    if (serverNo) {
-      rows.push(navRow({ act: 'more-sync-setup', ico: 'alert', tone: 'warn', title: 'Sincronizzazione non attiva sul server', sub: 'Tocca per vedere come attivarla su Cloudflare (5 minuti)' }));
-    } else {
-      rows.push(navRow({ act: 'more-sync', ico: 'lock', tone: 'accent', title: 'Attiva la sincronizzazione', sub: market.status === 'offline' ? 'Server non raggiungibile: serve la connessione' : 'Con una frase segreta che sai solo tu' }));
-    }
-  } else {
-    const line = syncStatusLine(st, today);
-    rows.push(`<div class="row more-static more-status"><span class="dot ${line.cls === 'error' ? 'offline' : line.cls}"></span><span class="row-main"><span class="row-title">${esc(line.text)}</span><span class="row-sub">Dati cifrati end-to-end con la tua frase segreta</span></span></div>`);
-    if (serverNo) rows.push(navRow({ act: 'more-sync-setup', ico: 'alert', tone: 'warn', title: 'Come attivarla sul server', sub: 'Cloudflare Pages → Settings → Functions → KV' }));
-    rows.push(navRow({ act: 'more-sync-now', ico: 'refresh', title: 'Sincronizza ora', sub: 'Confronta con l\'altro dispositivo e tiene la copia più recente', disabled: st.state === 'syncing', chev: false }));
-    rows.push(navRow({ act: 'more-sync-off', ico: 'close', title: 'Disattiva su questo dispositivo', sub: 'I dati restano qui e sull\'altro dispositivo', chev: false }));
-  }
-  return group('sync', 'cloud', 'Sincronizzazione iPhone ↔ PC', `<div class="list">${rows.join('')}</div>`);
+// Read the storage state again (at most every 30 s unless forced) and update its row if it is on screen
+export function refreshStorage({ force = false, read = util.storageStatus } = {}) {
+  if (storage.pending) return storage.pending;
+  if (!force && storage.known && Date.now() - storage.at < STORAGE_TTL) return Promise.resolve(storage);
+  storage.pending = readStorageStatus(read).then((r) => {
+    Object.assign(storage, r, { known: true, at: Date.now(), pending: null });
+    patchStorageRow();
+    return storage;
+  });
+  return storage.pending;
 }
 
-/* ---------- 5. Price server ---------- */
+const storageKey = () => (storage.known ? `${storage.persisted}|${storage.usage === null ? '' : Math.round(storage.usage / 1e4)}|${canAskPersist()}` : 'loading');
+
+function storageLine() {
+  const ios = onIos();
+  const who = ios ? 'iOS' : 'il browser';
+  const whoCap = ios ? 'iOS' : 'Il browser';
+  if (!storage.known) return { cls: 'busy', title: 'Controllo la memoria…', sub: '' };
+  if (storage.persisted === true) {
+    return { cls: 'online', title: 'Memoria permanente attiva', sub: `${whoCap} conserva i dati di Gruzzolo e non li cancella per liberare spazio.` };
+  }
+  if (storage.persisted === false) {
+    const base = `I dati sono salvati, ma ${ios ? 'se il telefono resta senza spazio' : 'se manca spazio'} ${who} potrebbe cancellarli.`;
+    const line = { cls: 'warn', title: 'Memoria permanente non ancora concessa', sub: base };
+    // In Safari iOS grants it to the Home Screen app only: asking again from the tab does not help
+    if (ios && !isStandalone()) line.sub += ' Si attiva aprendo Gruzzolo dall\'icona sulla schermata Home.';
+    else if (canAskPersist()) Object.assign(line, { sub: `${base} Tocca per chiederla di nuovo.`, ask: true });
+    return line;
+  }
+  return { cls: 'offline', title: 'Stato della memoria non disponibile', sub: `${whoCap} non lo comunica: i dati restano comunque salvati qui.` };
+}
+
+function storageRow() {
+  const line = storageLine();
+  const end = storage.known && storage.usage !== null
+    ? `<span class="row-end"><span class="row-value">${esc(fmtBytes(storage.usage))}</span><span class="row-sub">usati</span></span>`
+    : '';
+  const inner = `<span class="dot ${line.cls}"></span><span class="row-main"><span class="row-title">${esc(line.title)}</span>${line.sub ? `<span class="row-sub">${esc(line.sub)}</span>` : ''}</span>${end}`;
+  const state = esc(storageKey());
+  if (line.ask) {
+    return `<button class="row more-row more-status more-note" type="button" id="more-storage" data-state="${state}" data-act="more-storage-persist">${inner}</button>`;
+  }
+  return `<div class="row more-static more-status more-note" id="more-storage" data-state="${state}">${inner}</div>`;
+}
+
+function patchStorageRow() {
+  const el = byId('more-storage');
+  if (el && el.dataset.state !== storageKey()) el.outerHTML = storageRow();
+}
+
+MOUNTS.push(() => {
+  if (byId('more-storage')) refreshStorage();
+});
+
+// When the last backup was exported (this device only; it is not part of the data)
+const BACKUP_AT_KEY = 'gruzzolo:lastBackup';
+export const BACKUP_EVERY_DAYS = 30;
+function lastBackupAt() {
+  try {
+    const ls = globalThis.localStorage;
+    return ls ? Number(ls.getItem(BACKUP_AT_KEY)) || 0 : 0;
+  } catch {
+    return 0;
+  }
+}
+function markBackup(ms = Date.now()) {
+  try {
+    const ls = globalThis.localStorage;
+    if (ls) ls.setItem(BACKUP_AT_KEY, String(ms));
+  } catch { /* the reminder is only a convenience */ }
+}
+
+// Reminder under «Esporta backup»: due (stronger color) when there is real data and no backup in 30 days
+export function backupReminder(last, { today = todayISO(), content = true } = {}) {
+  if (!last) return { due: Boolean(content), text: 'Non hai ancora fatto un backup: fanne uno ogni mese' };
+  const day = iso(new Date(last));
+  if (dayDiff(day, today) > BACKUP_EVERY_DAYS) return { due: Boolean(content), text: `Ultimo il ${fmtDate(day)}: è ora di farne uno nuovo` };
+  return { due: false, text: `Ultimo backup ${day === today ? `oggi ${whenText(last, today)}` : `il ${fmtDate(day)}`}` };
+}
+
+function installRow() {
+  if (!onIos() || isStandalone()) return '';
+  return navRow({
+    act: 'more-guide', attrs: ' data-topic="iphone"', ico: 'alert', tone: 'warn', cls: 'more-note',
+    title: 'Installa Gruzzolo sulla schermata Home',
+    sub: esc('In Safari, iOS può cancellare i dati dei siti che non apri da 7 giorni. Dall\'icona sulla schermata Home no.'),
+  });
+}
+
+function privacyGroup(today) {
+  const ios = onIos();
+  const rem = backupReminder(lastBackupAt(), { today, content: hasUserContent(D()) });
+  const static2 = (ico, tone, title, sub, cls = '') => `<div class="row more-static more-note${cls}">${lead(ico, tone)}<span class="row-main"><span class="row-title">${esc(title)}</span><span class="row-sub">${esc(sub)}</span></span></div>`;
+  const rows = [
+    static2('lock', 'accent', `I tuoi dati restano solo su ${hereText()}`,
+      `Conti, operazioni, titoli e impostazioni sono salvati nella memoria di Gruzzolo, qui sul ${ios ? 'telefono' : 'dispositivo'}. Niente account e niente cloud: nessuno oltre a te può vederli.`, ' more-hero'),
+    static2('globe', '', 'Cosa passa da internet',
+      'Solo il nome, il ticker o l\'ISIN dei titoli, per cercarli e chiederne i prezzi pubblici al server dell\'app. Mai importi, quantità, conti o operazioni.'),
+    storageRow(),
+    installRow(),
+    navRow({ act: 'more-backup-export', ico: 'download', tone: rem.due ? 'warn' : 'accent', title: 'Esporta backup', sub: esc(rem.text), chev: false, cls: 'more-backup-now' }),
+  ];
+  const foot = ios
+    ? 'Attenzione: se elimini l\'icona di Gruzzolo, iOS cancella anche i suoi dati. Prima esporta un backup.'
+    : 'Attenzione: se cancelli i dati di navigazione del browser, si cancellano anche quelli di Gruzzolo. Prima esporta un backup.';
+  return group('privacy', 'lock', 'Dove sono i tuoi dati', `<div class="list">${rows.join('')}</div>`, esc(foot));
+}
+
+/* ---------- 6. Backup and data ---------- */
+function dataGroup() {
+  const realTx = D().txns.some((t) => !t.demo);
+  const demo = hasDemo();
+  const dev = deviceName();
+  const rows = [
+    navRow({
+      act: 'more-backup-export', ico: 'download', title: 'Esporta backup', chev: false,
+      sub: esc(dev ? `Si apre Condividi: scegli «Salva su File» → «Sul mio ${dev}»` : 'Tutti i tuoi dati in un file .json da conservare'),
+    }),
+    navRow({
+      act: 'more-backup-import', ico: 'upload', title: 'Importa backup', chev: false,
+      sub: esc(dev ? 'Scegli il file .json nell\'app File: sostituisce i dati attuali' : 'Da un file .json di Gruzzolo: sostituisce i dati attuali'),
+    }),
+    navRow({ act: 'more-csv-export', ico: 'file', title: 'Esporta transazioni', sub: 'File .csv per Numbers, Excel o Fogli Google', chev: false }),
+    navRow({ act: 'prices', ico: 'edit', title: 'Prezzi manuali', sub: 'Per i titoli senza quotazione automatica' }),
+  ];
+  if (demo) rows.push(navRow({ act: 'demo-remove', ico: 'close', title: 'Rimuovi i dati di esempio', sub: 'Tiene solo quello che hai inserito tu', chev: false }));
+  else if (!realTx) rows.push(navRow({ act: 'demo-load', ico: 'chart', title: 'Carica un esempio', sub: 'Un portafoglio dimostrativo con prezzi simulati', chev: false }));
+  rows.push(navRow({ act: 'more-wipe', ico: 'trash', tone: 'danger', title: '<span class="down">Cancella tutti i dati</span>', sub: 'Conti, operazioni, titoli, prezzi e watchlist', chev: false }));
+  const foot = `Il backup è un file con tutti i tuoi dati: conservane sempre una copia recente. Con «Importa backup» li ripristini, anche su un nuovo ${dev || 'dispositivo'}.`;
+  return group('data', 'shield', 'Backup e dati', `<div class="list">${rows.join('')}</div>`, esc(foot));
+}
+
+/* ---------- 7. Price server ---------- */
 function serverLine(today) {
   if (market.status === 'online') {
     return { cls: 'online', text: market.lastRefresh ? `Collegato · prezzi aggiornati ${whenText(market.lastRefresh, today)}` : 'Collegato' };
@@ -672,57 +852,24 @@ function serverGroup(today) {
   const base = String(D().settings.apiBase || '').trim();
   const line = serverLine(today);
   const rows = [
-    `<div class="row more-static more-status"><span class="dot ${line.cls}"></span><span class="row-main"><span class="row-title">${esc(line.text)}</span><span class="row-sub">${esc(base ? `Server: ${base}` : 'Server: questo sito')}</span></span></div>`,
+    `<div class="row more-static more-status"><span class="dot ${line.cls}"></span><span class="row-main"><span class="row-title">${esc(line.text)}</span><span class="row-sub">${esc(base ? `Server: ${base}` : 'Server: lo stesso sito dell\'app')}</span></span></div>`,
     navRow({ act: 'more-refresh', ico: 'refresh', title: 'Aggiorna prezzi ora', sub: 'Scarica le ultime quotazioni di titoli, benchmark e cambi', chev: false }),
-    navRow({ act: 'more-server', ico: 'globe', title: 'Indirizzo del server', sub: esc(base || 'Questo sito (consigliato)') }),
+    navRow({ act: 'more-server', ico: 'globe', title: 'Indirizzo del server', sub: esc(base || 'Lo stesso sito dell\'app (consigliato)') }),
     navRow({ act: 'more-clear-cache', ico: 'trash', title: 'Svuota cache prezzi', sub: 'Cancella i prezzi scaricati e li riscarica', chev: false }),
-    navRow({ act: 'more-guide', attrs: ' data-topic="prices"', ico: 'info', title: 'Da dove arrivano i prezzi', sub: 'Yahoo Finance, con circa 15 minuti di ritardo' }),
   ];
-  return group('server', 'globe', 'Server prezzi', `<div class="list">${rows.join('')}</div>`);
-}
-
-/* ---------- 6. Appearance ---------- */
-function appearanceGroup() {
-  const theme = ['auto', 'light', 'dark'].includes(D().settings.theme) ? D().settings.theme : 'auto';
-  const tb = (k, label, ico) => `<button type="button" data-act="set-theme" data-theme="${k}" aria-pressed="${theme === k}">${icon(ico)}<span>${label}</span></button>`;
-  const hide = Boolean(S.ui.hide);
-  return group('look', 'sun', 'Aspetto', `<div class="list">
-    <div class="row more-static more-theme"><span class="row-main"><span class="row-title">Tema</span><span class="row-sub">«Automatico» segue l'impostazione del telefono o del computer</span></span></div>
-    <div class="more-seg-wrap"><div class="seg full more-seg" role="group" aria-label="Tema">${tb('auto', 'Automatico', 'refresh')}${tb('light', 'Chiaro', 'sun')}${tb('dark', 'Scuro', 'moon')}</div></div>
-    <button class="row more-row more-switch" type="button" role="switch" aria-checked="${hide}" data-act="toggle-hide">
-      ${lead(hide ? 'eyeOff' : 'eye')}<span class="row-main"><span class="row-title">Nascondi gli importi</span><span class="row-sub">Utile in pubblico: gli euro diventano •••••, le percentuali restano visibili</span></span>
-      <span class="more-toggle" aria-hidden="true"></span>
-    </button>
-  </div>`);
-}
-
-/* ---------- 7. Backup and data ---------- */
-function dataGroup(today) {
-  const realTx = D().txns.some((t) => !t.demo);
-  const demo = hasDemo();
-  const rows = [
-    navRow({ act: 'more-backup-export', ico: 'download', title: 'Esporta backup', sub: 'Tutti i dati in un file .json', chev: false }),
-    navRow({ act: 'more-backup-import', ico: 'upload', title: 'Importa backup', sub: 'Da un file .json di Gruzzolo: sostituisce i dati attuali', chev: false }),
-    navRow({ act: 'more-csv-export', ico: 'file', title: 'Esporta transazioni', sub: 'File .csv per Excel o Fogli Google', chev: false }),
-    navRow({ act: 'prices', ico: 'edit', title: 'Prezzi manuali', sub: 'Per i titoli senza quotazione automatica' }),
-  ];
-  if (demo) rows.push(navRow({ act: 'demo-remove', ico: 'close', title: 'Rimuovi i dati di esempio', sub: 'Tiene solo quello che hai inserito tu', chev: false }));
-  else if (!realTx) rows.push(navRow({ act: 'demo-load', ico: 'chart', title: 'Carica un esempio', sub: 'Un portafoglio dimostrativo con prezzi simulati', chev: false }));
-  rows.push(navRow({ act: 'more-wipe', ico: 'trash', tone: 'danger', title: '<span class="down">Cancella tutti i dati</span>', sub: 'Conti, operazioni, titoli, prezzi e watchlist', chev: false }));
-  const where = isArtifact()
-    ? 'I dati sono salvati nel tuo spazio privato di Claude.'
-    : sync.enabled()
-      ? 'I dati sono salvati su questo dispositivo e, cifrati, nella copia sincronizzata.'
-      : 'I dati sono salvati solo su questo dispositivo, nel browser: esporta un backup ogni tanto per non perderli.';
-  void today;
-  return group('data', 'shield', 'Backup e dati', `<div class="list">${rows.join('')}</div>`, esc(where));
+  return group('server', 'globe', 'Server prezzi', `<div class="list">${rows.join('')}</div>`,
+    esc('Dal server dell\'app passano solo dati pubblici di mercato da Yahoo Finance: prezzi, cambi, dividendi e ricerca dei titoli. Riceve solo nomi e ticker dei titoli, mai i tuoi dati.'));
 }
 
 /* ---------- 8. Guide ---------- */
 function guideGroup() {
+  const installed = isStandalone();
   const rows = [
-    navRow({ act: 'more-guide', attrs: ' data-topic="iphone"', ico: 'download', title: 'Installa su iPhone', sub: 'Safari → Condividi → Aggiungi alla schermata Home' }),
-    navRow({ act: 'more-guide', attrs: ' data-topic="pc"', ico: 'download', title: 'Installa su PC', sub: 'Chrome o Edge → icona «Installa» nella barra degli indirizzi' }),
+    navRow({
+      act: 'more-guide', attrs: ' data-topic="iphone"', ico: installed ? 'check' : 'download', title: 'Installa su iPhone',
+      sub: esc(installed ? 'Fatto: stai usando l\'app installata' : 'Safari → Condividi → Aggiungi alla schermata Home'),
+    }),
+    navRow({ act: 'more-guide', attrs: ' data-topic="offline"', ico: 'cloud', title: 'Senza internet', sub: 'Cosa funziona offline e quando si aggiornano i prezzi' }),
     navRow({ act: 'more-guide', attrs: ' data-topic="prices"', ico: 'info', title: 'Da dove arrivano i prezzi', sub: 'Fonte, ritardo e prezzi manuali' }),
   ];
   return group('guide', 'info', 'Guida', `<div class="list">${rows.join('')}</div>`,
@@ -1424,146 +1571,12 @@ FORMS['more-ter'] = (form) => {
 };
 
 /* ======================================================================
-   Sync: enable sheet, setup guide, actions
-   ====================================================================== */
-const SETUP_STEPS = [
-  'Accedi a Cloudflare e apri <b>Storage &amp; Databases → KV</b> (o «Workers &amp; Pages → KV»): crea un namespace, per esempio <b>gruzzolo-sync</b>.',
-  'Apri il progetto Pages di Gruzzolo → <b>Settings → Functions → KV namespace bindings</b> → <b>Add binding</b> (nelle versioni più recenti: Settings → Bindings → Add → KV namespace).',
-  'Come nome della variabile scrivi esattamente <b>GRUZZOLO_KV</b> e scegli il namespace appena creato. Salva.',
-  'Fai un nuovo deploy (Deployments → Retry deployment), poi chiudi e riapri Gruzzolo.',
-];
-
-SHEETS['more-sync-setup'] = () => ({
-  title: 'Attivare la sincronizzazione',
-  body: `<div class="more-sheet">
-    <p class="more-lead">La sincronizzazione usa un piccolo archivio sul server dell'app (Cloudflare KV). Il server riceve solo dati cifrati: senza la tua frase segreta non può leggerli.</p>
-    ${stepsHtml(SETUP_STEPS)}
-    <p class="hint">Finché non è attiva, i dati restano su ogni dispositivo: puoi spostarli con «Esporta backup» e «Importa backup».</p>
-  </div>`,
-});
-
-SHEETS['more-sync'] = () => ({
-  title: 'Sincronizza iPhone e PC',
-  body: `<form class="form more-form" data-form="more-sync" novalidate>
-    ${stepsHtml(SYNC_STEPS.map(esc))}
-    <div class="field"><label for="ms-pass">Frase segreta</label>
-      <input id="ms-pass" name="pass" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" minlength="10" enterkeyhint="next">
-      <p class="hint">Almeno 10 caratteri. Più è lunga, meglio è: per esempio tre parole a caso e un numero.</p></div>
-    <div class="field"><label for="ms-pass2">Ripeti la frase</label>
-      <input id="ms-pass2" name="pass2" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done"></div>
-    <label class="check"><input type="checkbox" data-input="more-sync-show">Mostra la frase</label>
-    <div class="banner warn more-warn">${icon('alert')}<p><strong>Conservala bene.</strong> Se la perdi non potrai più leggere la copia sincronizzata (nessuno può recuperarla). I dati su questo dispositivo restano comunque al sicuro.</p></div>
-    <p class="form-error" data-error role="alert" hidden></p>
-    <button class="btn primary block" type="submit" id="ms-submit">${icon('lock')}Attiva la sincronizzazione</button>
-  </form>`,
-});
-FORM_SHEETS.add('more-sync');
-
-INPUTS['more-sync-show'] = (el, ev) => {
-  if (ev && ev.type !== 'change') return;
-  const form = el.closest('form');
-  if (!form) return;
-  for (const name of ['pass', 'pass2']) if (form.elements[name]) form.elements[name].type = el.checked ? 'text' : 'password';
-};
-
-// Replace the data with the copy from the other device (no new timestamp: it is not a local change)
-function adoptRemote(raw) {
-  S.data = migrate(raw);
-  if (hasDemo()) installDemoMarket({ today: todayISO() });
-  bump();
-  try {
-    persistence.save(S.data);
-  } catch (e) {
-    console.warn('[gruzzolo] salvataggio', e);
-  }
-  app.render();
-}
-
-let syncBusy = false;
-FORMS['more-sync'] = async (form) => {
-  if (syncBusy) return;
-  clearErrors(form);
-  const showErr = formError(form);
-  const p1 = form.elements.pass.value;
-  const p2 = form.elements.pass2.value;
-  const err = sync.passphraseError(p1);
-  if (err) return showErr(err, form.elements.pass);
-  if (p1.trim() !== p2.trim()) return showErr('Le due frasi non coincidono: riscrivile con attenzione.', form.elements.pass2);
-  const btn = byId('ms-submit');
-  const label = btn ? btn.innerHTML : '';
-  if (btn) {
-    btn.disabled = true;
-    btn.textContent = 'Preparo le chiavi di cifratura…';
-  }
-  syncBusy = true;
-  blurActive();
-  const before = S.data;
-  const stamp = S.data.updatedAt;
-  try {
-    const local = hasUserContent(S.data) ? S.data : null;
-    const r = await sync.enable(p1, local);
-    app.closeSheets();
-    if (r && r.action === 'pulled' && r.data && S.data === before && S.data.updatedAt === stamp) {
-      adoptRemote(r.data);
-      app.toast('Sincronizzazione attiva: ho scaricato i dati dall\'altro dispositivo');
-    } else {
-      app.render();
-      app.toast(r && r.action === 'pushed' ? 'Sincronizzazione attiva: i dati di questo dispositivo sono stati salvati in modo cifrato' : 'Sincronizzazione attiva');
-    }
-  } catch (e) {
-    const code = e && e.code;
-    if (code === 'offline' && sync.enabled()) {
-      app.closeSheets();
-      app.render();
-      app.toast('Sincronizzazione attivata, ma il server non risponde: riproverò appena possibile');
-      return;
-    }
-    if (code === 'unavailable' || code === 'decrypt' || code === 'gzip' || code === 'server' || code === 'tooBig') sync.disable();
-    if (btn) {
-      btn.disabled = false;
-      btn.innerHTML = label;
-    }
-    if (code === 'unavailable') {
-      showErr('Sincronizzazione non attiva sul server. Chiudi questa finestra e tocca «Sincronizzazione non attiva sul server» per vedere come attivarla.');
-      app.render();
-      return;
-    }
-    showErr((e && e.message) || 'Attivazione non riuscita: riprova tra poco.');
-  } finally {
-    syncBusy = false;
-  }
-};
-
-async function syncNow() {
-  if (syncBusy || !sync.enabled()) return;
-  syncBusy = true;
-  const before = S.data;
-  const stamp = S.data.updatedAt;
-  try {
-    const r = await sync.reconcile(S.data);
-    if (r && r.action === 'pulled' && r.data) {
-      if (S.data === before && S.data.updatedAt === stamp) {
-        adoptRemote(r.data);
-        app.toast('Dati aggiornati dall\'altro dispositivo');
-      } else app.toast('Hai modificato i dati nel frattempo: li invio all\'altro dispositivo');
-    } else if (r && r.action === 'pushed') app.toast('Copia sincronizzata aggiornata con i dati di questo dispositivo');
-    else app.toast('Tutto sincronizzato: nessuna differenza');
-  } catch (e) {
-    app.toast((e && e.message) || 'Sincronizzazione non riuscita: riprova tra poco');
-  } finally {
-    syncBusy = false;
-    app.render();
-  }
-}
-
-/* ======================================================================
    Sheet: price server address
    ====================================================================== */
 function serverStatusHtml(text = null) {
   const today = todayISO();
   const line = text ? { cls: 'busy', text } : serverLine(today);
-  const syncText = market.status === 'online' && market.health ? (market.health.sync ? 'Sincronizzazione disponibile' : 'Sincronizzazione non attiva su questo server') : '';
-  return `<span class="dot ${line.cls}"></span><span><b>${esc(line.text)}</b>${syncText ? `<small>${esc(syncText)}</small>` : ''}</span>`;
+  return `<span class="dot ${line.cls}"></span><span><b>${esc(line.text)}</b><small>Riceve solo nomi e ticker dei titoli, mai i tuoi dati</small></span>`;
 }
 
 SHEETS['more-server'] = (args = {}) => {
@@ -1572,9 +1585,10 @@ SHEETS['more-server'] = (args = {}) => {
   return {
     title: 'Server prezzi',
     body: `<form class="form more-form" data-form="more-server" novalidate>
-      <p class="hint more-lead">Gruzzolo scarica i prezzi da Yahoo Finance attraverso il suo piccolo server. Di solito è sullo stesso sito dell'app: lascia vuoto il campo. Scrivi un indirizzo solo se hai pubblicato il server altrove.</p>
+      <p class="hint more-lead">Gruzzolo scarica prezzi, cambi e dividendi da Yahoo Finance attraverso il suo piccolo server. Sono dati pubblici: al server arrivano solo i nomi e i ticker dei titoli, mai i tuoi conti o le tue operazioni, che restano sul telefono.</p>
+      <p class="hint more-lead">Di solito il server è sullo stesso sito dell'app: lascia vuoto il campo. Scrivi un indirizzo solo se l'hai pubblicato altrove.</p>
       <div class="field"><label for="msv-base">Indirizzo del server</label>
-        <input id="msv-base" name="apiBase" type="url" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" value="${esc(base)}" placeholder="Vuoto = questo sito">
+        <input id="msv-base" name="apiBase" type="url" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" value="${esc(base)}" placeholder="Vuoto = lo stesso sito dell'app">
         <p class="hint">Per esempio https://gruzzolo.tuonome.workers.dev</p></div>
       <div class="more-server-status" id="msv-status" aria-live="polite">${serverStatusHtml()}</div>
       <p class="form-error" data-error role="alert" hidden></p>
@@ -1639,35 +1653,38 @@ FORMS['more-server'] = async (form) => {
 const GUIDE = {
   iphone: {
     title: 'Installa su iPhone',
-    body: () => `${stepsHtml([
-      'Apri Gruzzolo in <b>Safari</b> (con altri browser su iPhone l\'installazione può mancare).',
-      'Tocca <b>Condividi</b>: il quadrato con la freccia verso l\'alto, in basso al centro.',
-      'Scorri e scegli <b>Aggiungi alla schermata Home</b>, poi tocca <b>Aggiungi</b>.',
-      'Apri Gruzzolo dalla nuova icona: si apre a tutto schermo, come un\'app.',
+    body: () => `${isStandalone() ? `<div class="banner info more-banner">${icon('check')}<p><b>Fatto!</b> Stai già usando Gruzzolo dall'icona sulla schermata Home.</p></div>` : ''}
+    ${stepsHtml([
+      'Apri l\'indirizzo di Gruzzolo in <b>Safari</b>, con internet attivo.',
+      'Tocca <b>Condividi</b>: il quadrato con la freccia verso l\'alto (se non lo vedi, tocca prima <b>…</b> in basso).',
+      'Scorri e scegli <b>Aggiungi alla schermata Home</b>. Se compare «Apri come app web», lascialo attivo. Tocca <b>Aggiungi</b>.',
+      'Apri Gruzzolo <b>sempre dall\'icona</b>: si apre a tutto schermo, come un\'app, e i dati restano lì.',
+      'Alla prima apertura resta online qualche secondo: Gruzzolo si salva sul telefono e poi funziona anche senza internet. Scegli «Inizia da zero» per partire con i tuoi dati.',
     ])}
-    <div class="banner info">${icon('info')}<p>L'app installata e Safari hanno memorie separate. Se avevi già inserito dati in Safari, esporta un backup e importalo nell'app installata, oppure usa la sincronizzazione.</p></div>`,
+    <div class="banner info more-banner">${icon('info')}<p>L'app sulla schermata Home e Safari hanno memorie separate: quello che inserisci in Safari non compare nell'app. Se avevi già dei dati in Safari, esporta un backup da lì e importalo nell'app.</p></div>
+    <div class="banner warn more-banner">${icon('alert')}<p><b>Prima di eliminare l'icona</b> esporta un backup: eliminando l'app iOS cancella anche i suoi dati.</p></div>`,
   },
-  pc: {
-    title: 'Installa su PC',
-    body: () => `${stepsHtml([
-      'Apri Gruzzolo con <b>Chrome</b> o <b>Edge</b>.',
-      'Nella barra degli indirizzi, a destra, tocca l\'icona <b>Installa</b> (un monitor con una freccia).',
-      'Conferma con <b>Installa</b>: Gruzzolo avrà una sua finestra e un\'icona nel menu Start o nel Dock.',
-    ])}
-    <p class="hint">Non vedi l'icona? Menu ⋮ → «Trasmetti, salva e condividi» → «Installa pagina come app» (Chrome) oppure Menu … → «App» → «Installa questo sito come app» (Edge). Su Mac con Safari: File → Aggiungi al Dock.</p>`,
+  offline: {
+    title: 'Senza internet',
+    body: () => `<p>Gruzzolo è salvato sul telefono: si apre e funziona anche in aereo o senza campo.</p>
+      <ul class="more-bullets">
+        <li>Portafoglio, report e operazioni sono sempre disponibili. Puoi aggiungere, modificare ed eliminare operazioni: tutto resta salvato sul telefono.</li>
+        <li>I prezzi sono gli ultimi scaricati. Quando torni online si aggiornano da soli, oppure tocca <b>Aggiorna prezzi ora</b> in Altro.</li>
+        <li>Senza internet non puoi cercare titoli nuovi su Yahoo Finance; il catalogo dei titoli più diffusi funziona comunque.</li>
+        <li>Quando esce una nuova versione di Gruzzolo, aprila con internet attivo: si aggiorna da sola (a volte serve chiuderla e riaprirla una seconda volta).</li>
+      </ul>`,
   },
   prices: {
     title: 'Da dove arrivano i prezzi',
-    body: () => `<div class="more-sheet">
-      <p>I prezzi di azioni, ETF, crypto e cambi valuta arrivano da <b>Yahoo Finance</b>, attraverso il piccolo server di Gruzzolo che sta sullo stesso sito dell'app.</p>
+    body: () => `<p>I prezzi di azioni, ETF, crypto e cambi valuta arrivano da <b>Yahoo Finance</b>, attraverso il piccolo server di Gruzzolo che sta sullo stesso sito dell'app.</p>
       <ul class="more-bullets">
+        <li>Al server arrivano solo il nome, il ticker o l'ISIN del titolo (es. VWCE.DE): mai importi, quantità, conti o operazioni.</li>
         <li>Sono in ritardo di circa <b>15 minuti</b> e servono solo a scopo informativo: per i tuoi ordini fa fede il broker.</li>
-        <li>I prezzi scaricati restano salvati sul dispositivo: senza connessione l'app funziona con gli ultimi disponibili.</li>
+        <li>I prezzi scaricati restano salvati sul telefono: senza connessione l'app funziona con gli ultimi disponibili.</li>
         <li>I titoli senza quotazione su Yahoo (alcune obbligazioni, fondi non quotati, polizze) usano i <b>prezzi manuali</b> che inserisci tu, oppure il prezzo dell'ultima operazione.</li>
         <li>I valori in valuta estera sono convertiti in euro con il cambio del giorno.</li>
       </ul>
-      <button class="btn block" type="button" data-act="prices">${icon('edit')}Inserisci prezzi manuali</button>
-    </div>`,
+      <button class="btn block" type="button" data-act="prices">${icon('edit')}Inserisci prezzi manuali</button>`,
   },
 };
 
@@ -1708,9 +1725,8 @@ function askImportBackup(text) {
   const when = chk.updatedAt ? ` (salvato il ${fmtDate(iso(new Date(chk.updatedAt)))})` : '';
   const lines = [
     `Il backup${when} contiene ${plural(chk.txns, 'operazione', 'operazioni')} in ${plural(chk.accounts, 'conto', 'conti')}${chk.version === 1 ? ' ed è della prima versione di Gruzzolo: lo converto' : ''}.`,
-    'Sostituirà tutti i dati di questo dispositivo.',
+    `Sostituirà tutti i dati su ${hereText()}: se vuoi tenere quelli attuali, esporta prima un backup.`,
   ];
-  if (sync.enabled()) lines.push('La sincronizzazione è attiva: il backup sostituirà anche la copia sull\'altro dispositivo.');
   app.askConfirm({
     title: 'Importare il backup?',
     text: lines.join('\n'),
@@ -1721,6 +1737,7 @@ function askImportBackup(text) {
       S.data = d;
       if (hasDemo()) installDemoMarket({ today: todayISO() });
       S.ui.scope = 'all';
+      storage.at = 0;
       app.closeSheets();
       commit('Backup importato');
       app.refreshPrices();
@@ -1870,38 +1887,43 @@ Object.assign(ACTIONS, {
   'more-rates': () => app.pushSheet('more-rates'),
   'more-extpl': () => app.pushSheet('more-extpl'),
   'more-ter': () => app.pushSheet('more-ter'),
-  'more-sync': () => app.pushSheet('more-sync'),
-  'more-sync-setup': () => app.pushSheet('more-sync-setup'),
-  'more-sync-now': () => syncNow(),
-  'more-sync-off': () => app.askConfirm({
-    title: 'Disattivare la sincronizzazione?',
-    text: 'Questo dispositivo smette di inviare e ricevere modifiche. I dati restano qui e sull\'altro dispositivo; per riattivarla ti servirà la stessa frase segreta.',
-    ok: 'Disattiva',
-    danger: false,
-    onOk: () => {
-      sync.disable();
-      app.render();
-      app.toast('Sincronizzazione disattivata su questo dispositivo');
-    },
-  }),
   'more-server': () => app.pushSheet('more-server'),
   'more-refresh': () => app.refreshPrices({ force: true, manual: true }),
   'more-clear-cache': () => app.askConfirm({
     title: 'Svuotare la cache dei prezzi?',
-    text: 'Cancello i prezzi scaricati da Yahoo Finance su questo dispositivo e li riscarico. Operazioni e prezzi manuali non vengono toccati.',
+    text: `Cancello i prezzi scaricati da Yahoo Finance su ${hereText()} e li riscarico. Operazioni e prezzi manuali non vengono toccati.`,
     ok: 'Svuota la cache',
     danger: false,
     onOk: async () => {
       await market.clearCache();
+      storage.at = 0;
       app.render();
       app.toast(market.status === 'offline' ? 'Cache svuotata: riscarico i prezzi quando torni online' : 'Cache svuotata: riscarico i prezzi');
       app.refreshPrices({ force: true });
     },
   }),
   'more-guide': (el) => app.pushSheet('more-guide', { topic: el.dataset.topic || 'prices' }),
+  // On iPhone saveFile opens the share sheet: «Salva su File» → «Sul mio iPhone»
   'more-backup-export': async () => {
     const ok = await saveFile(`gruzzolo-backup-${todayISO()}.json`, JSON.stringify(D(), null, 1), 'application/json');
-    if (ok) app.toast('Backup pronto: conservalo in un posto sicuro (es. iCloud Drive)');
+    if (!ok) return;
+    markBackup();
+    app.render();
+    const dev = deviceName();
+    app.toast(dev ? `Backup esportato: tienilo in File → Sul mio ${dev}` : 'Backup esportato: conservalo in un posto sicuro');
+  },
+  'more-storage-persist': async () => {
+    let granted = false;
+    try {
+      if (typeof util.requestPersistentStorage === 'function') granted = (await util.requestPersistentStorage()) === true;
+      else if (canAskPersist()) granted = Boolean(await navigator.storage.persist());
+    } catch {
+      granted = false;
+    }
+    await refreshStorage({ force: true });
+    if (granted || storage.persisted === true) app.toast('Fatto: la memoria di Gruzzolo ora è permanente');
+    else if (onIos() && !isStandalone()) app.toast('Non concessa: apri Gruzzolo dall\'icona sulla schermata Home e riprova');
+    else app.toast('Non concessa per ora: i dati restano salvati, esporta un backup ogni tanto');
   },
   'more-backup-import': () => openBackupPicker(),
   'more-csv-export': async () => {
@@ -1914,12 +1936,12 @@ Object.assign(ACTIONS, {
   },
   'more-wipe': () => app.askConfirm({
     title: 'Cancellare tutti i dati?',
-    text: 'Conti, operazioni, titoli, prezzi manuali, watchlist e plus/minusvalenze esterne verranno eliminati; aliquote, benchmark e tema restano. Non si può annullare: se vuoi conservarli, esporta prima un backup.'
-      + (sync.enabled() ? '\nLa sincronizzazione è attiva: verranno cancellati anche dall\'altro dispositivo.' : ''),
+    text: `Conti, operazioni, titoli, prezzi manuali, watchlist e plus/minusvalenze esterne verranno eliminati da ${hereText()}; aliquote, benchmark e tema restano. Non si può annullare: se vuoi conservarli, esporta prima un backup.`,
     ok: 'Cancella tutto',
     onOk: () => {
       S.data = wipedData(D());
       S.ui.scope = 'all';
+      storage.at = 0;
       resetImport();
       app.closeSheets();
       commit('Dati cancellati');
@@ -1927,4 +1949,8 @@ Object.assign(ACTIONS, {
   }),
 });
 
-export const _test = { imp, loadImportText, computeImport, resetImport, defaultAccFor, newAccName, importStep3, previewHtml, catalogListing, buildAsset, NEW_ACC };
+export const _test = {
+  imp, loadImportText, computeImport, resetImport, defaultAccFor, newAccName, importStep3, previewHtml, catalogListing, buildAsset, NEW_ACC,
+  storage, storageRow, markBackup, lastBackupAt, GUIDE,
+  resetStorage: () => Object.assign(storage, { known: false, persisted: null, usage: null, quota: null, at: 0, pending: null }),
+};

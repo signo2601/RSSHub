@@ -1,16 +1,16 @@
-// Gruzzolo API: a small Yahoo Finance proxy (search, price history, quotes) plus storage
-// for the end-to-end encrypted sync blob.
+// Gruzzolo API: a small read-only Yahoo Finance proxy (search, price history, quotes, dividends, FX).
+// It only answers questions about public market data: it never receives, stores or forwards the
+// user's portfolio (that stays on the phone). No storage bindings or secrets are needed.
 //
 // Cloudflare Pages Function: this file lives at functions/api/[[path]].js and answers every
 // /api/... request of the site. It is self-contained (no imports), so it can also be pasted
 // as a standalone Cloudflare Worker: the default export at the bottom is the Worker entry.
 //
-// Routes (all JSON, CORS enabled):
-//   GET  /api/health                              → { ok: true, sync: boolean }
+// Routes (all GET, JSON, CORS enabled; anything else → 404 or 405):
+//   GET  /api/health                              → { ok: true }
 //   GET  /api/search?q=enel                       → { results: [...] }
 //   GET  /api/chart?symbol=VWCE.DE&range=10y&interval=1d
 //   GET  /api/quotes?symbols=AAPL,ENEL.MI         → { quotes: { [symbol]: {...} }, errors? }
-//   GET  /api/sync/:id   PUT /api/sync/:id   DELETE /api/sync/:id   (needs the KV binding GRUZZOLO_KV)
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
 const YAHOO_HEADERS = {
@@ -26,11 +26,9 @@ const LONG_RANGES = new Set(['1y', '2y', '5y', '10y', 'max']);
 const INTERVALS = new Set(['1d', '1wk', '1mo']);
 const SYMBOL_RE = /^[A-Za-z0-9.\-=^_]{1,32}$/;
 const ISIN_RE = /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/;
-const SYNC_ID_RE = /^[a-f0-9]{64}$/;
 const MAX_QUOTES = 50;
 const QUOTE_CONCURRENCY = 8;
 const MAX_SUBREQUESTS = 48; // Cloudflare free plan allows 50 outbound requests per invocation
-const MAX_SYNC_BYTES = 4 * 1024 * 1024;
 
 // Edge cache lifetimes (seconds)
 const TTL_SEARCH = 3600;
@@ -46,7 +44,7 @@ const EXCHANGE_RANK = { MIL: 0, GER: 1, PAR: 2, AMS: 2, BRU: 2, MCE: 2, EBS: 3, 
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
   'Access-Control-Max-Age': '86400',
 };
@@ -367,44 +365,7 @@ async function handleQuotes(context, url) {
   });
 }
 
-async function handleSync(request, env, id) {
-  const kv = env && env.GRUZZOLO_KV;
-  if (!kv) throw new HttpError(501, 'La sincronizzazione non è attiva su questo server: manca lo spazio dati KV "GRUZZOLO_KV".');
-  if (!SYNC_ID_RE.test(id || '')) throw new HttpError(400, 'Codice di sincronizzazione non valido.');
-  const key = 'sync:' + id;
-  if (request.method === 'GET') {
-    const stored = await kv.get(key);
-    if (stored === null || stored === undefined) throw new HttpError(404, 'Nessun dato sincronizzato per questo codice.');
-    return new Response(typeof stored === 'string' ? stored : JSON.stringify(stored), {
-      status: 200,
-      headers: { ...CORS, 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' },
-    });
-  }
-  if (request.method === 'PUT') {
-    const declared = Number(request.headers.get('Content-Length') || 0);
-    if (declared > MAX_SYNC_BYTES) throw new HttpError(413, 'Dati troppo grandi per la sincronizzazione (massimo 4 MB).');
-    const text = await request.text();
-    if (new TextEncoder().encode(text).length > MAX_SYNC_BYTES) throw new HttpError(413, 'Dati troppo grandi per la sincronizzazione (massimo 4 MB).');
-    let body;
-    try {
-      body = JSON.parse(text);
-    } catch {
-      throw new HttpError(400, 'Il contenuto inviato non è un JSON valido.');
-    }
-    if (!body || typeof body !== 'object' || !finite(body.updatedAt) || typeof body.iv !== 'string' || typeof body.ct !== 'string') {
-      throw new HttpError(400, 'Dati di sincronizzazione incompleti: servono updatedAt (numero), iv e ct (testo).');
-    }
-    await kv.put(key, text);
-    return json({ ok: true, updatedAt: body.updatedAt });
-  }
-  if (request.method === 'DELETE') {
-    if (typeof kv.delete === 'function') await kv.delete(key);
-    return json({ ok: true });
-  }
-  throw new HttpError(405, 'Metodo non consentito: usa GET, PUT o DELETE.');
-}
-
-// '/api/chart' → ['chart'], '/api/sync/abc' → ['sync', 'abc'] (also works for a Worker mounted at '/')
+// '/api/chart' → ['chart'], '/api/a/b' → ['a', 'b'] (also works for a Worker mounted at '/')
 function routeOf(pathname) {
   const i = pathname.indexOf('/api/');
   const rest = i >= 0 ? pathname.slice(i + 5) : pathname === '/api' ? '' : pathname.replace(/^\/+/, '');
@@ -417,27 +378,24 @@ function routeOf(pathname) {
   });
 }
 
+const ROUTES = {
+  health: async () => json({ ok: true }),
+  search: handleSearch,
+  chart: handleChart,
+  quotes: handleQuotes,
+};
+
 export async function onRequest(context) {
   const { request } = context;
-  const env = context.env || {};
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
   try {
     const url = new URL(request.url);
-    const [route = 'health', param] = routeOf(url.pathname);
-    if (route === 'sync') return await handleSync(request, env, param);
+    const parts = routeOf(url.pathname);
+    const route = parts[0] || 'health';
+    const handler = parts.length <= 1 && Object.hasOwn(ROUTES, route) ? ROUTES[route] : null;
+    if (!handler) throw new HttpError(404, `Indirizzo API sconosciuto: /api/${parts.join('/')}`);
     if (request.method !== 'GET') throw new HttpError(405, 'Metodo non consentito: usa GET.');
-    switch (route) {
-      case 'health':
-        return json({ ok: true, sync: Boolean(env.GRUZZOLO_KV) });
-      case 'search':
-        return await handleSearch(context, url);
-      case 'chart':
-        return await handleChart(context, url);
-      case 'quotes':
-        return await handleQuotes(context, url);
-      default:
-        throw new HttpError(404, `Indirizzo API sconosciuto: /api/${route}`);
-    }
+    return await handler(context, url);
   } catch (e) {
     if (e instanceof HttpError) return json({ error: e.message }, e.status);
     return json({ error: 'Errore interno del server: riprova più tardi.' }, 500);

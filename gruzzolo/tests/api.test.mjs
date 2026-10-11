@@ -1,5 +1,5 @@
-// Server function tests: input validation, sync with a fake KV, Yahoo payload conversion with a
-// mocked fetch, edge cache, and live checks against Yahoo Finance (skipped when unreachable).
+// Server function tests: input validation, read-only routes (no sync, no storage), Yahoo payload
+// conversion with a mocked fetch, edge cache, and live checks against Yahoo Finance (skipped when unreachable).
 // Behind an HTTPS proxy run with: NODE_USE_ENV_PROXY=1 node --test tests/api.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -18,22 +18,6 @@ async function call(path, { method = 'GET', body, env = {}, headers } = {}) {
     json = null;
   }
   return { status: res.status, headers: res.headers, json, text };
-}
-
-function fakeKv() {
-  const map = new Map();
-  return {
-    map,
-    async get(k) {
-      return map.has(k) ? map.get(k) : null;
-    },
-    async put(k, v) {
-      map.set(k, v);
-    },
-    async delete(k) {
-      map.delete(k);
-    },
-  };
 }
 
 // Is Yahoo Finance reachable from here?
@@ -56,15 +40,17 @@ const live = probe === true ? {} : { skip: probe };
 test('health, CORS and preflight', async () => {
   const r = await call('/api/health');
   assert.equal(r.status, 200);
-  assert.deepEqual(r.json, { ok: true, sync: false });
+  assert.deepEqual(r.json, { ok: true });
   assert.equal(r.headers.get('access-control-allow-origin'), '*');
   assert.match(r.headers.get('content-type'), /application\/json/);
-  const withKv = await call('/api/health', { env: { GRUZZOLO_KV: fakeKv() } });
-  assert.equal(withKv.json.sync, true);
+  assert.equal(r.headers.get('cache-control'), 'no-store');
+  // A storage binding left over from the old sync setup changes nothing
+  const withKv = await call('/api/health', { env: { GRUZZOLO_KV: { get: async () => null, put: async () => {} } } });
+  assert.deepEqual(withKv.json, { ok: true });
   const pre = await call('/api/quotes', { method: 'OPTIONS' });
   assert.equal(pre.status, 204);
   assert.equal(pre.headers.get('access-control-allow-origin'), '*');
-  assert.match(pre.headers.get('access-control-allow-methods'), /PUT/);
+  assert.equal(pre.headers.get('access-control-allow-methods'), 'GET, OPTIONS');
 });
 
 test('input validation → 400 / 404 / 405 with Italian JSON errors', async () => {
@@ -92,37 +78,33 @@ test('input validation → 400 / 404 / 405 with Italian JSON errors', async () =
   assert.equal(post.status, 405);
 });
 
-test('sync: PUT/GET roundtrip with a KV, errors, 501 without KV', async () => {
-  const kv = fakeKv();
+test('no sync and no storage: /api/sync is gone, writes are refused, nothing reaches a KV', async () => {
+  const touched = [];
+  const kv = new Proxy({}, { get: (_, k) => async () => { touched.push(String(k)); return null; } });
   const env = { GRUZZOLO_KV: kv };
   const id = 'ab'.repeat(32);
-  const blob = { updatedAt: 1760000000000, iv: 'aXY=', ct: 'Y2lwaGVy' };
-  const put = await call('/api/sync/' + id, { method: 'PUT', body: JSON.stringify(blob), env, headers: { 'Content-Type': 'application/json' } });
-  assert.equal(put.status, 200);
-  assert.equal(put.json.ok, true);
-  assert.equal(kv.map.get('sync:' + id), JSON.stringify(blob));
-  const get = await call('/api/sync/' + id, { env });
-  assert.equal(get.status, 200);
-  assert.deepEqual(get.json, blob);
-  assert.equal(get.headers.get('cache-control'), 'no-store');
-
-  assert.equal((await call('/api/sync/' + 'cd'.repeat(32), { env })).status, 404);
-  assert.equal((await call('/api/sync/XYZ', { env })).status, 400);
-  assert.equal((await call('/api/sync/' + 'AB'.repeat(32), { env })).status, 400); // uppercase hex is not accepted
-  assert.equal((await call('/api/sync/' + id, { method: 'PUT', body: 'not json', env })).status, 400);
-  assert.equal((await call('/api/sync/' + id, { method: 'PUT', body: JSON.stringify({ updatedAt: 'x', iv: 'a', ct: 'b' }), env })).status, 400);
-  assert.equal((await call('/api/sync/' + id, { method: 'PUT', body: JSON.stringify({ updatedAt: 1, iv: 2, ct: 'b' }), env })).status, 400);
-  const big = JSON.stringify({ updatedAt: 1, iv: 'a', ct: 'x'.repeat(4 * 1024 * 1024) });
-  assert.equal((await call('/api/sync/' + id, { method: 'PUT', body: big, env })).status, 413);
-
-  const del = await call('/api/sync/' + id, { method: 'DELETE', env });
-  assert.equal(del.status, 200);
-  assert.equal(kv.map.size, 0);
-
-  const noKv = await call('/api/sync/' + id);
-  assert.equal(noKv.status, 501);
-  assert.match(noKv.json.error, /sincronizzazione/i);
-  assert.equal((await call('/api/sync/' + id, { method: 'PUT', body: JSON.stringify(blob) })).status, 501);
+  const blob = JSON.stringify({ updatedAt: 1760000000000, iv: 'aXY=', ct: 'Y2lwaGVy' });
+  for (const [path, method, body] of [
+    ['/api/sync/' + id, 'GET'],
+    ['/api/sync/' + id, 'PUT', blob],
+    ['/api/sync/' + id, 'DELETE'],
+    ['/api/sync', 'GET'],
+    ['/api/health/extra', 'GET'],
+    ['/api/chart/AAPL', 'GET'],
+    ['/api/constructor', 'GET'],
+    ['/api/__proto__', 'GET'],
+  ]) {
+    const r = await call(path, { method, body, env });
+    assert.equal(r.status, 404, `${method} ${path}`);
+    assert.match(r.json.error, /sconosciuto/, path);
+    assert.equal(r.headers.get('access-control-allow-origin'), '*', path);
+  }
+  // Known routes accept only GET
+  for (const method of ['PUT', 'POST', 'DELETE', 'PATCH']) {
+    const r = await call('/api/health', { method, body: method === 'DELETE' ? undefined : '{}', env });
+    assert.equal(r.status, 405, method);
+  }
+  assert.deepEqual(touched, [], 'the function never uses a storage binding');
 });
 
 /* ---------- Yahoo payload conversion with a mocked upstream ---------- */
@@ -253,11 +235,10 @@ test('search mapping and edge cache (caches.default)', async () => {
     assert.equal(r2.status, 200);
     assert.equal(calls.length, 1); // served by the edge cache
     assert.deepEqual(r2.json, r1.json);
-    // Sync answers are never cached
-    const kv = fakeKv();
-    await call('/api/sync/' + 'ef'.repeat(32), { method: 'PUT', body: JSON.stringify({ updatedAt: 1, iv: 'a', ct: 'b' }), env: { GRUZZOLO_KV: kv } });
-    await call('/api/sync/' + 'ef'.repeat(32), { env: { GRUZZOLO_KV: kv } });
-    assert.ok([...store.keys()].every((k) => !k.includes('/sync/')));
+    // Errors and health answers are never stored in the edge cache
+    await call('/api/health');
+    await call('/api/nothing');
+    assert.deepEqual([...store.keys()], ['https://gruzzolo.test/api/search?q=enel']);
   } finally {
     delete globalThis.caches;
     globalThis.fetch = realFetch;

@@ -207,10 +207,84 @@ export function icon(name, attrs = '') {
   return `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true" ${attrs}>${ICONS[name] || ''}</svg>`;
 }
 
+/* ---------- Device storage ---------- */
+// The data lives only on this device. These helpers never throw and work where the
+// Storage API is missing (they answer null = unknown).
+const storageApi = () => (typeof navigator !== 'undefined' && navigator.storage ? navigator.storage : null);
+
+// True when the app was opened from its Home Screen icon (installed) instead of a Safari tab.
+// On iPhone the installed app and Safari keep separate data.
+export function isStandalone() {
+  try {
+    if (typeof navigator !== 'undefined' && navigator.standalone === true) return true;
+    return typeof matchMedia === 'function' && matchMedia('(display-mode: standalone)').matches;
+  } catch {
+    return false;
+  }
+}
+
+// Ask the browser to keep this app's data even when the device runs short of space
+// (iPhone: granted to apps added to the Home Screen). Called once at start by main.js.
+// Resolves true (kept), false (not granted) or null (not supported or failed).
+export async function requestPersistentStorage() {
+  const st = storageApi();
+  if (!st || typeof st.persist !== 'function') return null;
+  try {
+    if (typeof st.persisted === 'function' && (await st.persisted())) return true;
+    return Boolean(await st.persist());
+  } catch {
+    return null;
+  }
+}
+
+// State of the device storage, for the Altro tab:
+//   { persisted: boolean|null,  // true: the browser promised not to delete the data by itself
+//     usage: number|null,       // bytes used by this app (estimate, includes the price cache)
+//     quota: number|null,       // bytes available to this app (estimate)
+//     standalone: boolean }     // running as the installed Home Screen app
+export async function storageStatus() {
+  const out = { persisted: null, usage: null, quota: null, standalone: isStandalone() };
+  const st = storageApi();
+  if (!st) return out;
+  try {
+    if (typeof st.persisted === 'function') out.persisted = Boolean(await st.persisted());
+  } catch { /* unknown */ }
+  try {
+    const e = typeof st.estimate === 'function' ? await st.estimate() : null;
+    if (e && Number.isFinite(e.usage)) out.usage = e.usage;
+    if (e && Number.isFinite(e.quota)) out.quota = e.quota;
+  } catch { /* unknown */ }
+  return out;
+}
+
 /* ---------- Files ---------- */
-// Offer a generated file to the user: Claude artifact downloads capability when present,
-// otherwise a normal browser download. Resolves true when handed over.
+// Share sheet with the file on touch devices (iPhone: "Salva su File" puts it in the Files app or
+// iCloud Drive, also AirDrop, Mail...). Desktops keep a normal download.
+// Resolves true (shared), false (the user closed the sheet) or null (not possible here).
+// navigator.share is called without any await before it: Safari requires the tap that started it.
+function shareFile(filename, text, mime) {
+  if (typeof navigator === 'undefined' || typeof navigator.share !== 'function' || typeof navigator.canShare !== 'function') return null;
+  if (typeof File !== 'function' || typeof matchMedia !== 'function' || !matchMedia('(pointer: coarse)').matches) return null;
+  let file;
+  try {
+    file = new File([text], filename, { type: String(mime || 'text/plain').split(';')[0].trim() || 'text/plain' });
+    if (!navigator.canShare({ files: [file] })) return null;
+  } catch {
+    return null;
+  }
+  return navigator.share({ files: [file], title: filename }).then(
+    () => true,
+    // AbortError: closed by the user. Anything else (no permission, tap too old): try a download
+    (e) => (e && e.name === 'AbortError' ? false : null),
+  );
+}
+
+// Offer a generated file to the user: share sheet on iPhone, the Claude artifact downloads
+// capability when present, otherwise a normal browser download.
+// Resolves true when handed over, false when the user cancelled.
 export async function saveFile(filename, text, mime = 'text/plain') {
+  const shared = await shareFile(filename, text, mime);
+  if (shared !== null) return shared;
   if (typeof window !== 'undefined' && window.claude && typeof window.claude.use === 'function') {
     try {
       const dl = await window.claude.use('downloads');

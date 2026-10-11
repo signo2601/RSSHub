@@ -1,41 +1,63 @@
 # Gruzzolo v2 — architecture and module contracts
 
-Personal investment tracker. Italian UI, EUR base currency. Runs as a static PWA
-(iPhone first, desktop too) plus a tiny server function that proxies Yahoo Finance
-(search, prices, dividends, FX) and stores an encrypted sync blob.
+Personal investment tracker. Italian UI, EUR base currency. Runs as a static PWA installed on the
+iPhone (Safari → Aggiungi alla schermata Home) that works fully offline, plus a tiny read-only server
+function that proxies public market data from Yahoo Finance (search, prices, dividends, FX).
+The desktop layout still exists (harmless) but the iPhone is the only target.
 
 This file is the contract between modules. Signatures and shapes here are binding:
 if you own a module, implement exactly these exports; if you consume one, use only these.
+
+## Privacy rule (binding for every module)
+
+- **User data never leaves the device.** Accounts, transactions, assets, settings, watchlist and manual prices
+  live only in this device's `localStorage` key `'gruzzolo:data:v2'` (`js/store.js`); the market cache lives in
+  IndexedDB `'gruzzolo-market'` (`js/market.js`). There is no account, no cloud copy, no sync.
+- **The only network traffic is public market data from the app's own `/api`**: `health`, `search`, `chart`,
+  `quotes`. Requests carry only security names, tickers or ISINs (search, CSV import matching, prices), never
+  amounts, quantities, accounts or transactions.
+- **No third-party requests**: fonts are self-hosted in `fonts/` (Manrope and Bricolage Grotesque, OFL, `@font-face`
+  in `css/app.css`); no CDN, analytics or Google Fonts. `dev/build-artifact.mjs` refuses to build a bundle that
+  contains sync code, Claude storage (`use('db')`/`use('user')`) or Google Fonts.
+- **Offline**: `sw.js` precaches every file the app loads (`APP_FILES`, checked against the import graph by
+  `tests/offline.test.mjs`) and serves them cache-first with a background refresh (a new version arrives at the
+  following start); `/api/*` is never cached by the service worker.
+- **Storage persistence**: main.js calls `requestPersistentStorage()` (navigator.storage.persist) at boot; the Altro
+  tab shows `storageStatus()` (granted or not, space used) in the group «Dove sono i tuoi dati».
+- Other per-device keys are conveniences, not data: `'gruzzolo:ui:v2'` (UI state), `'gruzzolo:theme'`,
+  `'gruzzolo:lastBackup'` (time of the last backup export, for the reminder in Altro).
 
 ## Hosting model
 
 - Static files in `gruzzolo/` (no build step). ES modules loaded by `index.html` (`<script type="module" src="js/main.js">`).
 - Server: Cloudflare Pages Function `gruzzolo/functions/api/[[path]].js` (same origin → `/api/...`).
   Setting `settings.apiBase` (default `''`) lets the app use another origin (`https://x.workers.dev`), so the function must send CORS headers.
-- Without a reachable API (offline, GitHub Pages without proxy, Claude artifact) the app still works: manual prices, demo data, curated catalog.
-- Claude artifact build: `dev/build-artifact.mjs` bundles `js/main.js` with esbuild into one inline script + inline CSS. Code must therefore not rely on module-relative `fetch` of JSON files (import data as JS modules instead).
+- Without a reachable API (offline, a host without the function) the app still works: last downloaded prices, manual prices, demo data, curated catalog.
+- Claude artifact build (preview only): `dev/build-artifact.mjs` bundles `js/main.js` with esbuild into one inline script + inline CSS
+  (fonts as data: URIs). The preview stores data in its own browser `localStorage`, like the app; it has no service worker.
+  Code must therefore not rely on module-relative `fetch` of JSON files (import data as JS modules instead).
 
 ## Files and owners
 
 | File | Purpose |
 |---|---|
-| `index.html`, `manifest.webmanifest`, `sw.js`, `css/app.css` | Shell, PWA, base design system (UI shell) |
-| `js/util.js` | Dates, formatting, parsing, DOM helpers, icons (FOUNDATION, exists) |
+| `index.html`, `manifest.webmanifest`, `sw.js`, `css/app.css` | Shell, PWA (offline precache), base design system (UI shell) |
+| `fonts/` | Self-hosted woff2 fonts + `OFL.txt` |
+| `js/util.js` | Dates, formatting, parsing, DOM helpers, icons, files (share sheet), storage status (FOUNDATION, exists) |
 | `js/registry.js` | Global ACTIONS / FORMS / SHEETS registries (FOUNDATION, exists) |
 | `js/app.js` | `app` hook object filled by main.js: render, toast, sheets (FOUNDATION, exists) |
 | `js/state.js` | State `S`, data model, defaults, migrate, commit, memo (FOUNDATION, exists) |
 | `js/engine.js` | Ledger, positions, daily valuation series, events (FOUNDATION, exists) |
 | `js/market.js` | Market data cache + API client + refresh (core API exists; network layer to add) |
 | `js/catalog.js` | Curated popular securities |
-| `functions/api/[[path]].js` | Server: Yahoo proxy + sync KV |
-| `dev/server.mjs` | Local dev server: static + `/api` via the same function + in-memory KV |
+| `functions/api/[[path]].js` | Server: read-only Yahoo proxy (public market data, stores nothing) |
+| `dev/server.mjs` | Local dev server: static + `/api` via the same function |
 | `js/metrics.js` | Performance and risk metrics |
 | `js/markowitz.js` | Efficient frontier |
 | `js/income.js` | Dividends / fixed income analytics |
 | `js/costs.js` | Fees, taxes, stamp duty, Italian loss carry-forward ("zaino fiscale"), TER |
 | `js/charts.js` | SVG charts with touch/mouse tooltips |
-| `js/store.js` | Persistence (localStorage or Claude artifact db) |
-| `js/sync.js` | End-to-end encrypted sync via `/api/sync` |
+| `js/store.js` | Persistence: this device's localStorage only |
 | `js/importer.js` | Broker CSV parsing and mapping (DEGIRO, Scalable Capital, generic) |
 | `js/demo.js` | Example portfolio with synthetic market data |
 | `js/main.js` | Boot, router, chrome (header, mobile tab bar, desktop sidebar), event delegation, sheets |
@@ -49,7 +71,7 @@ if you own a module, implement exactly these exports; if you consume one, use on
 | `js/views/sheet-income.js` | Report 4 "Dividendi & Fixed Income" |
 | `js/views/sheet-costs.js` | Report 5 "Costi d'intermediazione" |
 | `js/views/sheet-risk.js` | Report 6 "Gestione del rischio" |
-| `js/views/more.js`, `css/extra.css` | Tab "Altro": accounts, import, settings, fiscal, sync, server, backup |
+| `js/views/more.js`, `css/extra.css` | Tab "Altro": accounts, import, settings, fiscal, appearance, where your data is (privacy, storage), backup, price server, guide |
 | `tests/*.test.mjs` | `node --test gruzzolo/tests` |
 
 Code style: plain modern JS (ES2022), no frameworks, 2-space indent, single quotes, semicolons,
@@ -73,7 +95,7 @@ camelCase, English comments, Italian UI copy. Views return HTML strings; every u
 ```js
 {
   v: 2,
-  updatedAt: 0,                          // ms epoch of last local change (sync)
+  updatedAt: 0,                          // ms epoch of last local change (shown when importing a backup)
   settings: {
     started: false,                      // user left demo / created data
     riskFree: 0.02,                      // annual
@@ -125,7 +147,10 @@ where avg cost includes buy fees. Taxes are reported separately.
 
 `js/util.js`: `iso, parseISO, todayISO, addDays, addMonths, dayDiff, isWeekend, monthKey, fmtDate, fmtMonth, MONTHS, MONTHS_LONG,
 fmt.hide (bool), money, moneySigned, moneyLocal, priceFmt, pct, pctSigned, pctPlain, num, compact, qtyFmt, tone, parseNum, numInput,
-esc, newId, clone, sum, mean, stdev, quantile, hashHue, icon(name, attrs), ICONS, contentWidth(), isDesktop(), debounce, epochToISO, fmtTime, saveFile(filename, text, mime)`.
+esc, newId, clone, sum, mean, stdev, quantile, hashHue, icon(name, attrs), ICONS, contentWidth(), isDesktop(), debounce, epochToISO, fmtTime,
+saveFile(filename, text, mime)` (iPhone: share sheet with the file → «Salva su File»; elsewhere a download; resolves `true` handed over, `false` cancelled),
+`isStandalone()` (opened from the Home Screen icon), `async requestPersistentStorage()` → `true|false|null`,
+`async storageStatus()` → `{ persisted: boolean|null, usage: number|null, quota: number|null, standalone }` (never throw).
 
 `js/registry.js`: `ACTIONS` (name → `(el, event) => void`), `FORMS` (name → `(form, event) => void`),
 `SHEETS` (name → `(args) => ({ title, body, after?, size?: 'wide' })`), `FORM_SHEETS` (Set of sheet names never re-rendered while open),
@@ -227,13 +252,12 @@ Yahoo `quoteType` → type: EQUITY→stock, ETF→etf, MUTUALFUND→fund, CRYPTO
 ## Server API (`functions/api/[[path]].js`)
 
 Exports `onRequest(context)` (Cloudflare Pages). Pure `fetch`-based so `dev/server.mjs` can call it with `{ request, env }`.
-All responses JSON with `Access-Control-Allow-Origin: *`; OPTIONS preflight handled.
+All responses JSON with `Access-Control-Allow-Origin: *`; OPTIONS preflight handled. Read-only: no storage, no user data.
 
-- `GET /api/health` → `{ ok: true, sync: boolean }`
+- `GET /api/health` → `{ ok: true }`
 - `GET /api/search?q=` → `{ results: [{ symbol, name, exchange, type, typeDisp, sector, industry }] }`
 - `GET /api/chart?symbol=&range=10y&interval=1d` → `{ symbol, currency, name, type, exchange, price, prev, time, dates, close, adj, divs }`
 - `GET /api/quotes?symbols=A,B,C` (≤ 50) → `{ quotes: { [symbol]: { currency, price, prev, time, dates, close, adj, divs } } }` (last ~5 days)
-- `GET /api/sync/:id` → `{ updatedAt, iv, ct }` or 404; `PUT /api/sync/:id` body same → `{ ok: true }`; 501 if no KV binding `GRUZZOLO_KV`. `:id` = 64 hex chars; body ≤ 4 MB.
 
 Yahoo endpoints: `https://query1.finance.yahoo.com/v1/finance/search`, `https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?range=&interval=&events=div,split&includeAdjustedClose=true`
 (fallback host `query2`), browser-like `User-Agent`. Edge cache (Cache API when present): search 1h, chart 10y 12h, quotes 60s.
@@ -328,8 +352,8 @@ chartScrubHandlers(id, { onScrub(i), onEnd() })   // optional hooks, e.g. home h
 
 - Mobile (< 900px): sticky header (brand, scope picker, privacy eye, refresh), bottom tab bar
   `Portafoglio | Report | (+) | Mercati | Altro`. Sheets are bottom sheets.
-- Desktop (≥ 900px): left sidebar with the same destinations and a primary "Nuova transazione" button; content max 1240px;
-  KPI grids 4 columns; chart grids 2 columns; sheets are centered dialogs.
+- Desktop (≥ 900px, kept but not a target; docs and copy talk about the iPhone only): left sidebar with the same destinations
+  and a primary "Nuova transazione" button; content max 1240px; KPI grids 4 columns; chart grids 2 columns; sheets are centered dialogs.
 - iPhone: `viewport-fit=cover`, safe-area insets on header/tab bar, inputs ≥ 16px, touch targets ≥ 44px, no hover-only affordances,
   `apple-mobile-web-app-capable`, icons, standalone display.
 
@@ -357,14 +381,22 @@ Report `ctx`:
 
 These modules are finished and tested; the notes list behavior beyond the contract above.
 
-- **market.js**: `market.init({ apiBase })` resolves after the IndexedDB load plus a health ping (≤ 4 s): do not block the first render on it. `market.subscribe(fn)` fires on data changes and on `status` changes. `market.refresh(symbols, { onProgress: (done, total) => …, force })` → `{ updated, failed, skipped?, offline? }`. Extras: `market.health` (`{ ok, sync }` from the server), `market.ping()`, `market.clearCache()`, `market.isDemoSymbol(s)`. `ensureHistory` also fetches the FX history for a new currency. Yahoo may answer 429 (rate limit): the server falls back to the second host, then returns 503; keep cached data and say "riprova tra poco".
+- **market.js**: `market.init({ apiBase })` resolves after the IndexedDB load plus a health ping (≤ 4 s): do not block the first render on it. `market.subscribe(fn)` fires on data changes and on `status` changes. `market.refresh(symbols, { onProgress: (done, total) => …, force })` → `{ updated, failed, skipped?, offline? }`. Extras: `market.health` (`{ ok }` from the server), `market.ping()`, `market.clearCache()`, `market.isDemoSymbol(s)`. `ensureHistory` also fetches the FX history for a new currency. Yahoo may answer 429 (rate limit): the server falls back to the second host, then returns 503; keep cached data and say "riprova tra poco".
 - **catalog.js**: `CATALOG` (200 verified instruments with `{ symbol, name, type, currency, exchange, group, isin?, ter?, sector?, region? }`), `GROUPS`, `BENCHMARKS` (`{ symbol, name, currency, desc }`, VWCE.DE first), `searchCatalog(q, limit)` (instant, offline), `findInCatalog(symbolOrIsin)`. To add an asset: `market.lookup(symbol)` (name, currency, type, price) then `market.ensureHistory(symbol)`; prefill sector/region/ter/isin from `findInCatalog`. Search UIs show `searchCatalog(q)` immediately, then merge `await market.search(q)`.
-- **Server**: `/api/search` with an ISIN also returns other listings of the same fund (Milan and Xetra first). Chart/quotes include `splits`; quotes may include `errors`; `PUT /api/sync` replies `{ ok, updatedAt }`; `DELETE /api/sync/:id` exists. Dev server: `PORT=8787 node dev/server.mjs` (static files + `/api` + in-memory KV).
+- **Server**: `/api/search` with an ISIN also returns other listings of the same fund (Milan and Xetra first). Chart/quotes include `splits`; quotes may include `errors`. Dev server: `PORT=8787 node dev/server.mjs` (static files + `/api`).
 - **metrics.js**: `cumulative()` first point is 0 on the period's first date; its `dates` equal `series.dates.slice(i0, i1 + 1)` — use them as the chart x axis. `benchReturns()` attaches `.dates` and `.coverageStart`: do not `.slice()` it if you need those (typed-array slices drop them); `periodStats` realigns a bench array by `.dates` when lengths differ, so passing the total's `bench.ret` for an account series is fine. `periodStats` extras: `i0, i1, shortPeriod` (days < 365: annualized CAGR/IRR/Sharpe are indicative — show a short note "periodo breve: valore annualizzato indicativo"), `gain, benchPartial, n`; `benchTwr`/`activeVsBench` are null without benchmark data. `resolvePeriod(period, { today, start, from, to })` → `{ from, to }` for the presets (use it in report.js). `riskStats(ret, { rf, benchRet, dates })` also returns `best, worst, maxDDFrom, maxDDTo`. `backProjected(...)`: `start` is the base date (not in `dates`); also returns `missingInfo [{ aid, name, reason: 'nohistory'|'short' }]`, `fxMissing`, `benchStart`, `n`; `bench` is 0 before `benchStart`. `rollingVol(dates, ret, window, { from, to })` can trim its output. Signs: `maxDD` negative; `var95`/`cvar95` positive daily losses; Sharpe/Sortino use CAGR − rf.
 - **markowitz.js**: easiest entry point `portfolioFrontier(positions, { today, rf })` → `{ ok, error?, missing, notes, weekly: { start, end, weeks }, frontier, minVar, maxSharpe, current, assets, … }`. When ≤ 5 instruments the 20% cap is dropped (`capRelaxed`, explained in `notes`). `frontierCsv(res)` already starts with a BOM: `saveFile('frontiera-efficiente.csv', frontierCsv(res), 'text/csv;charset=utf-8')`. Expected returns are historical averages (can look huge for stocks that boomed): label the frontier as descriptive, not a forecast.
 - **income.js**: `incomeStats({ accIds, from, to, today, settings? })`. Calendar items with `aid: null` are cash interest ("Interessi"); `forecast: true` items are estimates; use `years` for the year switch; `forecastByAsset[].perShare` is in `currency` (gross local for market data, net EUR for recorded). `missing[]` items carry `currency` and `kind`. Extras: `gross, count, value, income12m, twr, years`.
 - **costs.js**: `costStats` extras: `stampTaxes, otherTaxes, totalTaxes, prevYear, prevYearTaxes, estimatedStamp` (> 0 means estimated, not recorded), `stampDuty.{ year, rate, note }`, `ter.{ value, date, byAsset }`; `monthly` is newest first. `fiscalBackpack` row statuses also include `'nessun movimento'`; rows have `gains, losses, ignored, offset, used, usedBy`; `expired` sums only displayed rows.
 - **charts.js**: call `initCharts()` once at boot (injects chart CSS and listeners). Pass `w` as the exact inner pixel width (charts are not stretched; never give `.chart-svg` width:100%). Pass raw strings (charts escape them). `'YYYY-MM'` bar labels are formatted as months automatically. Benchmark style `{ color: 'var(--muted)', dash: true }`. `chartScrubHandlers(id, …)` must be re-attached after each render (push a function to `MOUNTS`). Hero chart on the page background: set `--chart-ring: var(--bg)` on its container. Donut next to its own list: `legend: false`; non-EUR donut: `format`. Scatter: frontier and CML as `lines` (CML `dash: true`), assets as points with `group: 'Titoli'`, special portfolios with `special: true` and a `group`; `tooltipX/tooltipY` formatters. `sparkline()` returns a bare `<svg class="spark">` (no tooltip). Extras: `niceTicks, logTicks, dateTicks, chartData, CHART_CSS`; `tooltipValue(v, seriesIndex, i)` on line/bar/stacked charts.
+
+- **views/more.js** (tab Altro): group «Dove sono i tuoi dati» says the data stays on this iPhone (copy names the device only when the
+  user agent is an iPhone/iPad, «questo dispositivo» elsewhere), what goes on the network, the storage status and a backup reminder.
+  `storageStatus` is feature-detected (`import * as util`) and wrapped by `readStorageStatus()` (missing helper, throw or a 4 s hang → nulls);
+  the row is filled after render (`MOUNTS` → `refreshStorage()`, at most every 30 s) and patched in place by `id="more-storage"`.
+  A refused persistence can be asked again by tapping the row (`more-storage-persist`), except in Safari, where only the Home Screen app gets it.
+  «Esporta backup» calls `saveFile` (share sheet) and records `'gruzzolo:lastBackup'`; `backupReminder()` flags no backup in 30 days.
+  Guide topics: `iphone`, `offline`, `prices`.
 
 ## Calculation rules refined by the independent audit
 

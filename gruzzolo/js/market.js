@@ -486,7 +486,7 @@ export const market = {
   apiBase: '',
   status: 'unknown', // 'unknown' | 'online' | 'offline'
   lastRefresh: 0,
-  health: null, // last /api/health answer: { ok, sync }
+  health: null, // last /api/health answer: { ok }
 
   getHistory(symbol) {
     return (symbol && histories.get(symbol)) || null;

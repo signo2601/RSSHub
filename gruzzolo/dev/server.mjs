@@ -1,26 +1,24 @@
 // Local development server for Gruzzolo.
 //   node dev/server.mjs            → http://localhost:8787
 //   PORT=9000 node dev/server.mjs  → another port
-//   HOST=0.0.0.0 node dev/server.mjs → reachable from the iPhone on the same Wi-Fi
-//   NO_KV=1 node dev/server.mjs    → run without sync storage (the API answers 501 on /api/sync)
+//   HOST=0.0.0.0 node dev/server.mjs → reachable from the iPhone on the same Wi-Fi (plain http:
+//                                    the offline service worker only starts on https or localhost)
 //
 // Serves the static app from the gruzzolo/ folder and answers /api/* with the same
 // Cloudflare Pages Function used in production (functions/api/[[path]].js), reloaded
-// automatically when the file changes. Sync data is kept in an in-memory KV saved to dev/.kv.json.
+// automatically when the file changes. The API is read-only market data: nothing is stored here.
 import http from 'node:http';
 import { spawn } from 'node:child_process';
-import { readFile, writeFile, rename, stat } from 'node:fs/promises';
-import { existsSync, readFileSync } from 'node:fs';
+import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..');
 const FUNCTION_FILE = path.join(ROOT, 'functions', 'api', '[[path]].js');
-const KV_FILE = path.join(HERE, '.kv.json');
 const PORT = Number(process.env.PORT) || 8787;
 const HOST = process.env.HOST || '127.0.0.1';
-const MAX_BODY = 8 * 1024 * 1024;
+const MAX_BODY = 1024 * 1024; // the API takes no uploads: bodies are only read to answer 404/405
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -57,58 +55,6 @@ if (proxied && !process.env.NODE_USE_ENV_PROXY && !process.env.GRUZZOLO_DEV_CHIL
   start();
 }
 
-/* ---------- In-memory KV (Cloudflare KV subset) persisted to dev/.kv.json ---------- */
-function createKv() {
-  const map = new Map();
-  try {
-    if (existsSync(KV_FILE)) for (const [k, v] of Object.entries(JSON.parse(readFileSync(KV_FILE, 'utf8')))) map.set(k, v);
-  } catch (e) {
-    console.warn(`[kv] ${KV_FILE} non leggibile, parto vuoto: ${e.message}`);
-  }
-  let timer = null;
-  let writing = Promise.resolve();
-  const save = () => {
-    clearTimeout(timer);
-    timer = setTimeout(() => {
-      timer = null;
-      writing = writing.then(async () => {
-        const tmp = KV_FILE + '.tmp';
-        await writeFile(tmp, JSON.stringify(Object.fromEntries(map)));
-        await rename(tmp, KV_FILE);
-      }).catch((e) => console.warn(`[kv] salvataggio fallito: ${e.message}`));
-    }, 50);
-  };
-  return {
-    // Write pending changes now (used on shutdown)
-    async flush() {
-      if (timer) {
-        clearTimeout(timer);
-        timer = null;
-        writing = writing.then(async () => {
-          await writeFile(KV_FILE, JSON.stringify(Object.fromEntries(map)));
-        }).catch(() => {});
-      }
-      await writing;
-    },
-    async get(key, opts) {
-      const v = map.has(key) ? map.get(key) : null;
-      const type = typeof opts === 'string' ? opts : opts && opts.type;
-      return v !== null && type === 'json' ? JSON.parse(v) : v;
-    },
-    async put(key, value) {
-      map.set(key, typeof value === 'string' ? value : JSON.stringify(value));
-      save();
-    },
-    async delete(key) {
-      map.delete(key);
-      save();
-    },
-    async list({ prefix = '' } = {}) {
-      return { keys: [...map.keys()].filter((k) => k.startsWith(prefix)).map((name) => ({ name })), list_complete: true };
-    },
-  };
-}
-
 /* ---------- API: load the Pages Function, reload when it changes ---------- */
 let fnModule = null;
 let fnStamp = 0;
@@ -141,7 +87,7 @@ function readBody(req) {
 
 const HOP_HEADERS = new Set(['connection', 'keep-alive', 'transfer-encoding', 'upgrade', 'expect', 'proxy-connection', 'http2-settings', 'te', 'trailer']);
 
-async function handleApi(req, res, url, env) {
+async function handleApi(req, res, url) {
   const headers = new Headers();
   for (const [k, v] of Object.entries(req.headers)) {
     if (v === undefined || HOP_HEADERS.has(k) || k.startsWith(':')) continue;
@@ -155,7 +101,7 @@ async function handleApi(req, res, url, env) {
   const pending = [];
   const response = await onRequest({
     request,
-    env,
+    env: {},
     params: { path: url.pathname.replace(/^\/api\/?/, '').split('/').filter(Boolean) },
     waitUntil: (p) => pending.push(Promise.resolve(p).catch(() => {})),
     next: async () => new Response('Not found', { status: 404 }),
@@ -186,7 +132,7 @@ async function handleStatic(req, res, url) {
   if (rel.endsWith('/')) rel += 'index.html';
   let file = path.resolve(ROOT, '.' + rel);
   const inside = file === ROOT || file.startsWith(ROOT + path.sep);
-  // Never serve dotfiles (.git, dev/.kv.json) or anything outside the project folder
+  // Never serve dotfiles (.git, .env) or anything outside the project folder
   const hidden = path.relative(ROOT, file).split(path.sep).some((p) => p.startsWith('.'));
   let info = null;
   if (inside && !hidden) {
@@ -217,15 +163,12 @@ async function handleStatic(req, res, url) {
 }
 
 function start() {
-  const env = {};
-  if (!process.env.NO_KV) env.GRUZZOLO_KV = createKv();
-
   const server = http.createServer(async (req, res) => {
     const started = Date.now();
     let url;
     try {
       url = new URL(req.url || '/', `http://${req.headers.host || `localhost:${PORT}`}`);
-      if (url.pathname === '/api' || url.pathname.startsWith('/api/')) await handleApi(req, res, url, env);
+      if (url.pathname === '/api' || url.pathname.startsWith('/api/')) await handleApi(req, res, url);
       else await handleStatic(req, res, url);
     } catch (e) {
       const status = e && e.status ? e.status : 500;
@@ -245,13 +188,12 @@ function start() {
   server.listen(PORT, HOST, () => {
     const shown = HOST === '0.0.0.0' || HOST === '::' ? 'localhost' : HOST;
     console.log(`Gruzzolo dev server: http://${shown}:${PORT}/`);
-    console.log(`  API: http://${shown}:${PORT}/api/health  ·  sync KV: ${env.GRUZZOLO_KV ? 'attivo (dev/.kv.json)' : 'disattivato'}`);
+    console.log(`  API prezzi: http://${shown}:${PORT}/api/health`);
     if (HOST === '127.0.0.1') console.log('  Per provarlo dall\'iPhone sulla stessa rete Wi-Fi: HOST=0.0.0.0 node dev/server.mjs');
   });
-  const stop = async () => {
+  const stop = () => {
     server.close();
     if (typeof server.closeAllConnections === 'function') server.closeAllConnections();
-    if (env.GRUZZOLO_KV) await env.GRUZZOLO_KV.flush();
     process.exit(0);
   };
   process.on('SIGINT', stop);

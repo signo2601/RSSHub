@@ -1,15 +1,16 @@
 // Gruzzolo entry point: boot sequence, router, app chrome (phone header and tab bar,
 // desktop sidebar and top bar), event delegation, sheet stack, toasts and price refresh.
 // Views register their handlers in registry.js at import time; this file only dispatches.
+// The user's data is stored only on this device (store.js); the network is used only to
+// download public market data from the app's own /api price proxy (market.js).
 import { S, D, migrate, blankData, restoreUi, saveUi, bump, commit, persistence, account, accName, hasDemo } from './state.js';
 import { app } from './app.js';
 import { ACTIONS, FORMS, INPUTS, SHEETS, FORM_SHEETS, MOUNTS } from './registry.js';
 import { market } from './market.js';
 import { getSeries, trackedSymbols } from './engine.js';
-import { esc, fmt, icon, money, todayISO, debounce, isDesktop, fmtTime, newId } from './util.js';
+import { esc, fmt, icon, money, todayISO, debounce, isDesktop, fmtTime, newId, requestPersistentStorage } from './util.js';
 import { initCharts } from './charts.js';
-import * as storeMod from './store.js';
-import * as syncMod from './sync.js';
+import { pickStore, localStore } from './store.js';
 import * as demoMod from './demo.js';
 // Views, in the agreed order (namespace imports: a missing export shows a placeholder, not a crash)
 import * as homeView from './views/home.js';
@@ -38,9 +39,7 @@ const THEME_COLOR = { light: '#eef1f5', dark: '#0c0e12' };
 const THEME_KEY = 'gruzzolo:theme';
 const STALE_MS = 10 * 60e3; // refresh on return to the app after this
 const EVERY_MS = 15 * 60e3; // refresh while the app stays open
-const SYNC_RESUME_MS = 30e3;
 const BOOT_MARKET_WAIT_MS = 1500;
-const BOOT_SYNC_WAIT_MS = 2500;
 const HISTORY_CONCURRENCY = 3;
 
 const VIEWS = {
@@ -51,9 +50,9 @@ const VIEWS = {
   more: () => moreView.renderMore,
 };
 
-const sync = syncMod.sync || null;
 const $ = (sel) => document.querySelector(sel);
-// Claude artifact: the host provides window.claude; the artifact build also sets a flag
+// Claude artifact preview (no service worker there): the host provides window.claude and the
+// artifact build sets a flag. Data is still saved in this browser's localStorage (store.js).
 const isArtifact = () => typeof window !== 'undefined' && Boolean(window.claude || window.__GRUZZOLO_ARTIFACT__);
 const reducedMotion = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 const withTimeout = (promise, ms) => Promise.race([promise, new Promise((resolve) => setTimeout(resolve, ms))]);
@@ -69,8 +68,6 @@ const shell = {
   manualPending: false,
   lastAttempt: 0,
   everOnline: false,
-  lastSyncCheck: 0,
-  syncBusy: false,
   deferred: false, // a background render waits until the user stops typing
 };
 
@@ -652,39 +649,13 @@ function refreshPrices(opts = {}) {
   return shell.refreshPromise;
 }
 
-/* ---------- Storage and sync ---------- */
-function fallbackStore() {
-  const KEY = 'gruzzolo:data:v2';
-  return {
-    kind: 'local',
-    async load() {
-      try {
-        const t = localStorage.getItem(KEY);
-        return t ? JSON.parse(t) : null;
-      } catch {
-        return null;
-      }
-    },
-    save(d) {
-      try {
-        localStorage.setItem(KEY, JSON.stringify(d));
-      } catch {
-        toast('Non riesco a salvare: memoria del browser piena. Esporta un backup da Altro.');
-      }
-    },
-    flush() {},
-  };
-}
-
+/* ---------- Storage (this device only) ---------- */
 function flushStore() {
   try {
     if (store && typeof store.flush === 'function') store.flush();
   } catch (e) {
     console.warn('[gruzzolo] salvataggio', e);
   }
-  try {
-    if (sync && typeof sync.flush === 'function' && sync.enabled()) sync.flush();
-  } catch { /* never block hiding the page */ }
 }
 
 function saveData(d) {
@@ -699,11 +670,6 @@ function saveData(d) {
     store.save(d);
   } catch (e) {
     console.error('[gruzzolo] salvataggio', e);
-  }
-  try {
-    if (sync && typeof sync.schedulePush === 'function' && sync.enabled()) sync.schedulePush(d);
-  } catch (e) {
-    console.warn('[gruzzolo] sync', e);
   }
 }
 
@@ -728,42 +694,6 @@ function demoOrBlank(today) {
   return blankData();
 }
 
-// Replace the data with a copy pulled from the other device
-function adoptData(raw) {
-  S.data = migrate(raw);
-  if (hasDemo()) installDemo(todayISO());
-  bump();
-  if (canSave && store) {
-    try {
-      store.save(S.data);
-    } catch (e) {
-      console.error('[gruzzolo] salvataggio', e);
-    }
-  }
-  if (S.loaded) {
-    render();
-    toast('Dati aggiornati dall\'altro dispositivo');
-  }
-}
-
-async function reconcileSync() {
-  if (!sync || typeof sync.enabled !== 'function' || typeof sync.reconcile !== 'function') return;
-  if (shell.syncBusy || !sync.enabled()) return;
-  shell.syncBusy = true;
-  shell.lastSyncCheck = Date.now();
-  const before = S.data;
-  const stamp = S.data.updatedAt;
-  try {
-    const r = await sync.reconcile(S.data);
-    // adopt only if nothing changed locally in the meantime (a newer local edit is pushed instead)
-    if (r && r.action === 'pulled' && r.data && S.data === before && S.data.updatedAt === stamp) adoptData(r.data);
-  } catch (e) {
-    console.warn('[gruzzolo] sincronizzazione', e);
-  } finally {
-    shell.syncBusy = false;
-  }
-}
-
 /* ---------- Service worker ---------- */
 function registerServiceWorker() {
   if (isArtifact() || typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
@@ -774,34 +704,6 @@ function registerServiceWorker() {
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (hadController) toast('Gruzzolo è stata aggiornata: chiudila e riaprila per la nuova versione');
   });
-}
-
-/* ---------- Launch parameters (manifest shortcuts) ---------- */
-function readLaunch() {
-  try {
-    const q = new URLSearchParams(location.search);
-    const tab = q.get('tab');
-    return { tab: TABS.includes(tab) ? tab : null, action: q.get('action'), had: q.has('tab') || q.has('action') };
-  } catch {
-    return { tab: null, action: null, had: false };
-  }
-}
-
-function clearLaunch(launch) {
-  if (!launch.had) return;
-  try {
-    const q = new URLSearchParams(location.search);
-    q.delete('tab');
-    q.delete('action');
-    const rest = q.toString();
-    history.replaceState(history.state, '', location.pathname + (rest ? '?' + rest : '') + location.hash);
-  } catch { /* sandboxed frames */ }
-}
-
-function runLaunchAction(launch) {
-  if (launch.action !== 'add') return;
-  const fn = ACTIONS['add-tx'];
-  if (typeof fn === 'function') runHandler('add-tx', () => fn(document.createElement('button'), new Event('click')));
 }
 
 /* ---------- Actions owned by the shell ---------- */
@@ -962,7 +864,6 @@ function onVisibility() {
   }
   if (!S.loaded) return;
   if (Date.now() - shell.lastAttempt > STALE_MS) refreshPrices();
-  if (Date.now() - shell.lastSyncCheck > SYNC_RESUME_MS) reconcileSync();
 }
 
 function listen() {
@@ -998,7 +899,6 @@ function listen() {
     if (market.status === 'online') shell.everOnline = true;
     scheduleRender();
   });
-  if (sync && typeof sync.onChange === 'function') sync.onChange(() => scheduleRender());
   setInterval(() => {
     if (!S.loaded || document.visibilityState !== 'visible') return;
     if (Date.now() - shell.lastAttempt >= EVERY_MS) refreshPrices();
@@ -1008,8 +908,6 @@ function listen() {
 /* ---------- Boot ---------- */
 async function boot() {
   restoreUi();
-  const launch = readLaunch();
-  if (launch.tab) S.ui.tab = launch.tab;
   lastWidth = document.documentElement.clientWidth;
   $('#sheet-back').innerHTML = icon('chevLeft');
   $('#sheet-close').innerHTML = icon('close');
@@ -1017,13 +915,13 @@ async function boot() {
   listen();
   renderChrome();
 
-  // 1. Saved data (device storage or Claude artifact database)
+  // 1. Saved data (this device's storage)
   try {
-    store = typeof storeMod.pickStore === 'function' ? await storeMod.pickStore() : null;
+    store = await pickStore();
   } catch (e) {
     console.error('[gruzzolo] archivio', e);
   }
-  if (!store || typeof store.load !== 'function') store = fallbackStore();
+  if (!store || typeof store.load !== 'function') store = localStore();
   let raw = null;
   let loadFailed = false;
   try {
@@ -1057,16 +955,15 @@ async function boot() {
   marketReady = market.init({ apiBase: S.data.settings.apiBase || '' }).catch((e) => console.warn('[gruzzolo] mercato', e));
   await withTimeout(marketReady, BOOT_MARKET_WAIT_MS);
 
-  // 3. Sync with the other device (the newer copy wins)
-  if (canSave) await withTimeout(reconcileSync(), BOOT_SYNC_WAIT_MS);
-
-  // 4. First real render
+  // 3. First real render
   S.loaded = true;
   render();
   if (typeof window !== 'undefined') window.__gruzzoloReady = true;
-  runLaunchAction(launch);
-  clearLaunch(launch);
   registerServiceWorker();
+
+  // 4. Ask the phone to keep the data (never deleted to free space); the Altro tab shows the
+  //    state with util.storageStatus(). Not awaited: rendering never waits for it.
+  requestPersistentStorage().catch(() => null);
 
   // 5. Fresh prices in the background
   marketReady.then(() => refreshPrices());

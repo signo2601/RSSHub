@@ -1,15 +1,17 @@
 // Tab "Altro" (js/views/more.js): pure helpers, the import wizard state, backup and wipe,
-// and the HTML of the page and of its sheets.
+// the privacy group (data only on the device, storage status), and the HTML of the page and of its sheets.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { S, migrate, blankData, bump, FEE_KINDS } from '../js/state.js';
-import { SHEETS } from '../js/registry.js';
+import { SHEETS, ACTIONS, FORMS, INPUTS } from '../js/registry.js';
+import { app } from '../js/app.js';
 import { demoData } from '../js/demo.js';
-import { todayISO } from '../js/util.js';
+import { todayISO, addDays } from '../js/util.js';
 import {
   prettyName, csvNum, transactionsCsv, checkBackup, dropAccount, rankListings, findExistingAsset, resolveImportAssets,
   finalizeTxns, externalFromRows, importBatches, normalizeApiBase, normCcy, wipedData, KEEP_ON_WIPE, renderMore, _test,
+  deviceName, hasUserContent, fmtBytes, readStorageStatus, refreshStorage, backupReminder, BACKUP_EVERY_DAYS,
 } from '../js/views/more.js';
 
 const fixture = (name) => readFileSync(new URL('./fixtures/' + name, import.meta.url), 'utf8');
@@ -386,4 +388,206 @@ test('renderMore: account subtitle skips the broker when it repeats the name', (
   const html = renderMore();
   assert.match(html, /<span class="row-title">DEGIRO<\/span><span class="row-sub">Solo investimenti · 0 operazioni<\/span>/);
   assert.match(html, /<span class="row-title">Conto Fineco<\/span><span class="row-sub">Altro intermediario · Con liquidità · 0 operazioni<\/span>/);
+});
+
+/* ---------- Data only on the device: no sync, privacy group ---------- */
+const IPHONE_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1';
+const navDesc = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+function withNavigator(nav, fn) {
+  Object.defineProperty(globalThis, 'navigator', { value: nav, configurable: true, writable: true });
+  try {
+    return fn();
+  } finally {
+    if (navDesc) Object.defineProperty(globalThis, 'navigator', navDesc);
+    else delete globalThis.navigator;
+  }
+}
+function groupHtml(html, id) {
+  const start = html.indexOf(`aria-labelledby="mg-${id}"`);
+  assert.ok(start > 0, `group ${id} is on the page`);
+  return html.slice(start, html.indexOf('</section>', start));
+}
+
+test('no sync anywhere: no sync sheets, forms, actions, inputs, rows or copy; sync.js is not imported', () => {
+  useData(realData());
+  for (const reg of [SHEETS, FORMS, ACTIONS, INPUTS]) {
+    assert.deepEqual(Object.keys(reg).filter((k) => /sync/i.test(k)), []);
+  }
+  const html = renderMore();
+  assert.doesNotMatch(html, /sincronizz|sync|frase segreta|PC\b|Cloudflare|KV/i);
+  assert.doesNotMatch(html, /data-topic="pc"/, 'no «Installa su PC» guide');
+  assert.match(html, /data-topic="iphone"/);
+  const src = readFileSync(new URL('../js/views/more.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(src, /from '\.\.\/sync\.js'/);
+  assert.doesNotMatch(src, /window\.claude|GRUZZOLO_ARTIFACT/, 'no Claude storage branch');
+  for (const topic of ['iphone', 'offline', 'prices']) {
+    const g = SHEETS['more-guide']({ topic });
+    assert.doesNotMatch(g.body, /sincronizz|sync|\bPC\b/i, topic);
+  }
+  assert.equal(SHEETS['more-guide']({ topic: 'pc' }).title, 'Da dove arrivano i prezzi', 'an old topic falls back to the prices guide');
+  const server = SHEETS['more-server']({}).body;
+  assert.doesNotMatch(server, /sincronizz|KV|Cloudflare/i);
+  assert.match(server, /solo i nomi e i ticker dei titoli/);
+});
+
+test('wipe and backup import confirmations: no sync wording, a backup reminder instead', async () => {
+  const d = realData();
+  d.txns = [{ id: 't', acc: 'deg', date: '2024-01-02', type: 'deposit', amount: 100 }];
+  useData(d);
+  const asked = [];
+  const prev = app.askConfirm;
+  app.askConfirm = (o) => asked.push(o);
+  try {
+    ACTIONS['more-wipe']();
+    const backup = JSON.stringify({ ...realData(), v: 2, txns: [{ id: 'x', acc: 'deg', date: '2024-02-01', type: 'deposit', amount: 5 }], updatedAt: 1700000000000 });
+    const file = { name: 'gruzzolo-backup.json', size: backup.length, arrayBuffer: async () => new TextEncoder().encode(backup).buffer };
+    await INPUTS['more-import-file']({ files: [file], value: 'x' }, { type: 'change' });
+  } finally {
+    app.askConfirm = prev;
+  }
+  assert.equal(asked.length, 2);
+  for (const o of asked) {
+    assert.doesNotMatch(o.text, /sincronizz|altro dispositivo/i, o.title);
+    assert.match(o.text, /esporta prima un backup/, o.title);
+  }
+  assert.equal(asked[1].title, 'Importare il backup?');
+  assert.match(asked[1].text, /1 operazione in 1 conto/);
+  // confirming the import replaces the data
+  asked[1].onOk();
+  assert.deepEqual(S.data.txns.map((t) => t.id), ['x']);
+});
+
+test('deviceName, hasUserContent, fmtBytes', () => {
+  assert.equal(deviceName(IPHONE_UA), 'iPhone');
+  assert.equal(deviceName('Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X)'), 'iPad');
+  assert.equal(deviceName('Mozilla/5.0 (X11; Linux x86_64) Chrome/130'), '');
+  assert.equal(hasUserContent(null), false);
+  assert.equal(hasUserContent(migrate(demoData({ today }))), false, 'example data does not count');
+  assert.equal(hasUserContent({ txns: [], assets: {}, watch: [{ symbol: 'AAPL' }] }), true);
+  assert.equal(hasUserContent({ txns: [{ demo: true }], assets: { a: { id: 'a' } } }), true);
+  assert.equal(fmtBytes(0), '0 byte');
+  assert.equal(fmtBytes(850000), '850 kB');
+  assert.equal(fmtBytes(2400000), '2,4 MB');
+  assert.equal(fmtBytes(1.5e9), '1,5 GB');
+  assert.equal(fmtBytes(NaN), '—');
+  assert.equal(fmtBytes(null), '—');
+});
+
+test('readStorageStatus: works with the helper missing, throwing or returning odd values', async () => {
+  const none = { persisted: null, usage: null, quota: null };
+  assert.deepEqual(await readStorageStatus(undefined), none);
+  assert.deepEqual(await readStorageStatus(null), none);
+  const warn = console.warn;
+  console.warn = () => {};
+  try {
+    assert.deepEqual(await readStorageStatus(async () => {
+      throw new Error('boom');
+    }), none);
+    assert.deepEqual(await readStorageStatus(() => {
+      throw new Error('sync boom');
+    }), none);
+  } finally {
+    console.warn = warn;
+  }
+  assert.deepEqual(await readStorageStatus(async () => null), none);
+  assert.deepEqual(await readStorageStatus(async () => ({ persisted: 'yes', usage: NaN, quota: -1 })), none);
+  assert.deepEqual(await readStorageStatus(async () => ({ persisted: true, usage: 2400000, quota: 1e9 })), { persisted: true, usage: 2400000, quota: 1e9 });
+  assert.deepEqual(await readStorageStatus(() => ({ persisted: false, usage: 0, quota: null })), { persisted: false, usage: 0, quota: null });
+});
+
+test('privacy group: data only on this device, storage status (unknown, granted, refused, unavailable), backup button', async () => {
+  useData(realData());
+  _test.resetStorage();
+  let html = renderMore();
+  assert.equal((html.match(/class="more-group"/g) || []).length, 8);
+  let g = groupHtml(html, 'privacy');
+  assert.match(g, /Dove sono i tuoi dati/);
+  assert.match(g, /I tuoi dati restano solo su questo dispositivo/);
+  assert.match(g, /Niente account e niente cloud/);
+  assert.match(g, /Cosa passa da internet/);
+  assert.match(g, /Mai importi, quantità, conti o operazioni/);
+  assert.match(g, /id="more-storage" data-state="loading"/);
+  assert.match(g, /Controllo la memoria/);
+  assert.match(g, /data-act="more-backup-export"/, 'a direct backup button');
+  assert.match(g, /Non hai ancora fatto un backup/);
+  assert.doesNotMatch(g, /data-topic="iphone"/, 'no install hint off iOS');
+
+  // granted, with the space used
+  let calls = 0;
+  await refreshStorage({ force: true, read: async () => (calls++, { persisted: true, usage: 2400000, quota: 5e9 }) });
+  g = groupHtml(renderMore(), 'privacy');
+  assert.match(g, /<span class="dot online"><\/span>/);
+  assert.match(g, /Memoria permanente attiva/);
+  assert.match(g, /<span class="row-value">2,4 MB<\/span><span class="row-sub">usati<\/span>/);
+  // throttled: a second read within 30 s reuses the result, force reads again
+  await refreshStorage({ read: async () => (calls++, { persisted: false }) });
+  assert.equal(calls, 1);
+  assert.equal(_test.storage.persisted, true);
+
+  // refused, with navigator.storage.persist available: the row asks again on tap
+  await refreshStorage({ force: true, read: async () => ({ persisted: false, usage: null, quota: null }) });
+  g = withNavigator({ userAgent: 'test', storage: { persist: async () => true } }, () => groupHtml(renderMore(), 'privacy'));
+  assert.match(g, /<button class="row more-row more-status more-note" type="button" id="more-storage"[^>]*data-act="more-storage-persist"/);
+  assert.match(g, /Memoria permanente non ancora concessa/);
+  assert.match(g, /Tocca per chiederla di nuovo/);
+  assert.doesNotMatch(g, /usati/, 'no size when unknown');
+  // refused without the API: plain row, no tap hint
+  g = withNavigator({ userAgent: 'test' }, () => groupHtml(renderMore(), 'privacy'));
+  assert.doesNotMatch(g, /more-storage-persist|Tocca per chiederla/);
+
+  // helper missing (another build): «not available», the page still renders
+  await refreshStorage({ force: true, read: undefined });
+  g = groupHtml(renderMore(), 'privacy');
+  assert.match(g, /Stato della memoria non disponibile/);
+  assert.match(g, /<span class="dot offline"><\/span>/);
+  _test.resetStorage();
+});
+
+test('privacy group on iPhone: names the phone, install hint in Safari, iOS wording in backup rows', async () => {
+  useData(realData());
+  _test.resetStorage();
+  await refreshStorage({ force: true, read: async () => ({ persisted: true, usage: 1200, quota: 1e9 }) });
+  const html = withNavigator({ userAgent: IPHONE_UA, maxTouchPoints: 5, standalone: false }, () => renderMore());
+  const g = groupHtml(html, 'privacy');
+  assert.match(g, /I tuoi dati restano solo su questo iPhone/);
+  assert.match(g, /qui sul telefono/);
+  assert.match(g, /iOS conserva i dati di Gruzzolo/);
+  assert.match(g, /1 kB/);
+  assert.match(g, /data-act="more-guide" data-topic="iphone"/, 'opened in Safari: suggest the Home Screen icon');
+  assert.match(g, /se elimini l&#39;icona di Gruzzolo, iOS cancella anche i suoi dati/);
+  const data = groupHtml(html, 'data');
+  assert.match(data, /Si apre Condividi: scegli «Salva su File» → «Sul mio iPhone»/);
+  assert.match(data, /Scegli il file \.json nell&#39;app File/);
+  // in Safari a refused storage points to the Home Screen icon instead of a tap that cannot help
+  await refreshStorage({ force: true, read: async () => ({ persisted: false, usage: null, quota: null }) });
+  const safari = withNavigator({ userAgent: IPHONE_UA, standalone: false, storage: { persist: async () => false } }, () => groupHtml(renderMore(), 'privacy'));
+  assert.match(safari, /se il telefono resta senza spazio iOS potrebbe cancellarli\. Si attiva aprendo Gruzzolo dall&#39;icona/);
+  assert.doesNotMatch(safari, /more-storage-persist/);
+  // installed (standalone): no install hint, the guide row says it is done
+  const inst = withNavigator({ userAgent: IPHONE_UA, standalone: true }, () => renderMore());
+  assert.doesNotMatch(groupHtml(inst, 'privacy'), /data-topic="iphone"/);
+  assert.match(groupHtml(inst, 'guide'), /Fatto: stai usando l&#39;app installata/);
+  _test.resetStorage();
+});
+
+test('backupReminder: never, recent, today, overdue', () => {
+  const now = Date.now();
+  assert.deepEqual(backupReminder(0, { today, content: true }), { due: true, text: 'Non hai ancora fatto un backup: fanne uno ogni mese' });
+  assert.equal(backupReminder(0, { today, content: false }).due, false, 'nothing to save yet');
+  const recent = backupReminder(new Date(`${addDays(today, -10)}T12:00:00`).getTime(), { today });
+  assert.equal(recent.due, false);
+  assert.match(recent.text, /^Ultimo backup il \d+ \w+ \d{4}$/);
+  assert.match(backupReminder(now, { today }).text, /^Ultimo backup oggi alle \d\d:\d\d$/);
+  const old = backupReminder(new Date(`${addDays(today, -(BACKUP_EVERY_DAYS + 5))}T12:00:00`).getTime(), { today });
+  assert.equal(old.due, true);
+  assert.match(old.text, /è ora di farne uno nuovo/);
+});
+
+test('guide «Installa su iPhone»: Safari, Condividi, Home Screen, always from the icon, first launch online', () => {
+  const body = SHEETS['more-guide']({ topic: 'iphone' }).body;
+  for (const re of [/Safari/, /Condividi/, /Aggiungi alla schermata Home/, /sempre dall'icona/, /resta online/, /Inizia da zero/, /esporta un backup/]) assert.match(body, re);
+  const off = SHEETS['more-guide']({ topic: 'offline' });
+  assert.equal(off.title, 'Senza internet');
+  assert.match(off.body, /funziona anche in aereo/);
+  assert.match(SHEETS['more-guide']({ topic: 'prices' }).body, /mai importi, quantità, conti o operazioni/);
 });

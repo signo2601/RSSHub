@@ -2,7 +2,7 @@
   "id": "./",
   "name": "Gruzzolo",
   "short_name": "Gruzzolo",
-  "description": "Il tuo portafoglio di investimenti: valore, rendimenti, dividendi, costi e rischio, solo per te.",
+  "description": "Il tuo portafoglio di investimenti sull'iPhone: valore, rendimenti, dividendi, costi e rischio. I dati restano solo sul telefono.",
   "lang": "it",
   "dir": "ltr",
   "start_url": "./",
@@ -12,26 +12,11 @@
   "theme_color": "#0c0e12",
   "categories": ["finance", "productivity"],
   "icons": [
+    { "src": "icon-180.png", "sizes": "180x180", "type": "image/png", "purpose": "any" },
     { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
     { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
     { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
     { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
-  ],
-  "shortcuts": [
-    {
-      "name": "Nuova transazione",
-      "short_name": "Nuova",
-      "description": "Registra un acquisto, una vendita o un dividendo",
-      "url": "./?action=add",
-      "icons": [{ "src": "icon-192.png", "sizes": "192x192", "type": "image/png" }]
-    },
-    {
-      "name": "Report",
-      "short_name": "Report",
-      "description": "Analisi della performance del portafoglio",
-      "url": "./?tab=report",
-      "icons": [{ "src": "icon-192.png", "sizes": "192x192", "type": "image/png" }]
-    }
   ]
 }

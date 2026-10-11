@@ -57,8 +57,19 @@
 .row.more-static { cursor: default; padding-top: 12px; padding-bottom: 12px; }
 .more-status > .dot { margin: 0 13.5px; }
 .more-status .row-title { white-space: normal; }
+.dot.warn { background: var(--warn); box-shadow: 0 0 0 3px var(--warn-soft); }
 
-/* Numbered steps (sync rows, sync and guide sheets) */
+/* Rows with a short explanation: the whole text, top-aligned (privacy group, storage status) */
+.row.more-note { align-items: flex-start; }
+.more-note .row-sub { display: block; -webkit-line-clamp: none; line-clamp: none; overflow: visible; }
+.more-note > .more-ico { margin-top: 1px; }
+.more-note.more-status > .dot { margin-top: 7px; }
+.more-note > .row-end { align-self: center; }
+.more-note > .chev { align-self: center; }
+.more-hero .row-title { font-size: 16px; font-weight: 800; letter-spacing: -.01em; }
+.more-hero .row-sub { font-size: 13.5px; color: var(--ink-2); }
+
+/* Numbered steps (guide sheets) */
 .more-steps {
   counter-reset: step; list-style: none; margin: 0; padding: 0;
   display: flex; flex-direction: column; gap: 10px; flex: 1; min-width: 0;
@@ -109,17 +120,16 @@
 .more-sheet { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .more-sheet > p { font-size: 15px; color: var(--ink-2); }
 .more-sheet b { color: var(--ink); }
-.more-form > .more-steps, .more-sheet > .more-steps {
+.more-sheet > .more-steps {
   padding: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
 }
 .more-bullets { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 14.5px; color: var(--ink-2); }
 .more-bullets li::marker { color: var(--accent-line); }
-.more-warn { align-items: flex-start; flex-wrap: nowrap; }
-.more-warn .ico { margin-top: 1px; }
+.more-banner { align-items: flex-start; flex-wrap: nowrap; }
+.more-banner .ico { margin-top: 1px; }
 .banner.warn .ico { color: var(--warn); }
 .more-sheet .banner, .more-form .banner { font-size: 13.5px; line-height: 1.45; }
 .more-sheet .banner .ico, .more-form .banner .ico { flex-shrink: 0; }
-.more-form .check { font-size: 14.5px; cursor: pointer; }
 
 /* Label with an info button on the same line */
 .more-label-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 24px; }
