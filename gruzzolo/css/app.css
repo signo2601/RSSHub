@@ -161,6 +161,7 @@ img { display: block; max-width: 100%; }
 
 .top {
   position: sticky; top: 0; z-index: 30;
+  transform: translateY(var(--vv-dy, 0px));
   padding-top: env(safe-area-inset-top, 0px);
   background: var(--bg);
   background: color-mix(in srgb, var(--bg) 86%, transparent);
@@ -229,6 +230,7 @@ img { display: block; max-width: 100%; }
 /* Bottom tab bar with the raised gold "+" */
 .tabbar {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 35;
+  transform: translateY(var(--vv-dy, 0px)); /* iPhone: follow a shifted visible area (main.js) */
   background: var(--surface);
   background: color-mix(in srgb, var(--surface) 92%, transparent);
   -webkit-backdrop-filter: saturate(1.6) blur(16px);
@@ -550,7 +552,7 @@ button.row:active, a.row:active { background: var(--surface-2); }
 .inline-form .field { flex: 1; }
 
 /* ---------- Sheets (bottom sheets on phones, dialogs on desktop) ---------- */
-.sheet-layer { position: fixed; inset: 0; z-index: 50; display: flex; align-items: flex-end; justify-content: center; }
+.sheet-layer { position: fixed; inset: 0; z-index: 50; transform: translateY(var(--vv-dy, 0px)); display: flex; align-items: flex-end; justify-content: center; }
 .backdrop { position: absolute; inset: 0; background: var(--scrim); animation: fade-in .2s ease-out; touch-action: none; }
 .sheet {
   position: relative; display: flex; flex-direction: column; width: 100%; max-width: 640px;
@@ -581,7 +583,7 @@ button.row:active, a.row:active { background: var(--surface-2); }
 
 /* ---------- Toast ---------- */
 .toast {
-  position: fixed; left: 50%; z-index: 70; transform: translateX(-50%);
+  position: fixed; left: 50%; z-index: 70; transform: translate(-50%, var(--vv-dy, 0px));
   bottom: calc(var(--tabbar-h) + 18px + env(safe-area-inset-bottom, 0px));
   width: max-content; max-width: calc(100% - 32px);
   padding: 11px 16px; border-radius: 14px; box-shadow: var(--shadow);

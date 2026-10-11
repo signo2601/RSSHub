@@ -527,6 +527,30 @@ function fitSheetToViewport() {
   } else clear();
 }
 
+// iPhone (installed app): after the keyboard closes iOS can leave the visible area
+// shifted below the layout viewport, so the fixed tab bar floats mid-screen and the
+// header disappears. Ask iOS to realign; if it stays shifted, move the bars with it.
+let viewportNudged = false;
+function fixStuckViewport() {
+  const vv = typeof window !== 'undefined' ? window.visualViewport : null;
+  if (!vv) return;
+  const keyboard = window.innerHeight - vv.height > 120;
+  const dy = !keyboard && vv.scale <= 1.01 ? Math.round(vv.offsetTop) : 0;
+  if (Math.abs(dy) > 1 && !viewportNudged) {
+    viewportNudged = true;
+    window.scrollTo(window.scrollX, window.scrollY);
+    requestAnimationFrame(fixStuckViewport);
+    return;
+  }
+  if (Math.abs(dy) <= 1) viewportNudged = false;
+  document.documentElement.style.setProperty('--vv-dy', `${Math.abs(dy) > 1 ? dy : 0}px`);
+}
+
+function onViewportChange() {
+  fitSheetToViewport();
+  fixStuckViewport();
+}
+
 /* ---------- Confirm dialog ---------- */
 const confirmFns = new Map();
 SHEETS.confirm = ({ title = 'Confermi?', text = '', ok = 'Conferma', danger = true, key = '' } = {}) => ({
@@ -846,6 +870,7 @@ function onScroll() {
     scrollTicking = false;
     const top = $('#top');
     if (top) top.classList.toggle('scrolled', window.scrollY > 4);
+    fixStuckViewport();
   });
 }
 
@@ -873,6 +898,7 @@ function listen() {
   document.addEventListener('change', onInput);
   document.addEventListener('keydown', onKeydown);
   document.addEventListener('focusout', () => {
+    setTimeout(fixStuckViewport, 350); // after the keyboard has closed
     if (!shell.deferred) return;
     setTimeout(() => {
       if (shell.deferred && !isEditing()) render();
@@ -889,8 +915,8 @@ function listen() {
     }).catch(() => {});
   });
   if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', fitSheetToViewport);
-    window.visualViewport.addEventListener('scroll', fitSheetToViewport);
+    window.visualViewport.addEventListener('resize', onViewportChange);
+    window.visualViewport.addEventListener('scroll', onViewportChange);
   }
   const toastEl = $('#toast');
   if (toastEl) toastEl.addEventListener('click', () => { toastEl.hidden = true; });
