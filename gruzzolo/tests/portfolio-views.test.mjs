@@ -1,5 +1,5 @@
-// Pure helpers of the portfolio views (home.js, sheets.js, market.js) and two regressions:
-// today's change ignores shares bought today; example (synthetic) quotes vanish with the example data.
+// Pure helpers of the portfolio views (home.js, sheets.js) and a regression:
+// today's change ignores shares bought today.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { S, migrate, bump } from '../js/state.js';
@@ -8,7 +8,6 @@ import { positions } from '../js/engine.js';
 import { todayISO, addDays } from '../js/util.js';
 import { rangeStart, rangePoints, txAmount, txLabel, _test as homeTest } from '../js/views/home.js';
 import { guessCurrency, tickerOf, closeOn, historyPoints, heldQty } from '../js/views/sheets.js';
-import { quoteOf, _test as marketTest } from '../js/views/market.js';
 
 const close = (a, b, eps = 1e-9) => assert.ok(Math.abs(a - b) < eps, `${a} ≉ ${b}`);
 
@@ -121,23 +120,4 @@ test("today's change counts only shares held at the previous close", () => {
   assert.equal(heldQty('a1', 'z', today, 't2'), 10);
 });
 
-test('quoteOf shows synthetic example prices only while example data is loaded', () => {
-  setupPortfolio({ demo: true });
-  const q = quoteOf('ZZT.MI');
-  assert.ok(q && q.demo, 'demo quote while the example portfolio is loaded');
-  close(q.changePct, 0.1);
-  setupPortfolio({ demo: false });
-  assert.equal(quoteOf('ZZT.MI'), null);
-});
 
-test('search results: one offline note only (the page shows it)', () => {
-  const before = market.status;
-  market.status = 'offline';
-  try {
-    const html = marketTest.resultsHtml('enel');
-    assert.ok(html.includes('ENEL.MI'), 'catalog results offline');
-    assert.ok(!html.includes('non disponibile'), 'no duplicate offline note');
-  } finally {
-    market.status = before;
-  }
-});

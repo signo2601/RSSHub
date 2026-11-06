@@ -8,6 +8,7 @@ import { S, D, migrate, blankData, bump, commit, account, hasDemo, assetCode, BR
 import { ACTIONS, FORMS, INPUTS, SHEETS, FORM_SHEETS, MOUNTS } from '../registry.js';
 import { app } from '../app.js';
 import { market } from '../market.js';
+import { eco } from '../eco.js';
 import { getSeries, fxOn, sortTxns } from '../engine.js';
 import { demoData, installDemoMarket, removeDemo } from '../demo.js';
 import { PRESETS, parseCsv, detectPreset, guessMapping, buildTxns } from '../importer.js';
@@ -142,13 +143,12 @@ function isStandalone() {
   }
 }
 
-// Anything the user entered (example data excluded): transactions, securities, watchlist items
+// Anything the user entered (example data excluded): transactions, securities
 export function hasUserContent(d) {
   if (!d || typeof d !== 'object') return false;
   const txns = Array.isArray(d.txns) ? d.txns : [];
   const assets = d.assets && typeof d.assets === 'object' ? Object.values(d.assets) : [];
-  const watch = Array.isArray(d.watch) ? d.watch : [];
-  return txns.some((t) => t && !t.demo) || assets.some((a) => a && !a.demo) || watch.some((w) => w && !w.demo);
+  return txns.some((t) => t && !t.demo) || assets.some((a) => a && !a.demo);
 }
 
 // Italian file size, decimal units like the iPhone settings: 850 kB, 2,4 MB
@@ -569,7 +569,7 @@ export function importBatches(data = D()) {
 }
 
 // Empty data for «Cancella tutti i dati»: preferences survive (rates, benchmark, server, theme),
-// everything the user entered (accounts, transactions, assets, prices, watchlist, external P&L) goes
+// everything the user entered (accounts, transactions, assets, prices, external P&L) goes
 export const KEEP_ON_WIPE = ['riskFree', 'benchmark', 'taxRate', 'govTaxRate', 'stampDuty', 'apiBase', 'theme'];
 export function wipedData(prev = {}) {
   const d = blankData();
@@ -832,7 +832,7 @@ function dataGroup() {
   ];
   if (demo) rows.push(navRow({ act: 'demo-remove', ico: 'close', title: 'Rimuovi i dati di esempio', sub: 'Tiene solo quello che hai inserito tu', chev: false }));
   else if (!realTx) rows.push(navRow({ act: 'demo-load', ico: 'chart', title: 'Carica un esempio', sub: 'Un portafoglio dimostrativo con prezzi simulati', chev: false }));
-  rows.push(navRow({ act: 'more-wipe', ico: 'trash', tone: 'danger', title: '<span class="down">Cancella tutti i dati</span>', sub: 'Conti, operazioni, titoli, prezzi e watchlist', chev: false }));
+  rows.push(navRow({ act: 'more-wipe', ico: 'trash', tone: 'danger', title: '<span class="down">Cancella tutti i dati</span>', sub: 'Conti, operazioni, titoli e prezzi', chev: false }));
   const foot = `Il backup è un file con tutti i tuoi dati: conservane sempre una copia recente. Con «Importa backup» li ripristini, anche su un nuovo ${dev || 'dispositivo'}.`;
   return group('data', 'shield', 'Backup e dati', `<div class="list">${rows.join('')}</div>`, esc(foot));
 }
@@ -858,7 +858,7 @@ function serverGroup(today) {
     navRow({ act: 'more-clear-cache', ico: 'trash', title: 'Svuota cache prezzi', sub: 'Cancella i prezzi scaricati e li riscarica', chev: false }),
   ];
   return group('server', 'globe', 'Server prezzi', `<div class="list">${rows.join('')}</div>`,
-    esc('Dal server dell\'app passano solo dati pubblici di mercato da Yahoo Finance: prezzi, cambi, dividendi e ricerca dei titoli. Riceve solo nomi e ticker dei titoli, mai i tuoi dati.'));
+    esc('Dal server dell\'app passano solo dati pubblici di mercato: prezzi, cambi, dividendi e ricerca dei titoli da Yahoo Finance, i dati della scheda Mercati da TradingView. Riceve solo nomi e ticker dei titoli, mai i tuoi dati.'));
 }
 
 /* ---------- 8. Guide ---------- */
@@ -873,7 +873,7 @@ function guideGroup() {
     navRow({ act: 'more-guide', attrs: ' data-topic="prices"', ico: 'info', title: 'Da dove arrivano i prezzi', sub: 'Fonte, ritardo e prezzi manuali' }),
   ];
   return group('guide', 'info', 'Guida', `<div class="list">${rows.join('')}</div>`,
-    `<b>${esc(VERSION)}</b> · prezzi da Yahoo Finance tramite il server dell'app, solo a scopo informativo.`);
+    `<b>${esc(VERSION)}</b> · prezzi da Yahoo Finance e mercati da TradingView tramite il server dell'app, solo a scopo informativo.`);
 }
 
 /* ======================================================================
@@ -1671,6 +1671,7 @@ const GUIDE = {
         <li>Portafoglio, report e operazioni sono sempre disponibili. Puoi aggiungere, modificare ed eliminare operazioni: tutto resta salvato sul telefono.</li>
         <li>I prezzi sono gli ultimi scaricati. Quando torni online si aggiornano da soli, oppure tocca <b>Aggiorna prezzi ora</b> in Altro.</li>
         <li>Senza internet non puoi cercare titoli nuovi su Yahoo Finance; il catalogo dei titoli più diffusi funziona comunque.</li>
+        <li>La scheda Mercati mostra gli ultimi dati scaricati (indici, heatmap, curve, mappa macro), con la data e l'ora in cui li hai scaricati.</li>
         <li>Quando esce una nuova versione di Gruzzolo, aprila con internet attivo: si aggiorna da sola (a volte serve chiuderla e riaprirla una seconda volta).</li>
       </ul>`,
   },
@@ -1683,6 +1684,7 @@ const GUIDE = {
         <li>I prezzi scaricati restano salvati sul telefono: senza connessione l'app funziona con gli ultimi disponibili.</li>
         <li>I titoli senza quotazione su Yahoo (alcune obbligazioni, fondi non quotati, polizze) usano i <b>prezzi manuali</b> che inserisci tu, oppure il prezzo dell'ultima operazione.</li>
         <li>I valori in valuta estera sono convertiti in euro con il cambio del giorno.</li>
+        <li>La scheda <b>Mercati</b> (indici, heatmap, rendimenti dei titoli di Stato, indicatori macro, materie prime, valute, crypto) usa i dati pubblici di <b>TradingView</b>, sempre attraverso il server di Gruzzolo.</li>
       </ul>
       <button class="btn block" type="button" data-act="prices">${icon('edit')}Inserisci prezzi manuali</button>`,
   },
@@ -1812,7 +1814,7 @@ Object.assign(ACTIONS, {
     if (hasUserContent(D())) {
       app.askConfirm({
         title: 'Caricare l\'esempio?',
-        text: 'I titoli e la watchlist che hai inserito verranno sostituiti dall\'esempio finché non ricarichi la pagina. Se modifichi l\'esempio, verrà salvato al loro posto.',
+        text: 'I titoli che hai inserito verranno sostituiti dall\'esempio finché non ricarichi la pagina. Se modifichi l\'esempio, verrà salvato al loro posto.',
         ok: 'Carica l\'esempio',
         danger: false,
         onOk: loadDemo,
@@ -1891,11 +1893,12 @@ Object.assign(ACTIONS, {
   'more-refresh': () => app.refreshPrices({ force: true, manual: true }),
   'more-clear-cache': () => app.askConfirm({
     title: 'Svuotare la cache dei prezzi?',
-    text: `Cancello i prezzi scaricati da Yahoo Finance su ${hereText()} e li riscarico. Operazioni e prezzi manuali non vengono toccati.`,
+    text: `Cancello i prezzi scaricati da Yahoo Finance e i dati della scheda Mercati su ${hereText()} e li riscarico. Operazioni e prezzi manuali non vengono toccati.`,
     ok: 'Svuota la cache',
     danger: false,
     onOk: async () => {
       await market.clearCache();
+      await eco.clear();
       storage.at = 0;
       app.render();
       app.toast(market.status === 'offline' ? 'Cache svuotata: riscarico i prezzi quando torni online' : 'Cache svuotata: riscarico i prezzi');
@@ -1936,7 +1939,7 @@ Object.assign(ACTIONS, {
   },
   'more-wipe': () => app.askConfirm({
     title: 'Cancellare tutti i dati?',
-    text: `Conti, operazioni, titoli, prezzi manuali, watchlist e plus/minusvalenze esterne verranno eliminati da ${hereText()}; aliquote, benchmark e tema restano. Non si può annullare: se vuoi conservarli, esporta prima un backup.`,
+    text: `Conti, operazioni, titoli, prezzi manuali e plus/minusvalenze esterne verranno eliminati da ${hereText()}; aliquote, benchmark e tema restano. Non si può annullare: se vuoi conservarli, esporta prima un backup.`,
     ok: 'Cancella tutto',
     onOk: () => {
       S.data = wipedData(D());

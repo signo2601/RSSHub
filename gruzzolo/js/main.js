@@ -7,6 +7,7 @@ import { S, D, migrate, blankData, restoreUi, saveUi, bump, commit, persistence,
 import { app } from './app.js';
 import { ACTIONS, FORMS, INPUTS, SHEETS, FORM_SHEETS, MOUNTS } from './registry.js';
 import { market } from './market.js';
+import { eco } from './eco.js';
 import { getSeries, trackedSymbols } from './engine.js';
 import { esc, fmt, icon, money, todayISO, debounce, isDesktop, fmtTime, newId, requestPersistentStorage } from './util.js';
 import { initCharts } from './charts.js';
@@ -214,7 +215,7 @@ function renderChrome() {
   setHtml($('#side-add'), `<button class="btn primary block" type="button" data-act="add-tx">${icon('plus')}Nuova transazione</button>`);
   setHtml($('#side-status'), `<div class="side-status"><span class="dot ${st.cls}"></span><span>${esc(st.long)}</span></div>`
     + (S.loaded && hasDemo() ? '<div class="side-status"><span class="dot demo"></span><span>Stai guardando dati di esempio</span></div>' : '')
-    + '<div>Gruzzolo 2.0 · prezzi da Yahoo Finance</div>');
+    + '<div>Gruzzolo 2.0 · prezzi da Yahoo Finance e TradingView</div>');
 
   // st.short is built here from fixed text and a time: it may hold markup
   setHtml($('#top-status'), st.short ? `<span class="dot ${st.cls}"></span><span>${st.short}</span>` : '');
@@ -758,7 +759,15 @@ Object.assign(ACTIONS, {
     render();
     toast(S.ui.hide ? 'Importi nascosti: tocca l\'occhio per mostrarli' : 'Importi visibili');
   },
-  refresh: () => refreshPrices({ force: true, manual: true }),
+  refresh: () => {
+    // Mercati tab: the button refreshes the market pages; portfolio prices follow quietly
+    if (S.ui.tab === 'market' && typeof marketView.refreshCurrent === 'function') {
+      marketView.refreshCurrent();
+      refreshPrices();
+      return;
+    }
+    refreshPrices({ force: true, manual: true });
+  },
   'close-sheet': () => closeSheets(),
   'back-sheet': () => popSheet(),
   'confirm-ok': (el) => {
@@ -924,6 +933,9 @@ function listen() {
   market.subscribe(() => {
     if (market.status === 'online') shell.everOnline = true;
     scheduleRender();
+  });
+  eco.subscribe(() => {
+    if (S.ui.tab === 'market') scheduleRender();
   });
   setInterval(() => {
     if (!S.loaded || document.visibilityState !== 'visible') return;

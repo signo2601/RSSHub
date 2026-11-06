@@ -419,6 +419,110 @@ export function lineChart(id, opts = {}) {
 }
 
 /* ======================================================================
+   Curve chart: categories on the x axis (e.g. bond maturities), lines that bridge missing points
+   ====================================================================== */
+// opts.cats: [{ short: '10A', long: '10 anni' }]; series[k].values are aligned to cats (null = no point:
+// the line goes straight to the next one). Solid series get a dot on every point. The tooltip lists every
+// series at the touched category, like lineChart.
+export function curveChart(id, opts = {}) {
+  const { cats = [], series = [], yFormat, legend, tooltipValue, ariaLabel = 'Curva' } = opts;
+  const w = width(opts.w);
+  const h = height(opts.h, 240);
+  const n = cats.length;
+  const ser = series.map((s, k) => ({
+    name: s.name ?? `Serie ${k + 1}`,
+    color: s.color || seriesColor(k),
+    values: s.values || [],
+    width: isNum(s.width) ? s.width : 2,
+    dash: dashArray(s.dash),
+  }));
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (const s of ser) {
+    for (let i = 0; i < n; i++) {
+      const v = s.values[i];
+      if (isNum(v)) {
+        if (v < lo) lo = v;
+        if (v > hi) hi = v;
+      }
+    }
+  }
+  if (!n || !ser.length || lo === Infinity) return emptyChart(id, w, h, ariaLabel);
+
+  const fmtY = fmtFn(yFormat, compact);
+  const fmtTip = typeof tooltipValue === 'function' ? tooltipValue : typeof yFormat === 'function' ? (v) => yFormat(v) : defaultTip;
+  const padT = 10;
+  const padB = 24;
+  const padL = 6;
+  const ih = h - padT - padB;
+  const nt = niceTicks(lo, hi, yTickCount(ih));
+  const Y = (v) => padT + ih - ((v - nt.min) / (nt.max - nt.min)) * ih;
+  const labels = tidyTicks(nt.ticks.map((t) => fmtY(t)));
+  const padR = Math.ceil(Math.max(0, ...labels.map((l) => textW(l)))) + 12;
+  const iw = Math.max(20, w - padL - padR);
+  const X = (i) => padL + (n === 1 ? iw / 2 : (i / (n - 1)) * iw);
+
+  let body = yAxis(nt.ticks, labels, Y, padL, padL + iw, w);
+  // x labels: every step-th category plus the last one, with the smallest step that leaves 6px between labels
+  const short = cats.map((c) => String(c && typeof c === 'object' ? c.short ?? '' : c ?? ''));
+  let ticks = [];
+  for (let step = 1; step <= n; step++) {
+    const idx = [];
+    for (let i = 0; i < n; i += step) idx.push(i);
+    if (idx[idx.length - 1] !== n - 1) {
+      if (idx.length > 1 && n - 1 - idx[idx.length - 1] < step / 2) idx.pop();
+      idx.push(n - 1);
+    }
+    let prevRight = -Infinity;
+    const placed = [];
+    let ok = true;
+    for (const i of idx) {
+      const tw = textW(short[i]);
+      const x = clamp(X(i), tw / 2, padL + iw + padR / 2 - tw / 2);
+      if (x - tw / 2 < prevRight + 6) {
+        ok = false;
+        break;
+      }
+      prevRight = x + tw / 2;
+      placed.push({ i, x, label: short[i] });
+    }
+    if (ok) {
+      ticks = placed;
+      break;
+    }
+  }
+  body += xLabels(ticks, h - 6);
+
+  let lines = '';
+  let dots = '';
+  for (let k = ser.length - 1; k >= 0; k--) {
+    const s = ser[k];
+    const c = esc(s.color);
+    const pts = [];
+    for (let i = 0; i < n; i++) if (isNum(s.values[i])) pts.push([r1(X(i)), r1(Y(s.values[i]))]);
+    if (!pts.length) continue;
+    lines += `<path class="chart-line" d="M${pts.map((p) => p.join(',')).join('L')}${pts.length === 1 ? 'h0.01' : ''}" fill="none" style="stroke:${c}" stroke-width="${s.width}" stroke-linejoin="round" stroke-linecap="round"${s.dash ? ` stroke-dasharray="${s.dash}"` : ''}/>`;
+    if (!s.dash) for (const [x, y] of pts) dots += `<circle cx="${x}" cy="${y}" r="2.6" style="fill:${c};stroke:var(--chart-ring, var(--surface))" stroke-width="1.2"/>`;
+  }
+  body += lines + dots;
+  body += `<g class="ch-hover" visibility="hidden" pointer-events="none">`
+    + `<line class="ch-x" x1="0" x2="0" y1="${padT}" y2="${padT + ih}" style="stroke:var(--ink-2)" stroke-opacity="0.45" stroke-width="1"/>`
+    + ser.map((s, k) => `<circle class="ch-dot" data-k="${k}" r="4" style="fill:${esc(s.color)};stroke:var(--chart-ring, var(--surface))" stroke-width="2"/>`).join('')
+    + '</g>';
+
+  // Registered as a line chart: same tooltip, crosshair and keyboard behaviour
+  REG.set(id, {
+    type: 'line', w, h, padT, ih, x0: padL, iw, n,
+    dates: cats.map((c, i) => String(c && typeof c === 'object' ? c.long ?? c.short ?? '' : short[i])),
+    X, Y,
+    ser: ser.map((s) => ({ name: s.name, color: s.color, values: s.values, dash: !!s.dash })),
+    fmtTip,
+  });
+  const leg = showLegend(legend, ser.length) ? legendHtml(ser.map((s) => ({ name: s.name, color: s.color, kind: s.dash ? 'dash' : 'line' }))) : '';
+  return wrap(id, 'line', body, { w, h, aria: ariaLabel, legend: leg });
+}
+
+/* ======================================================================
    Grouped bar chart (negatives grow down from a visible zero line)
    ====================================================================== */
 // Category labels: 'YYYY-MM' keys are formatted as months ('gen' when all in one year, else 'gen 26').

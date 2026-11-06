@@ -3,7 +3,7 @@
 // at the synthetic close of their day, dividends follow the shares held, the DEGIRO cash balance
 // never goes negative, sells never exceed holdings.
 //
-//   demoData({ today })          → v2 data; every account/asset/txn/watch item has demo: true; settings.started false
+//   demoData({ today })          → v2 data; every account/asset/txn has demo: true; settings.started false
 //   installDemoMarket({ today }) → injects the synthetic histories under 'demo:' + symbol (memory only)
 //   removeDemo(data)             → copy of data without the example items (settings.started true)
 //
@@ -543,33 +543,21 @@ export function demoData({ today } = {}) {
     data.prices[aidOf('btp')] = [...btpPoints.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1));
   }
 
-  // Watchlist with price targets (prices are the synthetic last closes)
-  const watchItem = (id, symbol, ticker, target, note) => {
-    const s = specOf(symbol);
-    const price = mk.close(symbol, last);
-    return { id, symbol, ticker, name: s.name, currency: s.currency, price, target: round(price * target, price < 50 ? 2 : 0), note, demo: true };
-  };
-  data.watch = [
-    watchItem('demo-w1', 'ASML.AS', 'ASML', 0.88, 'Da comprare se scende sotto l\'obiettivo'),
-    watchItem('demo-w2', 'RACE.MI', 'RACE', 0.92, 'Aspetto un ritracciamento'),
-    watchItem('demo-w3', 'SGLD.MI', 'SGLD', 1.08, 'Oro come protezione: obiettivo di vendita'),
-  ];
   data.updatedAt = 0;
   return data;
 }
 
 /* ---------- Leaving the example ---------- */
-// Copy of data without the example: demo transactions and watch items go away; demo assets and
+// Copy of data without the example: demo transactions go away; demo assets and
 // accounts stay only if the user's own transactions use them (then they become ordinary items).
 export function removeDemo(data) {
   const d = JSON.parse(JSON.stringify(data || blankData()));
   d.txns = (Array.isArray(d.txns) ? d.txns : []).filter((t) => t && !t.demo);
-  d.watch = (Array.isArray(d.watch) ? d.watch : []).filter((w) => w && !w.demo);
+  delete d.watch; // left by versions with a watchlist
   d.assets = d.assets && typeof d.assets === 'object' ? d.assets : {};
   d.prices = d.prices && typeof d.prices === 'object' ? d.prices : {};
   const used = new Set();
   for (const t of d.txns) if (t.aid) used.add(t.aid);
-  for (const w of d.watch) if (w.aid) used.add(w.aid);
   for (const [id, a] of Object.entries(d.assets)) {
     if (!a || !a.demo) continue;
     if (!used.has(id)) {

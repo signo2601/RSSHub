@@ -545,7 +545,7 @@ export function qtyAt(accIds, aid, date) {
   return q;
 }
 
-// Symbols the app should keep fresh: linked assets with a position or on the watchlist, FX, benchmark
+// Symbols the app should keep fresh: linked assets, the FX rates of their currencies, the benchmark
 export function trackedSymbols() {
   const syms = new Set();
   const ccys = new Set();
@@ -555,7 +555,6 @@ export function trackedSymbols() {
       if (a.currency && a.currency !== 'EUR') ccys.add(a.currency);
     }
   }
-  for (const w of D().watch) if (w.symbol) syms.add(w.symbol);
   const b = D().settings.benchmark;
   if (b && b.symbol) syms.add(b.symbol);
   for (const c of ccys) syms.add(market.fxSymbol(c));

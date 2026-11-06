@@ -1,5 +1,5 @@
-/* Gruzzolo — portfolio views: tab "Portafoglio" (home.js), the transactions page, tab "Mercati" (market.js)
-   and the portfolio sheets (sheets.js: asset, quote, transaction detail and form, prices, watchlist).
+/* Gruzzolo — portfolio views: tab "Portafoglio" (home.js), the transactions page
+   and the portfolio sheets (sheets.js: asset, transaction detail and form, prices). The Mercati tab is in markets.css.
    Shared components (cards, rows, chips, seg, fields, stats…) come from app.css: this file only adds
    what those views need on top. Phone first; desktop from 900px. */
 
@@ -7,18 +7,18 @@
    Bigger touch targets for chips and segmented buttons in these views (44px on iPhone)
    The visible pill stays 36px/38px; an invisible ::after extends the hit area.
    ====================================================================== */
-.home .chips, .tx-page .chips, .mkt-page .chips, .price-chart .chips { padding: 4px 1px; margin: -4px 0; }
-.home .chip, .tx-page .chip, .mkt-page .chip, .price-chart .chip { position: relative; }
-.home .chip::after, .tx-page .chip::after, .mkt-page .chip::after, .price-chart .chip::after {
+.home .chips, .tx-page .chips, .price-chart .chips { padding: 4px 1px; margin: -4px 0; }
+.home .chip, .tx-page .chip, .price-chart .chip { position: relative; }
+.home .chip::after, .tx-page .chip::after, .price-chart .chip::after {
   content: ""; position: absolute; inset: -4px 0;
 }
 .home-controls .seg button { position: relative; }
 .home-controls .seg button::after { content: ""; position: absolute; inset: -3px 0; }
 /* Text links and small buttons (36px tall in app.css) */
-.home .link-btn, .tx-page .link-btn, .mkt-page .link-btn, .pf-sheet .link-btn,
-.home .btn.sm, .tx-page .btn.sm, .mkt-page .btn.sm, .pf-sheet .btn.sm { position: relative; }
-.home .link-btn::after, .tx-page .link-btn::after, .mkt-page .link-btn::after, .pf-sheet .link-btn::after,
-.home .btn.sm::after, .tx-page .btn.sm::after, .mkt-page .btn.sm::after, .pf-sheet .btn.sm::after {
+.home .link-btn, .tx-page .link-btn, .pf-sheet .link-btn,
+.home .btn.sm, .tx-page .btn.sm, .pf-sheet .btn.sm { position: relative; }
+.home .link-btn::after, .tx-page .link-btn::after, .pf-sheet .link-btn::after,
+.home .btn.sm::after, .tx-page .btn.sm::after, .pf-sheet .btn.sm::after {
   content: ""; position: absolute; inset: -4px -2px;
 }
 
@@ -116,7 +116,7 @@
 /* Positions and recent activity */
 .home-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-items: start; }
 .home-grid > .section > .link-btn { align-self: flex-start; }
-.home .sec-head h2 .muted, .mkt-page .sec-head h2 .muted { font-weight: 700; margin-left: 2px; }
+.home .sec-head h2 .muted { font-weight: 700; margin-left: 2px; }
 .pos-row .row-end { gap: 2px; }
 .row-today { font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .pos-row.closed .avatar { filter: grayscale(1); opacity: .6; }
@@ -167,32 +167,12 @@
 .search-box.sm input,
 .field .search-box.sm input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]) { height: 46px; }
 
-.mkt-note {
-  display: flex; align-items: center; gap: 8px; margin: 0;
-  font-size: 13px; font-weight: 600; color: var(--muted);
-}
-.mkt-note .ico { width: 17px; height: 17px; flex-shrink: 0; }
-.mkt-note .dot { margin: 0 4px 0 5px; }
-#mkt-results > .section { gap: 10px; }
-
-.mkt-home { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
-.mkt-cols { display: grid; grid-template-columns: minmax(0, 1fr); gap: 22px; align-items: start; }
-.mkt-col { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
-.mkt-col .section > .hint { margin: 0 4px; }
-.mkt-page .sec-head { align-items: center; min-height: 36px; }
-
 .result-row .tag { flex-shrink: 0; }
-.own-dot { display: inline-block; margin-left: 3px; font-size: 9px; vertical-align: 2px; color: var(--accent-line); }
-.watch-row { gap: 10px; }
-.watch-row .spark-wrap { display: flex; align-items: center; flex-shrink: 0; height: 28px; }
-.watch-row .row-end { min-width: 78px; }
 .empty.compact { padding: 18px 16px; }
 .empty.compact p { margin: 0 auto; font-size: 14px; }
-.pop-more { margin-top: 2px; }
-.pop-more .ico { width: 16px; height: 16px; color: var(--muted); }
 
 /* ======================================================================
-   Sheets: asset and quote detail
+   Sheets: asset detail
    ====================================================================== */
 .pf-sheet .detail-title { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
 .pf-sheet .detail-title h3 { overflow-wrap: anywhere; text-wrap: balance; }
@@ -225,17 +205,12 @@
 .chev-wrap { display: grid; place-items: center; flex-shrink: 0; color: var(--muted); }
 .chev-wrap .ico { width: 18px; height: 18px; }
 
-.pos-stats, .quote-stats, .tx-stats { margin: 0 0 10px; }
+.pos-stats, .tx-stats { margin: 0 0 10px; }
 .pf-sheet > .hint { margin: 0 4px 10px; }
-.pf-watchForm > .form { margin-top: 18px; }
 .pf-sheet > .muted { margin: 0 4px; font-size: 14px; }
 
-.quote-actions, .asset-actions { margin-top: 16px; }
-.quote-actions > .btn { flex: 1 1 200px; }
+.asset-actions { margin-top: 16px; }
 .asset-actions > .btn { flex: 1 1 0; min-width: 0; padding: 0 8px; white-space: nowrap; }
-.pf-sheet .bench-btn { margin-top: 6px; color: var(--ink-2); }
-.pf-sheet .bench-btn:disabled { opacity: .7; }
-.pf-sheet .bench-btn .ico { color: var(--muted); }
 .sheet-foot-actions { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--line); }
 .pf-sheet > .group-label { margin-top: 24px; }
 .pf-sheet > .section { margin-top: 18px; }
@@ -345,9 +320,6 @@
   .tx-page { max-width: 880px; }
   .tx-page .tx-filters { margin-bottom: -10px; }
 
-  .mkt-page .search-box.mkt-search { max-width: 720px; }
-  .mkt-cols { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
-
   .pf-sheet .combo-list { max-height: 352px; overflow-y: auto; overscroll-behavior: contain; }
 }
 
@@ -376,7 +348,6 @@
 /* Narrow phones */
 @media (max-width: 374px) {
   .home .hero-value { font-size: 34px; }
-  .watch-row .spark-wrap { display: none; }
   .price-input input { width: 96px; }
   .acc-strip { grid-auto-columns: minmax(148px, 1fr); }
 }

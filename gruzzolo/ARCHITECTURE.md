@@ -2,7 +2,8 @@
 
 Personal investment tracker. Italian UI, EUR base currency. Runs as a static PWA installed on the
 iPhone (Safari → Aggiungi alla schermata Home) that works fully offline, plus a tiny read-only server
-function that proxies public market data from Yahoo Finance (search, prices, dividends, FX).
+function that proxies public market data: Yahoo Finance for the portfolio (search, prices, dividends, FX) and the
+TradingView screener for the Mercati tab (heatmaps, yield curves, macro indicators, indices, commodities, FX, crypto).
 The desktop layout still exists (harmless) but the iPhone is the only target.
 
 This file is the contract between modules. Signatures and shapes here are binding:
@@ -10,12 +11,14 @@ if you own a module, implement exactly these exports; if you consume one, use on
 
 ## Privacy rule (binding for every module)
 
-- **User data never leaves the device.** Accounts, transactions, assets, settings, watchlist and manual prices
+- **User data never leaves the device.** Accounts, transactions, assets, settings and manual prices
   live only in this device's `localStorage` key `'gruzzolo:data:v2'` (`js/store.js`); the market cache lives in
-  IndexedDB `'gruzzolo-market'` (`js/market.js`). There is no account, no cloud copy, no sync.
+  IndexedDB `'gruzzolo-market'` (`js/market.js`), the Mercati answers in IndexedDB `'gruzzolo-eco'` (`js/eco.js`).
+  There is no account, no cloud copy, no sync.
 - **The only network traffic is public market data from the app's own `/api`**: `health`, `search`, `chart`,
-  `quotes`. Requests carry only security names, tickers or ISINs (search, CSV import matching, prices), never
-  amounts, quantities, accounts or transactions.
+  `quotes`, `eco/*`. Requests carry only security names, tickers or ISINs (search, CSV import matching, prices) or
+  fixed lists of public tickers (Mercati), never amounts, quantities, accounts or transactions. Company and crypto
+  logos also come through our API (`/api/eco/logo`), so the app contacts no other site.
 - **No third-party requests**: fonts are self-hosted in `fonts/` (Manrope and Bricolage Grotesque, OFL, `@font-face`
   in `css/app.css`); no CDN, analytics or Google Fonts. `dev/build-artifact.mjs` refuses to build a bundle that
   contains sync code, Claude storage (`use('db')`/`use('user')`) or Google Fonts.
@@ -50,7 +53,7 @@ if you own a module, implement exactly these exports; if you consume one, use on
 | `js/engine.js` | Ledger, positions, daily valuation series, events (FOUNDATION, exists) |
 | `js/market.js` | Market data cache + API client + refresh (core API exists; network layer to add) |
 | `js/catalog.js` | Curated popular securities |
-| `functions/api/[[path]].js` | Server: read-only Yahoo proxy (public market data, stores nothing) |
+| `functions/api/[[path]].js` | Server: read-only Yahoo + TradingView proxy (public market data, stores nothing) |
 | `dev/server.mjs` | Local dev server: static + `/api` via the same function |
 | `js/metrics.js` | Performance and risk metrics |
 | `js/markowitz.js` | Efficient frontier |
@@ -62,7 +65,15 @@ if you own a module, implement exactly these exports; if you consume one, use on
 | `js/demo.js` | Example portfolio with synthetic market data |
 | `js/main.js` | Boot, router, chrome (header, mobile tab bar, desktop sidebar), event delegation, sheets |
 | `js/views/home.js` | Tab "Portafoglio" |
-| `js/views/market.js` | Tab "Mercati": search, watchlist, popular, asset preview |
+| `js/views/market.js`, `css/markets.css` | Tab "Mercati": segmented control and data loading of the four pages below |
+| `js/views/eco-common.js` | Mercati: preferences (`S.ui.eco`), periods, number formats, flags, status line, empty states |
+| `js/views/eco-overview.js` | Mercati → Panoramica: indices, government bonds (+ spread), AAA corporate bonds, commodities, FX, crypto |
+| `js/views/eco-heatmap.js` | Mercati → Heatmap: index constituents (squarified treemap by sector), sector zoom, movers |
+| `js/views/eco-curves.js` | Mercati → Curve: government yield curves, comparison with a past date, country table |
+| `js/views/eco-macro.js` | Mercati → Macro: world choropleth of 6 indicators, regions/groups, ranking |
+| `js/eco.js` | Mercati data layer: `/api/eco/*` answers in memory + IndexedDB, freshness, back-off |
+| `js/treemap.js` | Squarified treemap layout (pure) |
+| `js/world.js`, `dev/build-world.mjs` | World map (Equal Earth, Natural Earth 1:110m) + Italian names, continents, region views (generated) |
 | `js/views/sheets.js` | Modal sheets: asset detail, transaction form/detail, confirm |
 | `js/views/report.js`, `css/report.css`, `js/info.js` | Tab "Report": controls, navigator, sheet registry, metric explanations |
 | `js/views/sheet-summary.js` | Report 1 "Riepilogo" |
@@ -110,8 +121,8 @@ camelCase, English comments, Italian UI copy. Views return HTML strings; every u
   // ticker: short display code ('VWCE'); symbol: Yahoo symbol ('VWCE.DE'), '' for manual assets; ter: annual fraction (0.0022) or null
   txns: [Txn],
   prices: { [aid]: [[date, price], ...] },   // MANUAL price points only (local currency), sorted
-  watch: [{ id, aid?, symbol, ticker, name, currency, price /* manual fallback */, target, note, demo? }],
 }
+// The watchlist of versions ≤ 2.1 ('watch') is dropped by migrate().
 ```
 
 `Txn`:
@@ -173,7 +184,7 @@ saveFile(filename, text, mime)` (iPhone: share sheet with the file → «Salva s
 ```js
 historyFor(symbol) → History|null           // real market history, else the demo one ('demo:' + symbol)
 assetHistory(asset) → History|null          // history used to price an asset (null for manual assets)
-trackedSymbols() → string[]                 // linked assets, watchlist, benchmark, FX pairs to keep fresh
+trackedSymbols() → string[]                 // linked assets, benchmark, FX pairs to keep fresh
 sortTxns(list), fxSeries(ccy) → [[date, rate]]
 priceSeries(aid) → [[date, price]]          // merged: market closes, manual points (win), trade prices before market data
 priceOn(aid, date) → number|null            // carry forward; null before first point
@@ -261,6 +272,18 @@ All responses JSON with `Access-Control-Allow-Origin: *`; OPTIONS preflight hand
 
 Yahoo endpoints: `https://query1.finance.yahoo.com/v1/finance/search`, `https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?range=&interval=&events=div,split&includeAdjustedClose=true`
 (fallback host `query2`), browser-like `User-Agent`. Edge cache (Cache API when present): search 1h, chart 10y 12h, quotes 60s.
+
+Mercati routes (one POST to `https://scanner.tradingview.com/{global|coin|economics2}/scan` each; compact arrays with a `cols` list):
+
+- `GET /api/eco/quotes?t=TVC:FTMIB,FX_IDC:EURUSD,…` (≤ 200) → `{ at, cols, rows: { [ticker]: [price, chg, chgAbs, w, m1, m3, m6, ytd, y, time, ccy, name, ytm, maturity] } }`
+  (percent units; pence and US cents converted; `ytm`/`maturity` for bonds). Edge cache 60 s.
+- `GET /api/eco/heatmap?index=SPX|NDX|DJI|FTSEMIB|SX5E|SXXP|DAX|CAC|IBEX|AEX|SMI|UKX|NI225|HSI|CSI300` →
+  `{ at, index, cols, rows: [[symbol, name, sector, industry, mcap (USD mln), price, ccy, chg, w, m1, m3, m6, ytd, y, logo]] }`. 120 s.
+- `GET /api/eco/yields` → `{ at, cols, curves: { [country]: [[months, yield, chgAbs, w, m1, ytd, y, time]] } }` (23 countries,
+  tenors in `YIELD_TENORS`; w/m1/ytd/y are % changes of the yield itself: the client turns them into levels). 120 s.
+- `GET /api/eco/macro` → `{ at, cols, data: { IRYY|INTR|GDP|GDPYY|UR|GDG: { [country]: [value, prev, time] } } }`. 6 h.
+- `GET /api/eco/crypto` → the 15 largest non-stablecoin cryptocurrencies, prices in USD. 120 s.
+- `GET /api/eco/logo?id=apple` → SVG logo, `Content-Security-Policy: sandbox`, 30 days.
 
 ## Analytics modules (pure functions; no DOM, no `Date.now()`)
 
@@ -384,6 +407,12 @@ These modules are finished and tested; the notes list behavior beyond the contra
 - **market.js**: `market.init({ apiBase })` resolves after the IndexedDB load plus a health ping (≤ 4 s): do not block the first render on it. `market.subscribe(fn)` fires on data changes and on `status` changes. `market.refresh(symbols, { onProgress: (done, total) => …, force })` → `{ updated, failed, skipped?, offline? }`. Extras: `market.health` (`{ ok }` from the server), `market.ping()`, `market.clearCache()`, `market.isDemoSymbol(s)`. `ensureHistory` also fetches the FX history for a new currency. Yahoo may answer 429 (rate limit): the server falls back to the second host, then returns 503; keep cached data and say "riprova tra poco".
 - **catalog.js**: `CATALOG` (200 verified instruments with `{ symbol, name, type, currency, exchange, group, isin?, ter?, sector?, region? }`), `GROUPS`, `BENCHMARKS` (`{ symbol, name, currency, desc }`, VWCE.DE first), `searchCatalog(q, limit)` (instant, offline), `findInCatalog(symbolOrIsin)`. To add an asset: `market.lookup(symbol)` (name, currency, type, price) then `market.ensureHistory(symbol)`; prefill sector/region/ter/isin from `findInCatalog`. Search UIs show `searchCatalog(q)` immediately, then merge `await market.search(q)`.
 - **Server**: `/api/search` with an ISIN also returns other listings of the same fund (Milan and Xetra first). Chart/quotes include `splits`; quotes may include `errors`. Dev server: `PORT=8787 node dev/server.mjs` (static files + `/api`).
+- **eco.js** (Mercati data): `eco.load(key, path, { maxAge, force })` downloads unless a copy of the same path is younger than
+  `maxAge`, or the last try failed less than 30 s ago (`force` skips both); answers go to memory and IndexedDB `'gruzzolo-eco'`
+  (at most 6 heatmaps kept). `eco.data(key)`, `eco.entry(key)` (`fetchedAt`), `eco.isLoading(key)`, `eco.failure(key)` (`{ message,
+  offline }`), `eco.subscribe(fn)` (main.js re-renders the Mercati tab), `eco.logoUrl(id)`, `eco.clear()` (Altro → Svuota cache).
+  Each page exports `wants()` → `[{ key, path, maxAge }]`; `views/market.js` loads them after every render of the tab and every 30 s
+  while it stays open; the header refresh button calls `refreshCurrent()` on this tab.
 - **metrics.js**: `cumulative()` first point is 0 on the period's first date; its `dates` equal `series.dates.slice(i0, i1 + 1)` — use them as the chart x axis. `benchReturns()` attaches `.dates` and `.coverageStart`: do not `.slice()` it if you need those (typed-array slices drop them); `periodStats` realigns a bench array by `.dates` when lengths differ, so passing the total's `bench.ret` for an account series is fine. `periodStats` extras: `i0, i1, shortPeriod` (days < 365: annualized CAGR/IRR/Sharpe are indicative — show a short note "periodo breve: valore annualizzato indicativo"), `gain, benchPartial, n`; `benchTwr`/`activeVsBench` are null without benchmark data. `resolvePeriod(period, { today, start, from, to })` → `{ from, to }` for the presets (use it in report.js). `riskStats(ret, { rf, benchRet, dates })` also returns `best, worst, maxDDFrom, maxDDTo`. `backProjected(...)`: `start` is the base date (not in `dates`); also returns `missingInfo [{ aid, name, reason: 'nohistory'|'short' }]`, `fxMissing`, `benchStart`, `n`; `bench` is 0 before `benchStart`. `rollingVol(dates, ret, window, { from, to })` can trim its output. Signs: `maxDD` negative; `var95`/`cvar95` positive daily losses; Sharpe/Sortino use CAGR − rf.
 - **markowitz.js**: easiest entry point `portfolioFrontier(positions, { today, rf })` → `{ ok, error?, missing, notes, weekly: { start, end, weeks }, frontier, minVar, maxSharpe, current, assets, … }`. When ≤ 5 instruments the 20% cap is dropped (`capRelaxed`, explained in `notes`). `frontierCsv(res)` already starts with a BOM: `saveFile('frontiera-efficiente.csv', frontierCsv(res), 'text/csv;charset=utf-8')`. Expected returns are historical averages (can look huge for stocks that boomed): label the frontier as descriptive, not a forecast.
 - **income.js**: `incomeStats({ accIds, from, to, today, settings? })`. Calendar items with `aid: null` are cash interest ("Interessi"); `forecast: true` items are estimates; use `years` for the year switch; `forecastByAsset[].perShare` is in `currency` (gross local for market data, net EUR for recorded). `missing[]` items carry `currency` and `kind`. Extras: `gross, count, value, income12m, twr, years`.

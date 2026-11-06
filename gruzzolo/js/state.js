@@ -33,7 +33,6 @@ export function blankData() {
     assets: {},
     txns: [],
     prices: {},
-    watch: [],
   };
 }
 
@@ -60,7 +59,7 @@ export const S = {
     allocSel: null,
     incomeYear: null,
     txFilter: 'all',
-    marketQuery: '',
+    eco: null, // Mercati tab: page and filters (views/eco-common.js)
   },
 };
 export const D = () => S.data;
@@ -77,7 +76,7 @@ export function migrate(raw) {
     d.assets = raw.assets && typeof raw.assets === 'object' ? raw.assets : {};
     d.txns = Array.isArray(raw.txns) ? raw.txns : [];
     d.prices = raw.prices && typeof raw.prices === 'object' ? raw.prices : {};
-    d.watch = Array.isArray(raw.watch) ? raw.watch : [];
+    delete d.watch; // the watchlist was removed from the Mercati tab
     return d;
   }
   // v1 → v2: portfolios become accounts, prices were entered in EUR
@@ -97,7 +96,6 @@ export function migrate(raw) {
     return { ...rest, acc: pid || d.accounts[0].id, ...(t.type === 'buy' || t.type === 'sell' ? { fx: 1 } : {}) };
   });
   d.prices = raw.prices || {};
-  d.watch = (raw.watch || []).map((w) => ({ id: w.id, symbol: '', ticker: w.ticker || '', name: w.name, currency: 'EUR', price: w.price || 0, target: w.target || 0, note: w.note || '', ...(w.demo ? { demo: true } : {}) }));
   return d;
 }
 
@@ -117,7 +115,7 @@ export function incomeLabel(aid) {
   return t === 'bond' ? 'Cedola' : t === 'cash' ? 'Interessi' : 'Dividendo';
 }
 export const assetCode = (a) => a.ticker || (a.symbol ? a.symbol.replace(/\..*$/, '').replace(/-USD$|=X$/, '') : '') || '';
-export const hasDemo = () => S.data.txns.some((t) => t.demo) || Object.values(S.data.assets).some((a) => a.demo) || S.data.watch.some((w) => w.demo);
+export const hasDemo = () => S.data.txns.some((t) => t.demo) || Object.values(S.data.assets).some((a) => a.demo);
 
 // Manual price point in the asset currency
 export function setPrice(aid, date, price) {
@@ -170,7 +168,7 @@ export function commit(message) {
 
 /* ---------- UI preferences (per device) ---------- */
 const UI_KEY = 'gruzzolo:ui:v2';
-const UI_SAVED = ['tab', 'scope', 'range', 'chartMode', 'sort', 'hide', 'sheet', 'period', 'from', 'to', 'base100', 'logScale', 'allocBy'];
+const UI_SAVED = ['tab', 'scope', 'range', 'chartMode', 'sort', 'hide', 'sheet', 'period', 'from', 'to', 'base100', 'logScale', 'allocBy', 'eco'];
 export function restoreUi() {
   try {
     const saved = JSON.parse(localStorage.getItem(UI_KEY) || '{}');

@@ -318,3 +318,272 @@ test('live: unknown symbol → 404', live, async () => {
   const r = await call('/api/chart?symbol=ZZZNOTREAL123.MI&range=5d');
   assert.equal(r.status, 404);
 });
+
+/* ---------- Mercati tab: TradingView screener routes (mocked upstream) ---------- */
+// Records every screener query and answers with rows built by `answer(market, body)`
+function mockScanner(answer) {
+  const calls = [];
+  globalThis.fetch = async (url, init = {}) => {
+    const u = String(url);
+    const m = u.match(/^https:\/\/scanner\.tradingview\.com\/([a-z0-9]+)\/scan$/);
+    if (!m) return new Response('unexpected ' + u, { status: 500 });
+    const body = JSON.parse(init.body);
+    calls.push({ market: m[1], body, method: init.method });
+    const out = answer(m[1], body);
+    return out instanceof Response ? out : yjson({ totalCount: out.length, data: out });
+  };
+  return calls;
+}
+
+test('eco quotes: one POST for all tickers, pence → GBP, dates, unknown tickers left out', async () => {
+  try {
+    const calls = mockScanner((market, body) => {
+      assert.equal(market, 'global');
+      assert.deepEqual(body.symbols.tickers, ['TVC:FTMIB', 'LSE:HSBA', 'BONDSCOM:XS1001749289', 'NOPE:NOPE']);
+      return [
+        { s: 'TVC:FTMIB', d: [50052.95, -0.896786671, -452.93, 0.76534, -1.69, -6.97, 2.06, 11.2281104, 15.07, 1793952000, 'EUR', 'MILANO ITALIA BORSA INDEX', null, null] },
+        { s: 'LSE:HSBA', d: [1304.6, 0.5, 6.5, 1, 2, 3, 4, 5, 6, 1793952000, 'GBX', 'HSBC Holdings Plc', null, null] },
+        { s: 'BONDSCOM:XS1001749289', d: [99.9265, 0.0676, 0.0675, null, null, null, null, null, null, 1793926800, null, 'Microsoft Corporation 3.125% 06-DEC-2028', 3.160858847, 20281206, null] },
+      ];
+    });
+    const r = await call('/api/eco/quotes?t=TVC:FTMIB,LSE:HSBA,BONDSCOM:XS1001749289,NOPE:NOPE');
+    assert.equal(r.status, 200);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].method, 'POST');
+    const { rows, cols } = r.json;
+    assert.deepEqual(cols, ['price', 'chg', 'chgAbs', 'w', 'm1', 'm3', 'm6', 'ytd', 'y', 'time', 'ccy', 'name', 'ytm', 'maturity']);
+    assert.deepEqual(Object.keys(rows), ['TVC:FTMIB', 'LSE:HSBA', 'BONDSCOM:XS1001749289']);
+    assert.deepEqual(rows['TVC:FTMIB'].slice(0, 3), [50052.95, -0.8968, -452.93]);
+    assert.equal(rows['TVC:FTMIB'][7], 11.2281);
+    assert.deepEqual(rows['LSE:HSBA'].slice(0, 3), [13.046, 0.5, 0.065]);
+    assert.equal(rows['LSE:HSBA'][10], 'GBP');
+    assert.equal(rows['BONDSCOM:XS1001749289'][12], 3.1609);
+    assert.equal(rows['BONDSCOM:XS1001749289'][13], '2028-12-06');
+    assert.ok(r.json.at > 0);
+    assert.match(r.headers.get('cache-control'), /max-age=60/);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test('eco routes: input validation and upstream failures', async () => {
+  try {
+    const calls = mockScanner(() => []);
+    const cases = [
+      ['/api/eco/quotes', 400],
+      ['/api/eco/quotes?t=bad', 400],
+      ['/api/eco/quotes?t=TVC:A,' + encodeURIComponent('<x>:y'), 400],
+      ['/api/eco/quotes?t=' + Array.from({ length: 201 }, (_, i) => `TVC:A${i}`).join(','), 400],
+      ['/api/eco/heatmap', 400],
+      ['/api/eco/heatmap?index=NOPE', 400],
+      ['/api/eco/logo', 400],
+      ['/api/eco/logo?id=' + encodeURIComponent('../secret'), 400],
+      ['/api/eco/logo?id=' + encodeURIComponent('https://evil.example/x'), 400],
+      ['/api/eco', 404],
+      ['/api/eco/nothing', 404],
+      ['/api/eco/quotes/extra', 404],
+    ];
+    for (const [path, status] of cases) {
+      const r = await call(path);
+      assert.equal(r.status, status, path);
+      assert.equal(typeof r.json.error, 'string', path);
+    }
+    assert.equal(calls.length, 0, 'invalid requests never reach TradingView');
+    assert.equal((await call('/api/eco/macro', { method: 'POST', body: '{}' })).status, 405);
+
+    mockScanner(() => new Response('Too Many Requests', { status: 429 }));
+    const limited = await call('/api/eco/yields');
+    assert.equal(limited.status, 503);
+    assert.equal(limited.headers.get('cache-control'), 'no-store');
+    mockScanner(() => new Response('<html>oops</html>', { status: 200 }));
+    assert.equal((await call('/api/eco/crypto')).status, 502);
+    globalThis.fetch = async () => { throw new TypeError('network down'); };
+    assert.equal((await call('/api/eco/macro')).status, 502);
+    // An empty answer is an error, never an empty page cached for minutes
+    mockScanner(() => []);
+    assert.equal((await call('/api/eco/heatmap?index=SPX')).status, 502);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test('eco heatmap: index constituents by market cap in USD millions, rows without market cap dropped', async () => {
+  try {
+    const calls = mockScanner((market, body) => {
+      assert.equal(market, 'global');
+      assert.deepEqual(body.symbols, { symbolset: ['SYML:INDEX;FTSEMIB'] });
+      assert.deepEqual(body.sort, { sortBy: 'market_cap_basic', sortOrder: 'desc' });
+      return [
+        { s: 'MIL:UCG', d: ['UniCredit S.p.A.', 'Finance', 'Major Banks', 132602369150.55, 85.1, 'EUR', 1.23456, 2, 3, 4, 5, 6, 7, 'unicredit'] },
+        { s: 'MIL:XYZ', d: ['No cap', 'Finance', 'Banks', null, 1, 'EUR', 0, 0, 0, 0, 0, 0, 0, ''] },
+        { s: 'LSE:TEST', d: ['Pence plc', 'Utilities', 'Electric Utilities', 2e9, 250, 'GBX', -0.5, null, null, null, null, null, null, ''] },
+      ];
+    });
+    const r = await call('/api/eco/heatmap?index=ftsemib');
+    assert.equal(r.status, 200);
+    assert.equal(calls.length, 1);
+    assert.equal(r.json.index, 'FTSEMIB');
+    assert.deepEqual(r.json.rows, [
+      ['MIL:UCG', 'UniCredit S.p.A.', 'Finance', 'Major Banks', 132602, 85.1, 'EUR', 1.2346, 2, 3, 4, 5, 6, 7, 'unicredit'],
+      ['LSE:TEST', 'Pence plc', 'Utilities', 'Electric Utilities', 2000, 2.5, 'GBP', -0.5, null, null, null, null, null, null, ''],
+    ]);
+    assert.equal(r.json.cols.length, r.json.rows[0].length);
+    assert.match(r.headers.get('cache-control'), /max-age=120/);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test('eco yields: month tenors read as …MY tickers, curves sorted by maturity', async () => {
+  try {
+    mockScanner((market, body) => {
+      const t = body.symbols.tickers;
+      assert.ok(t.includes('TVC:US03MY') && t.includes('TVC:US10Y') && t.includes('TVC:IT50Y'));
+      assert.ok(!t.includes('TVC:US03M') && !t.includes('TVC:US10YY'));
+      return [
+        { s: 'TVC:IT10Y', d: [4.3564, -0.0013, -3.56, -5.26, 22.57, 27.44, 1793952000] },
+        { s: 'TVC:IT03MY', d: [2.675, 0.006, 1.66, -0.3, 30.1, 33.68, 1793952000] },
+        { s: 'TVC:IT02Y', d: [3.5045, 0.0876, 0.48, 0.95, 50.2, 59.1, 1793952000] },
+        { s: 'TVC:US10Y', d: [4.855, 0.012, -1.62, -8.36, 15.8, 16.86, 1793952000] },
+        { s: 'TVC:XX10Y', d: [1, 0, 0, 0, 0, 0, 0] }, // not asked: ignored
+        { s: 'TVC:DE10Y', d: [null, null, null, null, null, null, null] },
+      ];
+    });
+    const r = await call('/api/eco/yields');
+    assert.equal(r.status, 200);
+    assert.deepEqual(Object.keys(r.json.curves).sort(), ['IT', 'US']);
+    assert.deepEqual(r.json.curves.IT.map((p) => p[0]), [3, 24, 120]);
+    assert.deepEqual(r.json.curves.IT[2], [120, 4.3564, -0.0013, -3.56, -5.26, 22.57, 27.44, 1793952000]);
+    assert.deepEqual(r.json.cols, ['months', 'yield', 'chgAbs', 'w', 'm1', 'ytd', 'y', 'time']);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test('eco macro: indicators by country with the previous value; aggregates and other series left out', async () => {
+  try {
+    mockScanner((market, body) => {
+      assert.equal(market, 'economics2');
+      assert.equal(body.filter[0].right, '^[A-Z]{2}(IRYY|INTR|GDP|GDPYY|UR|GDG)$');
+      return [
+        { s: 'ECONOMICS:ITIRYY', d: ['ITIRYY', 5.4, 1.2, 1793404800, 'IT'] },
+        { s: 'ECONOMICS:ITGDP', d: ['ITGDP', 2551556954100.35, 168121391642.23, 1767139200, 'IT'] },
+        { s: 'ECONOMICS:EUINTR', d: ['EUINTR', 2.65, 0, 1793232000, 'EU'] },
+        { s: 'ECONOMICS:PLHIRYY', d: ['PLHIRYY', 3, 0.1, 1793404800, 'PL'] },
+        { s: 'ECONOMICS:FRIRYY', d: ['FRIRYY', 3.4, null, 1793404800, 'FR'] },
+        { s: 'ECONOMICS:DEUR', d: ['DEUR', 6.1, 0, 1793404800, 'AT'] }, // country code mismatch
+      ];
+    });
+    const r = await call('/api/eco/macro');
+    assert.equal(r.status, 200);
+    const { data } = r.json;
+    assert.deepEqual(Object.keys(data), ['IRYY', 'INTR', 'GDP', 'GDPYY', 'UR', 'GDG']);
+    assert.deepEqual(data.IRYY.IT, [5.4, 4.2, 1793404800]);
+    assert.deepEqual(data.IRYY.FR, [3.4, null, 1793404800]);
+    assert.equal(data.IRYY.PL, undefined);
+    assert.deepEqual(data.INTR.EU, [2.65, 2.65, 1793232000]);
+    assert.equal(data.GDP.IT[0], 2551556954100.35);
+    assert.deepEqual(data.UR, {});
+    assert.match(r.headers.get('cache-control'), /max-age=21600/);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test('eco crypto: ranked by market cap, stablecoins left out, at most 15', async () => {
+  try {
+    mockScanner((market, body) => {
+      assert.equal(market, 'coin');
+      assert.deepEqual(body.sort, { sortBy: 'crypto_total_rank', sortOrder: 'asc' });
+      const rows = [
+        { s: 'CRYPTO:BTCUSD', d: ['BTC', 'Bitcoin', 'crypto/XTVCBTC', 75783.71, -0.2979, -2.7, -11.4, -13.4, -27, 1523764000000, ['cryptocurrencies'], 1793923200] },
+        { s: 'CRYPTO:USDTUSD', d: ['USDT', 'Tether USDt', 'crypto/XTVCUSDT', 0.9986, 0, 0, 0, 0, 0, 177e9, ['stablecoins'], 1793923200] },
+      ];
+      for (let i = 0; i < 20; i++) rows.push({ s: `CRYPTO:C${i}USD`, d: [`C${i}`, `Coin ${i}`, '', 1 + i, 0, 0, 0, 0, 0, 1e9, ['layer-1'], 1793923200] });
+      return rows;
+    });
+    const r = await call('/api/eco/crypto');
+    assert.equal(r.status, 200);
+    assert.equal(r.json.rows.length, 15);
+    assert.deepEqual(r.json.rows[0], ['CRYPTO:BTCUSD', 'BTC', 'Bitcoin', 'crypto/XTVCBTC', 75783.71, -0.2979, -2.7, -11.4, -13.4, -27, 1523764, 1793923200]);
+    assert.ok(!r.json.rows.some((x) => x[1] === 'USDT'));
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test('eco logo: SVG from our origin, sandboxed, long cache; non-SVG answers are 404', async () => {
+  try {
+    const seen = [];
+    globalThis.fetch = async (url) => {
+      seen.push(String(url));
+      if (String(url).includes('apple')) return new Response('<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0h1v1z"/></svg>', { headers: { 'Content-Type': 'image/svg+xml' } });
+      if (String(url).includes('crypto/XTVCBTC')) return new Response('<svg xmlns="http://www.w3.org/2000/svg"/>', { headers: { 'Content-Type': 'image/svg+xml' } });
+      return new Response('<Error>AccessDenied</Error>', { status: 403, headers: { 'Content-Type': 'application/xml' } });
+    };
+    const r = await call('/api/eco/logo?id=apple');
+    assert.equal(r.status, 200);
+    assert.match(r.headers.get('content-type'), /^image\/svg\+xml/);
+    assert.match(r.headers.get('content-security-policy'), /sandbox/);
+    assert.match(r.headers.get('cache-control'), /max-age=2592000/);
+    assert.equal(r.headers.get('x-content-type-options'), 'nosniff');
+    assert.equal(seen[0], 'https://s3-symbol-logo.tradingview.com/apple--big.svg');
+    assert.equal((await call('/api/eco/logo?id=crypto/XTVCBTC')).status, 200);
+    assert.equal(seen[1], 'https://s3-symbol-logo.tradingview.com/crypto/XTVCBTC.svg');
+    assert.equal((await call('/api/eco/logo?id=nothing-here')).status, 404);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+/* ---------- Live TradingView screener ---------- */
+async function probeTradingView() {
+  try {
+    const res = await realFetch('https://scanner.tradingview.com/global/scan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ columns: ['close'], symbols: { tickers: ['TVC:US10Y'] }, range: [0, 1] }),
+      signal: AbortSignal.timeout(10000),
+    });
+    return res.ok ? true : `TradingView ha risposto ${res.status}`;
+  } catch (e) {
+    const hint = process.env.HTTPS_PROXY && !process.env.NODE_USE_ENV_PROXY ? ' (dietro proxy: imposta NODE_USE_ENV_PROXY=1)' : '';
+    return `rete non disponibile: ${e.cause ? e.cause.code || e.cause.message : e.message}${hint}`;
+  }
+}
+const tvProbe = await probeTradingView();
+const tvLive = tvProbe === true ? {} : { skip: tvProbe };
+
+test('live: eco heatmap S&P 500 has about 500 stocks with sectors', tvLive, async () => {
+  const r = await call('/api/eco/heatmap?index=SPX');
+  assert.equal(r.status, 200);
+  assert.ok(r.json.rows.length > 450 && r.json.rows.length < 520, `${r.json.rows.length} rows`);
+  const sectors = new Set(r.json.rows.map((x) => x[2]));
+  assert.ok(sectors.size >= 10 && sectors.size <= 25, [...sectors].join(', '));
+  assert.ok(r.json.rows.every((x) => x[4] > 0 && typeof x[0] === 'string'));
+});
+
+test('live: eco yields and macro cover the main countries', tvLive, async () => {
+  const y = await call('/api/eco/yields');
+  assert.equal(y.status, 200);
+  for (const cc of ['US', 'DE', 'IT', 'FR', 'GB', 'JP']) {
+    const curve = y.json.curves[cc];
+    assert.ok(curve && curve.length >= 8, cc);
+    const ten = curve.find((p) => p[0] === 120);
+    assert.ok(ten && ten[1] > -1 && ten[1] < 15, `${cc} 10Y ${ten && ten[1]}`);
+  }
+  const m = await call('/api/eco/macro');
+  assert.equal(m.status, 200);
+  for (const code of ['IRYY', 'INTR', 'GDP', 'GDPYY', 'UR', 'GDG']) assert.ok(Object.keys(m.json.data[code]).length > 100, code);
+  assert.ok(m.json.data.IRYY.IT && m.json.data.IRYY.US);
+});
+
+test('live: eco quotes for an index, a currency, a commodity, a bond yield and crypto', tvLive, async () => {
+  const r = await call('/api/eco/quotes?t=TVC:FTMIB,FX_IDC:EURUSD,TVC:GOLD,TVC:IT10Y,CRYPTO:BTCUSD');
+  assert.equal(r.status, 200);
+  assert.deepEqual(Object.keys(r.json.rows).sort(), ['CRYPTO:BTCUSD', 'FX_IDC:EURUSD', 'TVC:FTMIB', 'TVC:GOLD', 'TVC:IT10Y']);
+  assert.ok(r.json.rows['FX_IDC:EURUSD'][0] > 0.7 && r.json.rows['FX_IDC:EURUSD'][0] < 1.7);
+  const c = await call('/api/eco/crypto');
+  assert.equal(c.status, 200);
+  assert.equal(c.json.rows[0][1], 'BTC');
+});

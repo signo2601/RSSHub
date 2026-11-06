@@ -9,7 +9,7 @@
 //   prices it downloaded in IndexedDB). Other sites are not handled: the app contacts none.
 // Bump VERSION whenever APP_FILES or the caching rules change. tests/offline.test.mjs checks that
 // APP_FILES lists exactly the files that index.html, the stylesheets and the JS imports load.
-const VERSION = 'gruzzolo-v2.1.1';
+const VERSION = 'gruzzolo-v2.2.0';
 const CACHE = `${VERSION}-app`;
 const CACHE_PREFIX = 'gruzzolo-';
 
@@ -26,6 +26,7 @@ const APP_FILES = [
   './css/report.css',
   './css/report2.css',
   './css/extra.css',
+  './css/markets.css',
   './fonts/manrope-latin.woff2',
   './fonts/manrope-latin-ext.woff2',
   './fonts/bricolage-grotesque-latin.woff2',
@@ -37,6 +38,9 @@ const APP_FILES = [
   './js/util.js',
   './js/store.js',
   './js/market.js',
+  './js/eco.js',
+  './js/treemap.js',
+  './js/world.js',
   './js/catalog.js',
   './js/engine.js',
   './js/charts.js',
@@ -49,6 +53,11 @@ const APP_FILES = [
   './js/importer.js',
   './js/views/home.js',
   './js/views/market.js',
+  './js/views/eco-common.js',
+  './js/views/eco-overview.js',
+  './js/views/eco-heatmap.js',
+  './js/views/eco-curves.js',
+  './js/views/eco-macro.js',
   './js/views/sheets.js',
   './js/views/report.js',
   './js/views/sheet-summary.js',

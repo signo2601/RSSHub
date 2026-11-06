@@ -469,16 +469,15 @@ function fromSearch(r) {
     isin: '', sector: mapSector(r.sector), region: guessRegion(r.symbol, type), ter: null,
   };
 }
-// Pick for a symbol coming from the market tab (catalog, cached history or watchlist)
+// Pick for a symbol given to the transaction form (catalog or cached history)
 export function pickFromSymbol(symbol, extra = {}) {
   const cat = findInCatalog(symbol);
   if (cat && cat.symbol === symbol) return fromCatalog(cat);
   const h = historyFor(symbol);
-  const w = D().watch.find((x) => x.symbol === symbol);
   const type = (h && TYPE_KEYS.includes(h.type) && h.type) || (TYPE_KEYS.includes(extra.type) && extra.type) || 'stock';
   return {
-    kind: 'market', symbol, name: (h && h.name) || extra.name || (w && w.name) || symbol, exchange: (h && h.exchange) || extra.exchange || '',
-    type, currency: (h && h.currency) || (w && w.currency) || guessCurrency(symbol), ccyOk: Boolean(h && h.currency),
+    kind: 'market', symbol, name: (h && h.name) || extra.name || symbol, exchange: (h && h.exchange) || extra.exchange || '',
+    type, currency: (h && h.currency) || guessCurrency(symbol), ccyOk: Boolean(h && h.currency),
     isin: '', sector: '', region: guessRegion(symbol, type), ter: null,
   };
 }
@@ -1436,7 +1435,6 @@ Object.assign(ACTIONS, {
         d.txns = d.txns.filter((t) => t.aid !== aid);
         delete d.prices[aid];
         delete d.assets[aid];
-        for (const w of d.watch) if (w.aid === aid) delete w.aid;
         S.sheets = S.sheets.filter((s) => {
           const x = s.args || {};
           if ((s.name === 'asset' || s.name === 'assetForm') && x.aid === aid) return false;

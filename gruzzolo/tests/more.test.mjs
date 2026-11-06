@@ -269,7 +269,7 @@ test('wipedData: everything entered goes, preferences (rates, benchmark, server,
   const d = wipedData(prev);
   assert.deepEqual(d.txns, []);
   assert.deepEqual(d.assets, {});
-  assert.deepEqual(d.watch, []);
+  assert.equal(d.watch, undefined);
   assert.deepEqual(d.prices, {});
   assert.deepEqual(d.settings.externalPL, {});
   assert.equal(d.accounts.length, 1);
@@ -463,7 +463,8 @@ test('deviceName, hasUserContent, fmtBytes', () => {
   assert.equal(deviceName('Mozilla/5.0 (X11; Linux x86_64) Chrome/130'), '');
   assert.equal(hasUserContent(null), false);
   assert.equal(hasUserContent(migrate(demoData({ today }))), false, 'example data does not count');
-  assert.equal(hasUserContent({ txns: [], assets: {}, watch: [{ symbol: 'AAPL' }] }), true);
+  assert.equal(hasUserContent({ txns: [], assets: {}, watch: [{ symbol: 'AAPL' }] }), false, 'an old watchlist alone does not count');
+  assert.equal(hasUserContent({ txns: [], assets: { a: { id: 'a', name: 'X' } } }), true);
   assert.equal(hasUserContent({ txns: [{ demo: true }], assets: { a: { id: 'a' } } }), true);
   assert.equal(fmtBytes(0), '0 byte');
   assert.equal(fmtBytes(850000), '850 kB');

@@ -5,7 +5,11 @@ La tua app personale per seguire gli investimenti, ispirata a getquin. Vive sul 
 ## Cosa fa
 
 - **Portafoglio**: valore totale, variazione di oggi, grafico di valore e rendimento, posizioni con i prezzi aggiornati, conti separati (es. DEGIRO, Scalable Capital).
-- **Mercati**: cerchi un titolo per nome, ticker o ISIN (azioni, ETF, fondi, crypto, indici) con prezzi e grafici da Yahoo Finance; watchlist con prezzo obiettivo; catalogo di 200 titoli popolari.
+- **Mercati**: il monitoraggio dell'economia, in quattro pagine:
+  - **Panoramica**: indici di Borsa del mondo, rendimenti dei titoli di Stato (con lo spread sul Bund), obbligazioni delle aziende AAA (Microsoft, Johnson & Johnson), materie prime, cambi e le principali crypto, con la variazione di oggi, della settimana, del mese, da inizio anno o dell'anno.
+  - **Heatmap**: le aziende di un indice (S&P 500, FTSE MIB, DAX, Euro Stoxx 50…) come rettangoli grandi quanto il loro valore, verdi o rossi secondo la variazione; tocchi un settore per ingrandirlo.
+  - **Curve**: le curve dei rendimenti dei titoli di Stato dei principali Paesi, confrontate tra loro e con ieri, un mese o un anno fa.
+  - **Macro**: la mappa del mondo con inflazione, tassi delle banche centrali, PIL, crescita, disoccupazione e debito/PIL, con la classifica dei Paesi (G20, G7, area euro, continenti).
 - **Report** con 6 fogli: riepilogo (TWR, IRR, Sharpe, drawdown…), analisi visiva, composizione, dividendi e cedole, costi e imposte (bollo, zaino fiscale), gestione del rischio (VaR, beta, frontiera di Markowitz).
 - **Altro**: conti, import dei file CSV di DEGIRO e Scalable Capital, aliquote, backup, tema chiaro/scuro, «Dove sono i tuoi dati».
 
@@ -13,8 +17,8 @@ Ogni indicatore ha il pulsante **i** con una spiegazione semplice.
 
 ## Dove sono i tuoi dati
 
-- **Solo sul tuo iPhone.** Conti, operazioni, titoli, impostazioni, watchlist e prezzi manuali sono salvati nella memoria dell'app, sul telefono. Non c'è un account, non c'è un cloud, non c'è nessuna copia su un server.
-- **Cosa passa da internet**: solo il nome, il ticker o l'ISIN dei titoli (per esempio `VWCE.DE`), quando l'app chiede i prezzi pubblici al **suo** piccolo server, che li prende da Yahoo Finance. Importi, quantità, conti e operazioni non escono mai dal telefono.
+- **Solo sul tuo iPhone.** Conti, operazioni, titoli, impostazioni e prezzi manuali sono salvati nella memoria dell'app, sul telefono. Non c'è un account, non c'è un cloud, non c'è nessuna copia su un server.
+- **Cosa passa da internet**: solo il nome, il ticker o l'ISIN dei titoli (per esempio `VWCE.DE`), quando l'app chiede i prezzi pubblici al **suo** piccolo server, che li prende da Yahoo Finance; per la scheda Mercati, solo le liste fisse di indici, valute e Paesi, che il server legge da TradingView (anche i loghi delle aziende passano dal server dell'app). Importi, quantità, conti e operazioni non escono mai dal telefono.
 - **I caratteri e tutti i file dell'app** sono dentro l'app: non vengono scaricati da altri siti.
 - In **Altro → Dove sono i tuoi dati** vedi se iOS ha concesso la «memoria permanente» (i dati non vengono cancellati per fare spazio) e quanto spazio usa l'app.
 
@@ -60,6 +64,7 @@ Il backup è un file `.json` con tutti i tuoi dati. Fallo ogni tanto (l'app te l
 - Tutto funziona: portafoglio, report, operazioni (puoi aggiungerle e modificarle), con gli **ultimi prezzi scaricati**.
 - Quando torni online i prezzi si aggiornano da soli (o tocca l'icona ↻ in alto, o **Altro → Aggiorna prezzi ora**).
 - Offline non puoi cercare titoli nuovi su Yahoo Finance; il catalogo dei titoli popolari funziona comunque.
+- La scheda Mercati mostra gli ultimi dati scaricati, con l'ora in cui li hai scaricati.
 
 ## Aggiornamenti
 
@@ -81,7 +86,7 @@ Quando il codice dell'app cambia e Cloudflare lo ripubblica, apri Gruzzolo **con
 
 Il file viene letto sul telefono; le operazioni già presenti non vengono duplicate.
 
-I prezzi arrivano con circa 15 minuti di ritardo e servono a scopo informativo: i calcoli di rischio, frontiera e zaino fiscale sono stime, non consigli d'investimento né consulenza fiscale.
+I prezzi arrivano con circa 15 minuti di ritardo e servono a scopo informativo: i calcoli di rischio, frontiera e zaino fiscale sono stime, non consigli d'investimento né consulenza fiscale. I dati della scheda Mercati sono di TradingView (stesso ritardo); la mappa usa Natural Earth e i nomi dei Paesi di mledoze/countries (licenza ODbL).
 
 ## Per sviluppatori
 
@@ -93,4 +98,4 @@ node --test tests/*.test.mjs     # test
 node dev/build-artifact.mjs      # anteprima in un solo file per Claude (salva i dati solo nel browser che la apre)
 ```
 
-Il server (`functions/api/[[path]].js`) è in sola lettura: risponde a `/api/health`, `/api/search`, `/api/chart` e `/api/quotes` con dati pubblici di mercato e non conserva nulla. `sw.js` salva tutti i file dell'app per l'uso offline. Struttura e contratti tra i moduli: [ARCHITECTURE.md](ARCHITECTURE.md).
+Il server (`functions/api/[[path]].js`) è in sola lettura: risponde a `/api/health`, `/api/search`, `/api/chart`, `/api/quotes` e `/api/eco/*` (scheda Mercati) con dati pubblici di mercato e non conserva nulla. `node dev/build-world.mjs` rigenera la mappa del mondo (`js/world.js`). `sw.js` salva tutti i file dell'app per l'uso offline. Struttura e contratti tra i moduli: [ARCHITECTURE.md](ARCHITECTURE.md).

@@ -112,7 +112,7 @@ test('local store: first v2 start converts gruzzolo:data:v1 and keeps it', async
   assert.deepEqual(d.accounts.map((a) => a.id), ['p1', 'p2']);
   assert.deepEqual(d.txns.map((t) => t.acc), ['p1', 'p2']);
   assert.equal(d.assets.a.priceSource, 'manual');
-  assert.equal(d.watch[0].target, 600);
+  assert.equal(d.watch, undefined, 'the watchlist was removed');
   // main.js runs migrate again: still the same v2 data
   assert.deepEqual(migrate(d), d);
   store.save(d);

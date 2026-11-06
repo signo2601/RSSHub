@@ -25,7 +25,7 @@ test('demoData: flagged example data, deterministic, valid v2', () => {
   assert.ok(Object.values(d.assets).every((a) => a.demo && TYPE_KEYS.includes(a.type)));
   assert.ok(d.txns.length > 80 && d.txns.every((t) => t.demo && t.id && t.acc && t.date <= T));
   assert.equal(new Set(d.txns.map((t) => t.id)).size, d.txns.length);
-  assert.ok(d.watch.length === 3 && d.watch.every((w) => w.demo && w.symbol && w.price > 0 && w.target > 0));
+  assert.equal(d.watch, undefined, 'no watchlist any more');
   for (const a of Object.values(d.assets)) {
     if (a.type === 'bond') assert.equal(a.priceSource, 'manual');
     else assert.equal(a.priceSource, 'demo');
@@ -39,7 +39,7 @@ test('demoData: flagged example data, deterministic, valid v2', () => {
   assert.ok(Math.abs(dayDiff(first, addMonths(T, -30))) < 20, first);
 });
 
-test('installDemoMarket: synthetic histories for assets, benchmark, FX and watchlist', () => {
+test('installDemoMarket: synthetic histories for assets, benchmark and FX', () => {
   const syms = installDemoMarket({ today: T });
   for (const s of ['VWCE.DE', 'EURUSD=X', 'ASML.AS', 'RACE.MI', 'SGLD.MI', 'ENEL.MI', 'ALV.DE', 'AAPL', 'VHYL.MI', 'EIMI.MI', 'BTC-EUR']) {
     assert.ok(syms.includes('demo:' + s), s);
@@ -160,7 +160,7 @@ test('removeDemo: clean dataset, user transactions keep their account and asset'
   assert.deepEqual(clean.txns, []);
   assert.deepEqual(clean.assets, {});
   assert.deepEqual(clean.prices, {});
-  assert.deepEqual(clean.watch, []);
+  assert.equal(clean.watch, undefined);
   assert.deepEqual(clean.settings.externalPL, {});
   assert.equal(clean.settings.demoMarks, undefined);
   assert.equal(clean.accounts.length, 1);
@@ -169,12 +169,12 @@ test('removeDemo: clean dataset, user transactions keep their account and asset'
   assert.equal(hasDemo(), false);
   assert.equal(getSeries('all'), null);
 
-  // The user added a trade to the demo DEGIRO account on a demo asset, an own external P&L and an own watch item
+  // The user added a trade to the demo DEGIRO account on a demo asset and an own external P&L; an old watchlist goes
   const d = demoData({ today: T });
   d.txns.push({ id: 'mine', acc: DEMO_ACCOUNTS.degiro, date: T, type: 'buy', aid: 'demo-enel', qty: 10, price: 8, fee: 1 });
   d.txns.push({ id: 'mine2', acc: DEMO_ACCOUNTS.degiro, date: T, type: 'buy', aid: 'demo-btp', qty: 1, price: 99, fee: 1 });
   d.settings.externalPL['2020'] = -50;
-  d.watch.push({ id: 'w-mine', symbol: 'MSFT', ticker: 'MSFT', name: 'Microsoft', currency: 'USD', price: 0, target: 0, note: '' });
+  d.watch = [{ id: 'w-mine', symbol: 'MSFT', ticker: 'MSFT', name: 'Microsoft', currency: 'USD', price: 0, target: 0, note: '' }];
   const kept = removeDemo(d);
   assert.deepEqual(kept.txns.map((t) => t.id), ['mine', 'mine2']);
   assert.deepEqual(kept.accounts.map((a) => a.id), [DEMO_ACCOUNTS.degiro]);
@@ -185,7 +185,7 @@ test('removeDemo: clean dataset, user transactions keep their account and asset'
   assert.equal(kept.assets['demo-btp'].priceSource, 'manual');
   assert.equal(kept.prices['demo-btp'], undefined, 'synthetic manual prices removed');
   assert.deepEqual(kept.settings.externalPL, { 2020: -50 });
-  assert.deepEqual(kept.watch.map((w) => w.id), ['w-mine']);
+  assert.equal(kept.watch, undefined);
   assert.ok(!JSON.stringify(kept).includes('"demo":true'));
   load(kept);
   assert.equal(hasDemo(), false);

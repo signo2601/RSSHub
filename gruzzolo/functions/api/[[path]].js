@@ -1,4 +1,6 @@
-// Gruzzolo API: a small read-only Yahoo Finance proxy (search, price history, quotes, dividends, FX).
+// Gruzzolo API: a small read-only proxy for public market data. Yahoo Finance for the portfolio
+// (search, price history, quotes, dividends, FX); the TradingView screener for the Mercati tab
+// (heatmaps, yield curves, macro indicators, indices, commodities, currencies, crypto).
 // It only answers questions about public market data: it never receives, stores or forwards the
 // user's portfolio (that stays on the phone). No storage bindings or secrets are needed.
 //
@@ -6,11 +8,17 @@
 // /api/... request of the site. It is self-contained (no imports), so it can also be pasted
 // as a standalone Cloudflare Worker: the default export at the bottom is the Worker entry.
 //
-// Routes (all GET, JSON, CORS enabled; anything else → 404 or 405):
+// Routes (all GET, JSON unless noted, CORS enabled; anything else → 404 or 405):
 //   GET  /api/health                              → { ok: true }
 //   GET  /api/search?q=enel                       → { results: [...] }
 //   GET  /api/chart?symbol=VWCE.DE&range=10y&interval=1d
 //   GET  /api/quotes?symbols=AAPL,ENEL.MI         → { quotes: { [symbol]: {...} }, errors? }
+//   GET  /api/eco/quotes?t=TVC:FTMIB,FX_IDC:EURUSD → { at, cols, rows: { [ticker]: [...] } }
+//   GET  /api/eco/heatmap?index=SPX               → { at, index, cols, rows: [[...], ...] }
+//   GET  /api/eco/yields                          → { at, cols, curves: { [country]: [[months, ...], ...] } }
+//   GET  /api/eco/macro                           → { at, cols, data: { [indicator]: { [country]: [...] } } }
+//   GET  /api/eco/crypto                          → { at, cols, rows: [[...], ...] }
+//   GET  /api/eco/logo?id=apple                   → SVG logo (image/svg+xml)
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
 const YAHOO_HEADERS = {
@@ -365,6 +373,282 @@ async function handleQuotes(context, url) {
   });
 }
 
+/* ---------- Mercati tab: economy data from the TradingView screener ---------- */
+// Public market data (delayed up to 15 minutes, as on TradingView's own pages) from the screener
+// endpoint behind TradingView's heatmaps, yield curves and macro maps. One POST per answer, compact
+// arrays out, edge-cached. Only lists of public tickers are sent: nothing about the user.
+const TV_SCAN = 'https://scanner.tradingview.com';
+const TV_LOGO = 'https://s3-symbol-logo.tradingview.com';
+const TV_HEADERS = {
+  'User-Agent': UA,
+  Accept: 'application/json',
+  'Content-Type': 'application/json',
+  Origin: 'https://www.tradingview.com',
+  Referer: 'https://www.tradingview.com/',
+};
+const TV_TICKER_RE = /^[A-Z0-9_]{1,20}:[A-Z0-9_.!&-]{1,40}$/;
+const LOGO_RE = /^(?:(?:crypto|country|provider)\/)?[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/;
+const MAX_ECO_TICKERS = 200;
+const LOGO_MAX_BYTES = 128 * 1024;
+const TTL_ECO_QUOTES = 60;
+const TTL_ECO_LISTS = 120; // heatmap, yield curves, crypto
+const TTL_ECO_MACRO = 6 * 3600;
+const TTL_LOGO = 30 * 86400;
+
+// Index constituents for the heatmap (TradingView symbol sets)
+const HEATMAP_SETS = {
+  SPX: 'SYML:SP;SPX',
+  NDX: 'SYML:NASDAQ;NDX',
+  DJI: 'SYML:DJ;DJI',
+  SX5E: 'SYML:TVC;SX5E',
+  SXXP: 'SYML:TVC;SXXP',
+  FTSEMIB: 'SYML:INDEX;FTSEMIB',
+  DAX: 'SYML:XETR;DAX',
+  CAC: 'SYML:EURONEXT;PX1',
+  IBEX: 'SYML:BME;IBC',
+  AEX: 'SYML:EURONEXT;AEX',
+  SMI: 'SYML:SIX;SMI',
+  UKX: 'SYML:TVC;UKX',
+  NI225: 'SYML:TVC;NI225',
+  HSI: 'SYML:HSI;HSI',
+  CSI300: 'SYML:SSE;000300',
+};
+
+// Government bond tenors TradingView publishes per country (checked November 2026). Months are
+// quoted as yields under TVC:US03MY, years under TVC:US10Y. A tenor that disappears just comes back empty.
+const YIELD_TENORS = {
+  US: '01M 02M 03M 04M 06M 01Y 02Y 03Y 05Y 07Y 10Y 20Y 30Y',
+  CA: '01M 02M 03M 06M 01Y 02Y 03Y 04Y 05Y 07Y 10Y 20Y 30Y',
+  GB: '01M 03M 06M 01Y 02Y 03Y 04Y 05Y 06Y 07Y 08Y 09Y 10Y 12Y 15Y 20Y 25Y 30Y 40Y 50Y',
+  DE: '01M 03M 06M 09M 01Y 02Y 03Y 04Y 05Y 06Y 07Y 08Y 09Y 10Y 15Y 20Y 25Y 30Y',
+  FR: '01M 03M 06M 09M 01Y 02Y 03Y 04Y 05Y 06Y 07Y 08Y 09Y 10Y 15Y 20Y 25Y 30Y 50Y',
+  IT: '01M 03M 06M 09M 01Y 02Y 03Y 04Y 05Y 06Y 07Y 08Y 09Y 10Y 15Y 20Y 25Y 30Y 50Y',
+  ES: '01M 03M 06M 09M 01Y 02Y 03Y 04Y 05Y 06Y 07Y 08Y 09Y 10Y 15Y 20Y 25Y 30Y',
+  NL: '01M 03M 06M 02Y 03Y 04Y 05Y 06Y 07Y 08Y 09Y 10Y 15Y 20Y 25Y 30Y',
+  BE: '03M 06M 09M 01Y 02Y 03Y 04Y 05Y 06Y 07Y 08Y 09Y 10Y 15Y 20Y 30Y 50Y',
+  AT: '03M 06M 01Y 02Y 03Y 04Y 05Y 06Y 07Y 08Y 09Y 10Y 15Y 20Y 25Y 30Y 40Y 50Y',
+  PT: '03M 06M 01Y 02Y 03Y 04Y 05Y 06Y 07Y 08Y 09Y 10Y 15Y 20Y 30Y',
+  GR: '01M 03M 06M 01Y 02Y 03Y 04Y 05Y 06Y 07Y 08Y 09Y 10Y 15Y 20Y 30Y',
+  IE: '01Y 02Y 03Y 04Y 05Y 06Y 07Y 10Y 15Y 20Y 25Y 30Y',
+  FI: '02Y 03Y 04Y 05Y 06Y 08Y 10Y 15Y 30Y',
+  CH: '01M 02M 03M 06M 01Y 02Y 03Y 04Y 05Y 06Y 07Y 08Y 09Y 10Y 15Y 20Y 30Y 40Y',
+  SE: '01M 02M 03M 06M 02Y 05Y 07Y 10Y 15Y 20Y',
+  NO: '06M 09M 01Y 03Y 05Y 10Y 20Y',
+  DK: '03M 06M 02Y 03Y 05Y 08Y 10Y 20Y 30Y',
+  JP: '03M 06M 01Y 02Y 03Y 04Y 05Y 06Y 07Y 08Y 09Y 10Y 15Y 20Y 30Y 40Y',
+  AU: '01Y 02Y 03Y 04Y 05Y 06Y 07Y 08Y 09Y 10Y 12Y 15Y 20Y 30Y',
+  NZ: '01M 02M 03M 04M 06M 01Y 02Y 05Y 07Y 10Y 15Y 20Y',
+  CN: '01Y 02Y 03Y 05Y 07Y 10Y 15Y 20Y 30Y',
+  KR: '01Y 02Y 03Y 04Y 05Y 10Y 20Y 30Y 50Y',
+};
+
+// Macro indicators by TradingView code suffix: inflation YoY, central bank rate, GDP (USD),
+// GDP growth YoY, unemployment rate, government debt to GDP
+const MACRO_CODES = ['IRYY', 'INTR', 'GDP', 'GDPYY', 'UR', 'GDG'];
+const CRYPTO_TOP = 15;
+
+const r4 = (v) => (finite(v) ? Math.round(v * 1e4) / 1e4 : null);
+const tvTime = (v) => (finite(v) && v > 0 ? Math.round(v) : null);
+const str = (v, max = 120) => (typeof v === 'string' ? v.slice(0, max) : '');
+// 20361001 → '2036-10-01'
+function tvDate(v) {
+  const s = finite(v) ? String(Math.round(v)) : '';
+  return /^\d{8}$/.test(s) ? `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6)}` : null;
+}
+// Prices in pence or cents (US futures on grains, coffee, sugar: USX) come back in the major currency
+const ECO_MINOR_UNITS = { ...MINOR_UNITS, USX: ['USD', 100] };
+function majorPrice(price, currency) {
+  const [ccy, unit] = ECO_MINOR_UNITS[currency] || [currency || null, 1];
+  return [finite(price) ? round(price / unit) : null, ccy];
+}
+
+// POST a screener query; resolves with the data rows ([{ s, d: [...] }])
+async function tvScan(market, body) {
+  let res;
+  try {
+    res = await fetch(`${TV_SCAN}/${market}/scan`, { method: 'POST', headers: TV_HEADERS, body: JSON.stringify(body), signal: timeoutSignal(UPSTREAM_TIMEOUT_MS) });
+  } catch {
+    throw new HttpError(502, 'TradingView non risponde in questo momento: riprova più tardi.');
+  }
+  if (res.status === 429) throw new HttpError(503, 'TradingView sta limitando le richieste: riprova tra qualche minuto.');
+  let body2 = null;
+  try {
+    body2 = await res.json();
+  } catch {
+    body2 = null;
+  }
+  if (!res.ok || !body2 || !Array.isArray(body2.data)) throw new HttpError(502, 'TradingView ha risposto con un errore: riprova più tardi.');
+  return body2.data.filter((r) => r && typeof r.s === 'string' && Array.isArray(r.d));
+}
+
+// GET /api/eco/quotes?t=TVC:FTMIB,FX_IDC:EURUSD,… → last price, changes and performance of any public ticker
+const QUOTE_COLS = ['close', 'change', 'change_abs', 'Perf.W', 'Perf.1M', 'Perf.3M', 'Perf.6M', 'Perf.YTD', 'Perf.Y', 'time', 'currency', 'description', 'yield_to_maturity', 'maturity_date'];
+async function handleEcoQuotes(context, url) {
+  const raw = url.searchParams.get('t') || '';
+  const tickers = [...new Set(raw.split(',').map((s) => s.trim()).filter(Boolean))];
+  if (!tickers.length) throw new HttpError(400, 'Indica almeno un titolo, per esempio ?t=TVC:FTMIB');
+  if (tickers.length > MAX_ECO_TICKERS) throw new HttpError(400, `Troppi titoli: massimo ${MAX_ECO_TICKERS} per richiesta.`);
+  const bad = tickers.find((s) => !TV_TICKER_RE.test(s));
+  if (bad) throw new HttpError(400, `Codice non valido: "${bad.slice(0, 40)}". Usa la forma BORSA:CODICE, per esempio TVC:FTMIB.`);
+  const cacheUrl = `${url.origin}/api/eco/quotes?t=${tickers.map(encodeURIComponent).join(',')}`;
+  return withEdgeCache(context, cacheUrl, TTL_ECO_QUOTES, async () => {
+    const rows = await tvScan('global', { columns: QUOTE_COLS, symbols: { tickers }, range: [0, tickers.length] });
+    const out = {};
+    for (const { s, d } of rows) {
+      const [price, ccy] = majorPrice(d[0], d[10]);
+      if (price === null) continue;
+      const unit = (ECO_MINOR_UNITS[d[10]] || [null, 1])[1];
+      out[s] = [price, r4(d[1]), finite(d[2]) ? round(d[2] / unit) : null, r4(d[3]), r4(d[4]), r4(d[5]), r4(d[6]), r4(d[7]), r4(d[8]), tvTime(d[9]), ccy, str(d[11]), r4(d[12]), tvDate(d[13])];
+    }
+    return { data: { at: Date.now(), cols: ['price', 'chg', 'chgAbs', 'w', 'm1', 'm3', 'm6', 'ytd', 'y', 'time', 'ccy', 'name', 'ytm', 'maturity'], rows: out } };
+  });
+}
+
+// GET /api/eco/heatmap?index=SPX → constituents with market cap (USD millions), sector and performance
+const HEATMAP_COLS = ['description', 'sector', 'industry', 'market_cap_basic', 'close', 'currency', 'change', 'Perf.W', 'Perf.1M', 'Perf.3M', 'Perf.6M', 'Perf.YTD', 'Perf.Y', 'logoid'];
+async function handleEcoHeatmap(context, url) {
+  const index = (url.searchParams.get('index') || '').toUpperCase();
+  if (!Object.hasOwn(HEATMAP_SETS, index)) throw new HttpError(400, `Indice non disponibile: usa uno tra ${Object.keys(HEATMAP_SETS).join(', ')}.`);
+  const cacheUrl = `${url.origin}/api/eco/heatmap?index=${index}`;
+  return withEdgeCache(context, cacheUrl, TTL_ECO_LISTS, async () => {
+    const rows = await tvScan('global', {
+      columns: HEATMAP_COLS,
+      symbols: { symbolset: [HEATMAP_SETS[index]] },
+      sort: { sortBy: 'market_cap_basic', sortOrder: 'desc' },
+      range: [0, 800],
+    });
+    const out = [];
+    for (const { s, d } of rows) {
+      if (!finite(d[3]) || d[3] <= 0) continue; // no market cap: cannot size the tile
+      const [price, ccy] = majorPrice(d[4], d[5]);
+      out.push([s, str(d[0]), str(d[1], 60), str(d[2], 80), Math.max(1, Math.round(d[3] / 1e6)), price, ccy, r4(d[6]), r4(d[7]), r4(d[8]), r4(d[9]), r4(d[10]), r4(d[11]), r4(d[12]), str(d[13], 80)]);
+    }
+    if (!out.length) throw new HttpError(502, 'TradingView non ha restituito i titoli dell\'indice: riprova più tardi.');
+    return { data: { at: Date.now(), index, cols: ['symbol', 'name', 'sector', 'industry', 'mcap', 'price', 'ccy', 'chg', 'w', 'm1', 'm3', 'm6', 'ytd', 'y', 'logo'], rows: out } };
+  });
+}
+
+// GET /api/eco/yields → government yield curves of the countries in YIELD_TENORS
+async function handleEcoYields(context, url) {
+  const cacheUrl = `${url.origin}/api/eco/yields`;
+  return withEdgeCache(context, cacheUrl, TTL_ECO_LISTS, async () => {
+    const tickers = [];
+    const tenorOf = new Map(); // ticker → [country, months]
+    for (const [cc, list] of Object.entries(YIELD_TENORS)) {
+      for (const t of list.split(' ')) {
+        const n = parseInt(t, 10);
+        const months = t.endsWith('M') ? n : n * 12;
+        const ticker = `TVC:${cc}${t}${t.endsWith('M') ? 'Y' : ''}`;
+        tickers.push(ticker);
+        tenorOf.set(ticker, [cc, months]);
+      }
+    }
+    const rows = await tvScan('global', { columns: ['close', 'change_abs', 'Perf.W', 'Perf.1M', 'Perf.YTD', 'Perf.Y', 'time'], symbols: { tickers }, range: [0, tickers.length] });
+    const curves = {};
+    for (const { s, d } of rows) {
+      const k = tenorOf.get(s);
+      if (!k || !finite(d[0])) continue;
+      (curves[k[0]] ||= []).push([k[1], r4(d[0]), r4(d[1]), r4(d[2]), r4(d[3]), r4(d[4]), r4(d[5]), tvTime(d[6])]);
+    }
+    for (const list of Object.values(curves)) list.sort((a, b) => a[0] - b[0]);
+    if (!Object.keys(curves).length) throw new HttpError(502, 'TradingView non ha restituito i rendimenti: riprova più tardi.');
+    return { data: { at: Date.now(), cols: ['months', 'yield', 'chgAbs', 'w', 'm1', 'ytd', 'y', 'time'], curves } };
+  });
+}
+
+// GET /api/eco/macro → latest value, previous value and period end of each macro indicator, by country
+async function handleEcoMacro(context, url) {
+  const cacheUrl = `${url.origin}/api/eco/macro`;
+  return withEdgeCache(context, cacheUrl, TTL_ECO_MACRO, async () => {
+    const rows = await tvScan('economics2', {
+      columns: ['name', 'close', 'change_abs', 'time', 'country_code'],
+      filter: [{ left: 'name', operation: 'match', right: `^[A-Z]{2}(${MACRO_CODES.join('|')})$` }],
+      range: [0, 3000],
+    });
+    const data = Object.fromEntries(MACRO_CODES.map((c) => [c, {}]));
+    for (const { d } of rows) {
+      const [name, value, chg, time, cc] = d;
+      if (typeof name !== 'string' || typeof cc !== 'string' || !/^[A-Z]{2}$/.test(cc) || !name.startsWith(cc) || !finite(value)) continue;
+      const code = name.slice(2);
+      if (!Object.hasOwn(data, code)) continue;
+      data[code][cc] = [round(value), finite(chg) ? round(value - chg) : null, tvTime(time)];
+    }
+    if (!Object.values(data).some((m) => Object.keys(m).length)) throw new HttpError(502, 'TradingView non ha restituito i dati macro: riprova più tardi.');
+    return { data: { at: Date.now(), cols: ['value', 'prev', 'time'], data } };
+  });
+}
+
+// GET /api/eco/crypto → the largest cryptocurrencies by market cap (stablecoins left out), prices in USD
+async function handleEcoCrypto(context, url) {
+  const cacheUrl = `${url.origin}/api/eco/crypto`;
+  return withEdgeCache(context, cacheUrl, TTL_ECO_LISTS, async () => {
+    const rows = await tvScan('coin', {
+      columns: ['base_currency', 'base_currency_desc', 'base_currency_logoid', 'close', 'change', 'Perf.W', 'Perf.1M', 'Perf.YTD', 'Perf.Y', 'market_cap_calc', 'crypto_common_categories', 'time'],
+      sort: { sortBy: 'crypto_total_rank', sortOrder: 'asc' },
+      range: [0, 40],
+    });
+    const out = [];
+    for (const { s, d } of rows) {
+      const cats = Array.isArray(d[10]) ? d[10] : [];
+      if (cats.includes('stablecoins') || !finite(d[3])) continue;
+      out.push([s, str(d[0], 20), str(d[1], 60), str(d[2], 80), round(d[3]), r4(d[4]), r4(d[5]), r4(d[6]), r4(d[7]), r4(d[8]), finite(d[9]) ? Math.round(d[9] / 1e6) : null, tvTime(d[11])]);
+      if (out.length >= CRYPTO_TOP) break;
+    }
+    if (!out.length) throw new HttpError(502, 'TradingView non ha restituito le crypto: riprova più tardi.');
+    return { data: { at: Date.now(), cols: ['symbol', 'code', 'name', 'logo', 'price', 'chg', 'w', 'm1', 'ytd', 'y', 'mcap', 'time'], rows: out } };
+  });
+}
+
+// GET /api/eco/logo?id=apple → company or crypto logo (SVG), served from our origin so the app
+// contacts no other site. Sandboxed: the SVG cannot run scripts even when opened directly.
+async function handleEcoLogo(context, url) {
+  const id = url.searchParams.get('id') || '';
+  if (!LOGO_RE.test(id) || id.includes('..')) throw new HttpError(400, 'Logo non valido.');
+  const cache = typeof caches !== 'undefined' && caches && caches.default ? caches.default : null;
+  const key = cache ? new Request(`${url.origin}/api/eco/logo?id=${encodeURIComponent(id)}`, { method: 'GET' }) : null;
+  if (cache) {
+    try {
+      const hit = await cache.match(key);
+      if (hit) return hit;
+    } catch { /* answer from upstream */ }
+  }
+  let res;
+  try {
+    res = await fetch(`${TV_LOGO}/${id}${id.includes('/') ? '' : '--big'}.svg`, { headers: { 'User-Agent': UA, Accept: 'image/svg+xml' }, signal: timeoutSignal(UPSTREAM_TIMEOUT_MS) });
+  } catch {
+    throw new HttpError(502, 'Logo non disponibile in questo momento.');
+  }
+  const type = res.headers.get('content-type') || '';
+  if (!res.ok || !type.includes('image/svg+xml')) throw new HttpError(404, 'Logo non trovato.');
+  const svg = await res.text();
+  if (svg.length > LOGO_MAX_BYTES || !svg.includes('<svg')) throw new HttpError(404, 'Logo non trovato.');
+  const out = new Response(svg, {
+    status: 200,
+    headers: {
+      ...CORS,
+      'Content-Type': 'image/svg+xml; charset=utf-8',
+      'Cache-Control': `public, max-age=${TTL_LOGO}, immutable`,
+      'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+      'X-Content-Type-Options': 'nosniff',
+    },
+  });
+  if (cache) {
+    const put = cache.put(key, out.clone()).catch(() => {});
+    if (typeof context.waitUntil === 'function') context.waitUntil(put);
+    else await put;
+  }
+  return out;
+}
+
+const ECO_ROUTES = {
+  quotes: handleEcoQuotes,
+  heatmap: handleEcoHeatmap,
+  yields: handleEcoYields,
+  macro: handleEcoMacro,
+  crypto: handleEcoCrypto,
+  logo: handleEcoLogo,
+};
+
 // '/api/chart' → ['chart'], '/api/a/b' → ['a', 'b'] (also works for a Worker mounted at '/')
 function routeOf(pathname) {
   const i = pathname.indexOf('/api/');
@@ -392,7 +676,8 @@ export async function onRequest(context) {
     const url = new URL(request.url);
     const parts = routeOf(url.pathname);
     const route = parts[0] || 'health';
-    const handler = parts.length <= 1 && Object.hasOwn(ROUTES, route) ? ROUTES[route] : null;
+    let handler = parts.length <= 1 && Object.hasOwn(ROUTES, route) ? ROUTES[route] : null;
+    if (route === 'eco' && parts.length === 2 && Object.hasOwn(ECO_ROUTES, parts[1])) handler = ECO_ROUTES[parts[1]];
     if (!handler) throw new HttpError(404, `Indirizzo API sconosciuto: /api/${parts.join('/')}`);
     if (request.method !== 'GET') throw new HttpError(405, 'Metodo non consentito: usa GET.');
     return await handler(context, url);
