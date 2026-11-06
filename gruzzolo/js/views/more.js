@@ -1368,7 +1368,7 @@ async function runImport() {
     app.closeSheets();
     S.ui.tab = 'home';
     commit(`Importate ${plural(txns.length, 'operazione', 'operazioni').replace(/^1 operazione$/, '1 operazione')}${created ? ` · ${plural(created, 'nuovo titolo', 'nuovi titoli')}` : ''}`);
-    if (typeof window !== 'undefined') window.scrollTo(0, 0);
+    util.scrollToTop();
     app.refreshPrices();
   } catch (e) {
     imp.busy = false;

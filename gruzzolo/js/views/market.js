@@ -9,7 +9,7 @@ import { S } from '../state.js';
 import { ACTIONS, MOUNTS } from '../registry.js';
 import { app } from '../app.js';
 import { eco } from '../eco.js';
-import { esc } from '../util.js';
+import { esc, scrollToTop } from '../util.js';
 import { prefs, PERIODS } from './eco-common.js';
 import * as overview from './eco-overview.js';
 import * as heatmap from './eco-heatmap.js';
@@ -61,7 +61,7 @@ Object.assign(ACTIONS, {
     if (!Object.hasOwn(PAGES, el.dataset.page) || p.page === el.dataset.page) return;
     p.page = el.dataset.page;
     app.render();
-    if (typeof window !== 'undefined') window.scrollTo(0, 0);
+    scrollToTop();
   },
   'eco-period': (el) => {
     if (Object.hasOwn(PERIODS, el.dataset.period)) prefs().period = el.dataset.period;
@@ -83,7 +83,7 @@ Object.assign(ACTIONS, {
     p.page = 'curves';
     app.closeSheets();
     app.render();
-    if (typeof window !== 'undefined') window.scrollTo(0, 0);
+    scrollToTop();
   },
   'eco-retry': () => {
     ensure(true);

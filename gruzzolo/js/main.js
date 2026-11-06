@@ -9,7 +9,7 @@ import { ACTIONS, FORMS, INPUTS, SHEETS, FORM_SHEETS, MOUNTS } from './registry.
 import { market } from './market.js';
 import { eco } from './eco.js';
 import { getSeries, trackedSymbols } from './engine.js';
-import { esc, fmt, icon, money, todayISO, debounce, isDesktop, fmtTime, newId, requestPersistentStorage } from './util.js';
+import { esc, fmt, icon, money, todayISO, debounce, isDesktop, fmtTime, newId, requestPersistentStorage, scrollToTop } from './util.js';
 import { initCharts } from './charts.js';
 import { pickStore, localStore } from './store.js';
 import * as demoMod from './demo.js';
@@ -528,28 +528,12 @@ function fitSheetToViewport() {
   } else clear();
 }
 
-// iPhone (installed app): after the keyboard closes iOS can leave the visible area
-// shifted below the layout viewport, so the fixed tab bar floats mid-screen and the
-// header disappears. Ask iOS to realign; if it stays shifted, move the bars with it.
-let viewportNudged = false;
-function fixStuckViewport() {
+// iPhone: the page never scrolls (css/app.css), but after the keyboard closes iOS can leave the
+// visible area panned down. Once the keyboard is gone, put it back at the top of the screen.
+function resetViewport() {
   const vv = typeof window !== 'undefined' ? window.visualViewport : null;
-  if (!vv) return;
-  const keyboard = window.innerHeight - vv.height > 120;
-  const dy = !keyboard && vv.scale <= 1.01 ? Math.round(vv.offsetTop) : 0;
-  if (Math.abs(dy) > 1 && !viewportNudged) {
-    viewportNudged = true;
-    window.scrollTo(window.scrollX, window.scrollY);
-    requestAnimationFrame(fixStuckViewport);
-    return;
-  }
-  if (Math.abs(dy) <= 1) viewportNudged = false;
-  document.documentElement.style.setProperty('--vv-dy', `${Math.abs(dy) > 1 ? dy : 0}px`);
-}
-
-function onViewportChange() {
-  fitSheetToViewport();
-  fixStuckViewport();
+  if (!vv || vv.scale > 1.01 || window.innerHeight - vv.height > 120) return;
+  if (Math.abs(vv.offsetTop) > 1 || window.scrollY) window.scrollTo(0, 0);
 }
 
 /* ---------- Confirm dialog ---------- */
@@ -740,9 +724,9 @@ Object.assign(ACTIONS, {
     if (S.sheets.length) closeSheets();
     S.ui.tab = tab;
     render();
-    if (same) window.scrollTo({ top: 0, behavior: reducedMotion() ? 'auto' : 'smooth' });
+    if (same) scrollToTop(!reducedMotion());
     else {
-      window.scrollTo(0, 0);
+      scrollToTop();
       const view = $('#view');
       if (view && isDesktop()) view.focus({ preventScroll: true });
     }
@@ -878,8 +862,8 @@ function onScroll() {
   requestAnimationFrame(() => {
     scrollTicking = false;
     const top = $('#top');
-    if (top) top.classList.toggle('scrolled', window.scrollY > 4);
-    fixStuckViewport();
+    const view = $('#view');
+    if (top && view) top.classList.toggle('scrolled', view.scrollTop > 4);
   });
 }
 
@@ -907,7 +891,7 @@ function listen() {
   document.addEventListener('change', onInput);
   document.addEventListener('keydown', onKeydown);
   document.addEventListener('focusout', () => {
-    setTimeout(fixStuckViewport, 350); // after the keyboard has closed
+    setTimeout(resetViewport, 350); // after the keyboard has closed
     if (!shell.deferred) return;
     setTimeout(() => {
       if (shell.deferred && !isEditing()) render();
@@ -915,7 +899,8 @@ function listen() {
   });
   document.addEventListener('visibilitychange', onVisibility);
   window.addEventListener('pagehide', flushStore);
-  window.addEventListener('scroll', onScroll, { passive: true });
+  const viewEl = $('#view');
+  if (viewEl) viewEl.addEventListener('scroll', onScroll, { passive: true });
   window.addEventListener('resize', onResize);
   window.addEventListener('online', () => {
     if (!S.loaded) return;
@@ -924,8 +909,8 @@ function listen() {
     }).catch(() => {});
   });
   if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', onViewportChange);
-    window.visualViewport.addEventListener('scroll', onViewportChange);
+    window.visualViewport.addEventListener('resize', fitSheetToViewport);
+    window.visualViewport.addEventListener('scroll', fitSheetToViewport);
   }
   const toastEl = $('#toast');
   if (toastEl) toastEl.addEventListener('click', () => { toastEl.hidden = true; });

@@ -153,13 +153,23 @@ export function debounce(fn, ms) {
 
 /* ---------- Layout ---------- */
 export const DESKTOP_MIN = 900;
+// The page never scrolls: the content (#view) does (see css/app.css). Back to its top.
+export function scrollToTop(smooth = false) {
+  const v = typeof document !== 'undefined' ? document.getElementById('view') : null;
+  if (!v) return;
+  if (smooth && typeof v.scrollTo === 'function') v.scrollTo({ top: 0, behavior: 'smooth' });
+  else v.scrollTop = 0;
+}
 export const isDesktop = () => (typeof window !== 'undefined' ? window.innerWidth >= DESKTOP_MIN : false);
 // Width available to page content (inside page padding), matching css/app.css
 export function contentWidth() {
   if (typeof document === 'undefined') return 360;
   const vw = document.documentElement.clientWidth || window.innerWidth || 390;
-  if (vw >= DESKTOP_MIN) return Math.min(1240, vw - 248 - 64);
-  return Math.max(280, vw - 32);
+  // A desktop scrollbar inside #view takes some width (iPhone scrollbars take none)
+  const v = document.getElementById('view');
+  const bar = v ? Math.max(0, v.offsetWidth - v.clientWidth) : 0;
+  if (vw >= DESKTOP_MIN) return Math.min(1240, vw - 248 - 64 - bar);
+  return Math.max(280, vw - 32 - bar);
 }
 
 /* ---------- Icons (24×24 stroke icons, currentColor) ---------- */

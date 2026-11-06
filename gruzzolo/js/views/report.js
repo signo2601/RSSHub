@@ -11,7 +11,7 @@ import { resolvePeriod, benchReturns } from '../metrics.js';
 import { BENCHMARKS, searchCatalog, findInCatalog } from '../catalog.js';
 import { INFO, infoBtn } from '../info.js';
 import {
-  esc, icon, pct, parseNum, fmtDate, fmtTime, todayISO, contentWidth, isDesktop, debounce,
+  esc, icon, pct, parseNum, fmtDate, fmtTime, todayISO, contentWidth, isDesktop, debounce, scrollToTop,
 } from '../util.js';
 import { avatar, demoBanner } from './home.js';
 
@@ -588,9 +588,7 @@ SHEETS.bench = (args = {}) => {
 /* ======================================================================
    Actions, forms, inputs
    ====================================================================== */
-const scrollReportTop = () => {
-  if (typeof window !== 'undefined') window.scrollTo(0, 0);
-};
+const scrollReportTop = () => scrollToTop();
 const topSheet = () => S.sheets[S.sheets.length - 1] || null;
 
 function goSheet(i) {

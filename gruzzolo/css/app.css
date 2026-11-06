@@ -103,19 +103,23 @@
 /* ---------- Base ---------- */
 *, *::before, *::after { box-sizing: border-box; }
 [hidden] { display: none !important; }
+/* The page itself never scrolls: on iPhone (installed app) a scrolling page lets iOS move the fixed
+   bars, so the header and the tab bar drift while scrolling. The frame (.app) fills the screen and
+   only the content (#view) scrolls, between a header and a tab bar that cannot move. */
 html {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
   background: var(--bg);
   scrollbar-color: var(--line) transparent;
-  scrollbar-gutter: stable; /* no layout jump when a sheet locks the page */
 }
-/* Only the root: a body with overflow hidden would become the sticky container and hide the header */
-html.locked { overflow: hidden; }
 body {
   margin: 0;
-  min-height: 100vh;
-  min-height: 100dvh;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
   background: var(--bg);
   color: var(--ink);
   font-family: var(--font-ui);
@@ -155,18 +159,14 @@ img { display: block; max-width: 100%; }
 .hint { font-size: 12.5px; color: var(--muted); }
 
 /* ---------- App frame (phone) ---------- */
-.app { min-height: 100vh; min-height: 100dvh; }
+.app { position: fixed; inset: 0; display: flex; overflow: hidden; }
 .sidebar { display: none; }
-.shell { min-width: 0; overflow-x: clip; }
+.shell { position: relative; display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; min-height: 0; }
 
 .top {
-  position: sticky; top: 0; z-index: 30;
-  transform: translateY(var(--vv-dy, 0px));
+  position: relative; z-index: 30; flex: 0 0 auto;
   padding-top: env(safe-area-inset-top, 0px);
   background: var(--bg);
-  background: color-mix(in srgb, var(--bg) 86%, transparent);
-  -webkit-backdrop-filter: saturate(1.6) blur(16px);
-  backdrop-filter: saturate(1.6) blur(16px);
   border-bottom: 1px solid transparent;
   transition: border-color .2s;
 }
@@ -222,15 +222,18 @@ img { display: block; max-width: 100%; }
 .dot.offline { background: var(--c-other); }
 .dot.demo { background: var(--accent-line); }
 
+/* The only element that scrolls (see html above); the tab bar floats over its bottom padding */
 #view {
-  display: block; outline: none; min-height: 60vh;
+  display: block; flex: 1 1 auto; min-height: 0; outline: none;
+  overflow-x: hidden; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain;
   padding: 6px max(16px, env(safe-area-inset-right, 0px)) calc(var(--tabbar-h) + 36px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
 }
+/* An open sheet freezes the page under it */
+html.locked #view { overflow: hidden; }
 
-/* Bottom tab bar with the raised gold "+" */
+/* Bottom tab bar with the raised gold "+": anchored to the still frame, never to the scrolling page */
 .tabbar {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 35;
-  transform: translateY(var(--vv-dy, 0px)); /* iPhone: follow a shifted visible area (main.js) */
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 35;
   background: var(--surface);
   background: color-mix(in srgb, var(--surface) 92%, transparent);
   -webkit-backdrop-filter: saturate(1.6) blur(16px);
@@ -552,7 +555,7 @@ button.row:active, a.row:active { background: var(--surface-2); }
 .inline-form .field { flex: 1; }
 
 /* ---------- Sheets (bottom sheets on phones, dialogs on desktop) ---------- */
-.sheet-layer { position: fixed; inset: 0; z-index: 50; transform: translateY(var(--vv-dy, 0px)); display: flex; align-items: flex-end; justify-content: center; }
+.sheet-layer { position: fixed; inset: 0; z-index: 50; display: flex; align-items: flex-end; justify-content: center; }
 .backdrop { position: absolute; inset: 0; background: var(--scrim); animation: fade-in .2s ease-out; touch-action: none; }
 .sheet {
   position: relative; display: flex; flex-direction: column; width: 100%; max-width: 640px;
@@ -583,7 +586,7 @@ button.row:active, a.row:active { background: var(--surface-2); }
 
 /* ---------- Toast ---------- */
 .toast {
-  position: fixed; left: 50%; z-index: 70; transform: translate(-50%, var(--vv-dy, 0px));
+  position: fixed; left: 50%; z-index: 70; transform: translateX(-50%);
   bottom: calc(var(--tabbar-h) + 18px + env(safe-area-inset-bottom, 0px));
   width: max-content; max-width: calc(100% - 32px);
   padding: 11px 16px; border-radius: 14px; box-shadow: var(--shadow);
@@ -634,7 +637,8 @@ button.row:active, a.row:active { background: var(--surface-2); }
   .top-actions { gap: 4px; }
   .top-actions .icon-btn { width: 44px; border-radius: 50%; }
 
-  #view { max-width: 1304px; margin: 0 auto; padding: 8px 32px 64px; }
+  /* Full-width scroller (scrollbar at the window edge), content centered at most 1240px wide */
+  #view { padding: 8px max(32px, calc((100% - 1240px) / 2)) 64px; scrollbar-gutter: stable; }
 
   .page { gap: 24px; }
   .page-title { font-size: 34px; }

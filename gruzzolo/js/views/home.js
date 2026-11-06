@@ -9,7 +9,7 @@ import { getSeries, positions, txnsFor, lastQuote, incomeEvents, cashAt, fxOn, q
 import { lineChart, chartScrubHandlers } from '../charts.js';
 import {
   esc, icon, money, moneySigned, pct, pctSigned, pctPlain, qtyFmt, priceFmt, fmtDate, fmtTime, tone, todayISO,
-  addDays, addMonths, dayDiff, contentWidth, isDesktop, hashHue, sum, compact, MONTHS_LONG,
+  addDays, addMonths, dayDiff, contentWidth, isDesktop, hashHue, sum, compact, MONTHS_LONG, scrollToTop,
 } from '../util.js';
 
 /* ======================================================================
@@ -540,9 +540,7 @@ export function renderTransactions() {
 /* ======================================================================
    Actions and mounts
    ====================================================================== */
-const scrollTop = () => {
-  if (typeof window !== 'undefined') window.scrollTo(0, 0);
-};
+const scrollTop = () => scrollToTop();
 
 Object.assign(ACTIONS, {
   range: (el) => {
