@@ -65,14 +65,14 @@ function chartBlock(list, p) {
 function countryChips(p) {
   const on = new Set(selected(p));
   const order = selected(p);
-  return `<div class="chips eco-cc-chips" role="group" aria-label="Paesi nel grafico">${CURVE_COUNTRIES.filter((cc) => curve(cc)).map((cc) => {
+  return `<div class="chips eco-cc-chips" role="group" aria-label="Paesi nel grafico" data-keep-x="yc-cc">${CURVE_COUNTRIES.filter((cc) => curve(cc)).map((cc) => {
     const k = order.indexOf(cc);
     return `<button class="chip" type="button" data-act="yc-toggle" data-cc="${cc}" aria-pressed="${on.has(cc)}">${on.has(cc) ? `<i class="eco-dot" style="background:${seriesColor(k)}" aria-hidden="true"></i>` : flagSpan(cc)}${esc(countryName(cc))}</button>`;
   }).join('')}</div>`;
 }
 
 function compareChips(p) {
-  return `<div class="chips eco-compare" role="group" aria-label="Confronta con">${COMPARE.map(([k, label]) => `<button class="chip" type="button" data-act="yc-compare" data-v="${k}" aria-pressed="${p.ycCompare === k}">${esc(label)}</button>`).join('')}</div>`;
+  return `<div class="chips eco-compare" role="group" aria-label="Confronta con" data-keep-x="yc-cmp">${COMPARE.map(([k, label]) => `<button class="chip" type="button" data-act="yc-compare" data-v="${k}" aria-pressed="${p.ycCompare === k}">${esc(label)}</button>`).join('')}</div>`;
 }
 
 // One card per country in the chart: 10 and 2 years with today's change, slope, spread on the Bund
@@ -112,10 +112,10 @@ function tableBlock(p) {
   const hi = Math.max(...vals);
   return `<section class="section eco-sec" aria-label="Confronta i rendimenti">
     <div class="sec-head"><h2>Confronta i rendimenti</h2></div>
-    <div class="table-wrap eco-yc-table-wrap"><table class="table eco-yc-table">
+    <div class="table-wrap eco-yc-table-wrap" data-keep-x="yc-table"><table class="table eco-yc-table">
       <thead><tr><th scope="col">Paese</th>${TABLE_TENORS.map((m) => `<th scope="col" class="num">${tenorShort(m)}</th>`).join('')}</tr></thead>
-      <tbody>${rows.map((cc) => `<tr data-act="yc-toggle" data-cc="${cc}" role="button" tabindex="0" aria-pressed="${on.has(cc)}">
-        <th scope="row"><span class="eco-yc-country">${flagSpan(cc)}<span>${esc(countryName(cc))}</span></span></th>
+      <tbody>${rows.map((cc) => `<tr data-act="yc-toggle" data-cc="${cc}"${on.has(cc) ? ' class="on"' : ''}>
+        <th scope="row"><button class="eco-yc-country" type="button" data-act="yc-toggle" data-cc="${cc}" aria-pressed="${on.has(cc)}">${flagSpan(cc)}<span>${esc(countryName(cc))}</span></button></th>
         ${TABLE_TENORS.map((m) => {
     const y = yieldAt(cc, m);
     return `<td class="num${heatClass(y && y.value, lo, hi)}">${y ? fmtNum(y.value, 2) : '<span class="muted">—</span>'}</td>`;

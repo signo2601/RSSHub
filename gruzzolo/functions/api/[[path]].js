@@ -500,6 +500,8 @@ async function handleEcoQuotes(context, url) {
       const unit = (ECO_MINOR_UNITS[d[10]] || [null, 1])[1];
       out[s] = [price, r4(d[1]), finite(d[2]) ? round(d[2] / unit) : null, r4(d[3]), r4(d[4]), r4(d[5]), r4(d[6]), r4(d[7]), r4(d[8]), tvTime(d[9]), ccy, str(d[11]), r4(d[12]), tvDate(d[13])];
     }
+    // An empty answer is an error, never an empty page kept in the edge cache (and on the phone)
+    if (!Object.keys(out).length) throw new HttpError(502, 'TradingView non ha restituito dati per questi titoli: riprova più tardi.');
     return { data: { at: Date.now(), cols: ['price', 'chg', 'chgAbs', 'w', 'm1', 'm3', 'm6', 'ytd', 'y', 'time', 'ccy', 'name', 'ytm', 'maturity'], rows: out } };
   });
 }

@@ -22,6 +22,7 @@ const listeners = new Set();
 
 let db = null;
 let dbReady = null;
+let dbLoaded = false; // the offline copy has been read (or there is none): freshness can be judged
 
 function notify() {
   eco.version++;
@@ -193,6 +194,8 @@ export const eco = {
         if (loaded) notify();
       })().catch(() => {
         db = null;
+      }).finally(() => {
+        dbLoaded = true;
       });
     }
     return dbReady;
@@ -220,6 +223,9 @@ export const eco = {
   // Resolves with the entry (old or new) or null; notifies listeners when something changed.
   load(key, path, { maxAge = 60e3, force = false } = {}) {
     if (pending.has(key)) return pending.get(key);
+    // At start the copy saved on the phone may still be loading: judge freshness once it is in memory,
+    // otherwise every start would download everything again
+    if (!dbLoaded) return this.init().then(() => this.load(key, path, { maxAge, force }));
     const cur = entries.get(key);
     const fresh = cur && cur.path === path && Date.now() - cur.fetchedAt < maxAge;
     const failed = failures.get(key);
@@ -246,11 +252,11 @@ export const eco = {
     return `${apiRoot()}/eco/logo?id=${encodeURIComponent(id)}`;
   },
 
-  // Forget every downloaded answer (memory and IndexedDB)
+  // Forget every downloaded answer (memory and IndexedDB), also when the Mercati tab was never opened
   async clear() {
+    await this.init();
     entries.clear();
     failures.clear();
-    if (dbReady) await dbReady;
     await idbRun('readwrite', (st) => st.clear());
     notify();
   },

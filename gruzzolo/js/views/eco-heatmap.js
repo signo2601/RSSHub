@@ -7,25 +7,27 @@ import { eco } from '../eco.js';
 import { nestedTreemap, squarify } from '../treemap.js';
 import { esc, icon, contentWidth, isDesktop } from '../util.js';
 import { prefs, periodSeg, periodLong, periodField, fmtNum, fmtPct, fmtPctSigned, fmtBig, chgPill, flagSpan, stampLine, emptyState, finiteNum } from './eco-common.js';
-import { logoImg } from './eco-overview.js';
+import { logoImg, quote, wants as overviewWants } from './eco-overview.js';
 
-// [key, name, country, region]
+// [key, name, country, region, ticker of the index in the Panoramica quotes, weighting]
+// Dow Jones and Nikkei 225 weigh their stocks by price, the others by (free-float) market cap. The Nikkei
+// also applies a per-stock adjustment factor TradingView does not publish: its weights are estimates.
 export const INDEXES = [
-  ['SPX', 'S&P 500', 'US', 'America'],
-  ['NDX', 'Nasdaq 100', 'US', 'America'],
-  ['DJI', 'Dow Jones', 'US', 'America'],
-  ['FTSEMIB', 'FTSE MIB', 'IT', 'Europa'],
-  ['SX5E', 'Euro Stoxx 50', 'EU', 'Europa'],
-  ['SXXP', 'Stoxx Europe 600', 'EU', 'Europa'],
-  ['DAX', 'DAX 40', 'DE', 'Europa'],
-  ['CAC', 'CAC 40', 'FR', 'Europa'],
-  ['IBEX', 'IBEX 35', 'ES', 'Europa'],
-  ['AEX', 'AEX', 'NL', 'Europa'],
-  ['SMI', 'SMI', 'CH', 'Europa'],
-  ['UKX', 'FTSE 100', 'GB', 'Europa'],
-  ['NI225', 'Nikkei 225', 'JP', 'Asia'],
-  ['HSI', 'Hang Seng', 'HK', 'Asia'],
-  ['CSI300', 'CSI 300', 'CN', 'Asia'],
+  ['SPX', 'S&P 500', 'US', 'America', 'SP:SPX', 'cap'],
+  ['NDX', 'Nasdaq 100', 'US', 'America', 'NASDAQ:NDX', 'cap'],
+  ['DJI', 'Dow Jones', 'US', 'America', 'DJ:DJI', 'price'],
+  ['FTSEMIB', 'FTSE MIB', 'IT', 'Europa', 'TVC:FTMIB', 'cap'],
+  ['SX5E', 'Euro Stoxx 50', 'EU', 'Europa', 'TVC:SX5E', 'cap'],
+  ['SXXP', 'Stoxx Europe 600', 'EU', 'Europa', 'TVC:SXXP', 'cap'],
+  ['DAX', 'DAX 40', 'DE', 'Europa', 'TVC:DEU40', 'cap'],
+  ['CAC', 'CAC 40', 'FR', 'Europa', 'TVC:CAC40', 'cap'],
+  ['IBEX', 'IBEX 35', 'ES', 'Europa', 'TVC:IBEX35', 'cap'],
+  ['AEX', 'AEX', 'NL', 'Europa', 'EURONEXT:AEX', 'cap'],
+  ['SMI', 'SMI', 'CH', 'Europa', 'SIX:SMI', 'cap'],
+  ['UKX', 'FTSE 100', 'GB', 'Europa', 'TVC:UKX', 'cap'],
+  ['NI225', 'Nikkei 225', 'JP', 'Asia', 'TVC:NI225', 'price'],
+  ['HSI', 'Hang Seng', 'HK', 'Asia', 'TVC:HSI', 'cap'],
+  ['CSI300', 'CSI 300', 'CN', 'Asia', 'SSE:000300', 'cap'],
 ];
 export const HM_PERIODS = ['1D', '1W', '1M', '3M', '6M', 'YTD', '1Y'];
 // Change (in %) that gets the strongest color, by period
@@ -61,10 +63,11 @@ const COL = { symbol: 0, name: 1, sector: 2, industry: 3, mcap: 4, price: 5, ccy
 const indexInfo = (key) => INDEXES.find((x) => x[0] === key) || INDEXES[0];
 const keyOf = (index) => `heatmap:${index}`;
 
+// The constituents, plus the Panoramica quotes for the real change of the index itself
 export function wants() {
   const p = prefs();
   const index = indexInfo(p.hmIndex)[0];
-  return [{ key: keyOf(index), path: `/eco/heatmap?index=${index}`, maxAge: 150e3 }];
+  return [{ key: keyOf(index), path: `/eco/heatmap?index=${index}`, maxAge: 150e3 }, overviewWants()[0]];
 }
 
 // Stocks of the current index: [{ s, ticker, name, sector, industry, mcap, price, ccy, perf, logo, row }]
@@ -93,22 +96,33 @@ export function bucket(v, period) {
   return k > 0 ? `p${k}` : k < 0 ? `n${-k}` : '0';
 }
 
-// Market-cap weighted average change of a list (what the group as a whole did)
-export function weightedChange(list, period) {
+// Weight of a stock in its index: market cap, or the price for price-weighted indices (Dow, Nikkei)
+const weightOf = (st, mode) => (mode === 'price' ? st.price : st.mcap);
+
+// Weighted average change of a list (what the group as a whole did)
+export function weightedChange(list, period, mode = 'cap') {
   let sw = 0;
   let s = 0;
   for (const st of list) {
     const v = perfOf(st, period);
-    if (!finiteNum(v) || !(st.mcap > 0)) continue;
-    sw += st.mcap;
-    s += st.mcap * v;
+    const wt = weightOf(st, mode);
+    if (!finiteNum(v) || !(wt > 0)) continue;
+    sw += wt;
+    s += wt * v;
   }
   return sw > 0 ? s / sw : null;
+}
+// Share of each stock in the index (0…1), with the index's own weighting
+export function weightShare(st, all, mode = 'cap') {
+  const total = all.reduce((s, x) => s + (weightOf(x, mode) > 0 ? weightOf(x, mode) : 0), 0);
+  const wt = weightOf(st, mode);
+  return total > 0 && wt > 0 ? wt / total : null;
 }
 
 /* ---------- The map ---------- */
 function mapSize() {
-  const w = Math.max(280, Math.floor(contentWidth()));
+  // Desktop: as wide as the Mercati column (max 980px, css/markets.css)
+  const w = Math.max(280, Math.floor(Math.min(contentWidth(), isDesktop() ? 980 : Infinity)));
   const h = isDesktop() ? Math.round(Math.min(720, w * 0.56)) : Math.round(Math.max(400, Math.min(680, w * 1.3)));
   return { w, h };
 }
@@ -145,7 +159,7 @@ function mapHtml(list, p, period) {
       if (!groups.has(st.sector)) groups.set(st.sector, []);
       groups.get(st.sector).push(st);
     }
-    const layout = nestedTreemap([...groups].map(([key, items]) => ({ key, items })), { x: 0, y: 0, w, h }, { value, header: 17, minHeaderW: 70, minHeaderH: 56, gap: 3 });
+    const layout = nestedTreemap([...groups].map(([key, items]) => ({ key, items })), { x: 0, y: 0, w, h }, { value, header: 21, minHeaderW: 70, minHeaderH: 64, gap: 3 });
     for (const g of layout) {
       for (const t of g.tiles) inner += tileHtml(t.item, t, period);
       if (g.header) {
@@ -165,14 +179,14 @@ function legendHtml(period) {
 }
 
 /* ---------- Lists under the map ---------- */
-function sectorRows(list, period) {
-  const total = list.reduce((s, st) => s + (st.mcap > 0 ? st.mcap : 0), 0);
+function sectorRows(list, period, mode) {
+  const total = list.reduce((s, st) => s + (weightOf(st, mode) > 0 ? weightOf(st, mode) : 0), 0);
   const groups = new Map();
   for (const st of list) {
     if (!groups.has(st.sector)) groups.set(st.sector, []);
     groups.get(st.sector).push(st);
   }
-  const rows = [...groups].map(([key, items]) => ({ key, items, weight: items.reduce((s, st) => s + st.mcap, 0) / (total || 1), chg: weightedChange(items, period) }))
+  const rows = [...groups].map(([key, items]) => ({ key, items, weight: items.reduce((s, st) => s + (weightOf(st, mode) > 0 ? weightOf(st, mode) : 0), 0) / (total || 1), chg: weightedChange(items, period, mode) }))
     .sort((a, b) => (b.chg ?? -Infinity) - (a.chg ?? -Infinity));
   return rows.map((g) => `<button class="row eco-row hm-sec-row" type="button" data-act="hm-sector" data-sector="${esc(g.key)}">
     <span class="hm-swatch hm-${bucket(g.chg, period)}" aria-hidden="true"></span>
@@ -194,7 +208,7 @@ function moverRows(list, period, best) {
 /* ---------- Page ---------- */
 export function renderHeatmap() {
   const p = prefs();
-  const [index, indexName, cc] = indexInfo(p.hmIndex);
+  const [index, indexName, cc, , indexTicker, mode] = indexInfo(p.hmIndex);
   p.hmIndex = index;
   const period = HM_PERIODS.includes(p.hmPeriod) ? p.hmPeriod : '1D';
   const all = stocks(index);
@@ -212,7 +226,11 @@ export function renderHeatmap() {
   const list = sectorKey ? all.filter((st) => st.sector === sectorKey) : all;
   const up = list.filter((st) => perfOf(st, period) > 0.005).length;
   const down = list.filter((st) => perfOf(st, period) < -0.005).length;
-  const avg = weightedChange(list, period);
+  // The whole index: its real change from the Panoramica quotes; a sector: the weighted average
+  const idx = quote(indexTicker);
+  const real = !sectorKey && idx ? idx[{ chg: 1, w: 3, m1: 4, m3: 5, m6: 6, ytd: 7, y: 8 }[periodField(period)]] : null;
+  const avg = finiteNum(real) ? real : weightedChange(list, period, mode);
+  const avgTitle = finiteNum(real) ? `Variazione del ${indexName}` : `Media delle variazioni pesata ${mode === 'price' ? 'sul prezzo, come l\'indice' : 'sulla capitalizzazione'}`;
   const crumb = sectorKey
     ? `<div class="hm-crumb"><button class="link-btn" type="button" data-act="hm-sector" data-sector="">${icon('chevLeft')}Tutti i settori</button><b>${esc(sectorName(sectorKey))}</b></div>`
     : '';
@@ -224,12 +242,12 @@ export function renderHeatmap() {
     <div class="hm-summary">
       <div><span>In rialzo</span><b class="up num">${up}</b></div>
       <div><span>In ribasso</span><b class="down num">${down}</b></div>
-      <div title="Media delle variazioni pesata sulla capitalizzazione"><span>${sectorKey ? 'Settore' : 'Indice'}</span><b class="num">${avg === null ? '—' : fmtPctSigned(avg)}</b></div>
+      <div title="${esc(avgTitle)}"><span>${sectorKey ? 'Settore' : 'Indice'}</span><b class="num">${avg === null ? '—' : fmtPctSigned(avg)}</b></div>
     </div>
-    ${sectorKey ? '' : `<section class="section eco-sec" aria-label="Settori"><div class="sec-head"><h2>Settori</h2><span class="hint">Tocca per ingrandire</span></div><div class="list eco-list">${sectorRows(all, period)}</div></section>`}
+    ${sectorKey ? '' : `<section class="section eco-sec" aria-label="Settori"><div class="sec-head"><h2>Settori</h2><span class="hint">Tocca per ingrandire</span></div><div class="list eco-list">${sectorRows(all, period, mode)}</div></section>`}
     <section class="section eco-sec" aria-label="I migliori"><div class="sec-head"><h2>I migliori</h2></div><div class="list eco-list">${moverRows(list, period, true)}</div></section>
     <section class="section eco-sec" aria-label="I peggiori"><div class="sec-head"><h2>I peggiori</h2></div><div class="list eco-list">${moverRows(list, period, false)}</div></section>
-    <p class="hint eco-foot">Ogni rettangolo è un'azienda: più è grande, più l'azienda vale in Borsa (capitalizzazione). Verde se è salita, rosso se è scesa. Dati TradingView, in ritardo fino a 15 minuti.</p>`;
+    <p class="hint eco-foot">Ogni rettangolo è un'azienda: più è grande, più l'azienda vale in Borsa (capitalizzazione). Verde se è salita, rosso se è scesa.${mode === 'price' ? ` Il ${esc(indexName)} però pesa le aziende in base al prezzo dell'azione: pesi dei settori e media seguono questa regola.` : ''} Dati TradingView, in ritardo fino a 15 minuti.</p>`;
 }
 
 /* ---------- Sheets ---------- */
@@ -246,11 +264,11 @@ SHEETS.hmIndexPicker = () => {
 
 SHEETS.hmStock = (args = {}) => {
   const p = prefs();
-  const [index, indexName] = indexInfo(p.hmIndex);
+  const [index, indexName, , , , mode] = indexInfo(p.hmIndex);
   const all = stocks(index) || [];
   const st = all.find((x) => x.s === args.s);
   if (!st) return { title: 'Titolo', body: '<div class="empty compact"><p>Dati non disponibili.</p></div>' };
-  const total = all.reduce((s, x) => s + (x.mcap > 0 ? x.mcap : 0), 0);
+  const share = weightShare(st, all, mode);
   const perf = [['Oggi', 'chg'], ['1 settimana', 'w'], ['1 mese', 'm1'], ['3 mesi', 'm3'], ['6 mesi', 'm6'], ['Da inizio anno', 'ytd'], ['1 anno', 'y']];
   const [exchange] = String(st.s).split(':');
   return {
@@ -260,13 +278,13 @@ SHEETS.hmStock = (args = {}) => {
       <div class="quote-price"><div class="price-big num">${fmtNum(st.price)} <small>${esc(st.ccy || '')}</small></div><div class="price-change">${chgPill(st.row[COL.chg])} <span class="muted">oggi</span></div></div>
       <div class="stats eco-stats">
         <div class="stat"><span>Capitalizzazione</span><b>${fmtBig(st.mcap * 1e6, '$')}</b></div>
-        <div class="stat"><span>Peso nel ${esc(indexName)}</span><b>${total ? fmtPct((st.mcap / total) * 100, 2) : '—'}</b></div>
+        <div class="stat"><span>Peso nel ${esc(indexName)}${index === 'NI225' ? ' (stima)' : ''}</span><b>${share === null ? '—' : fmtPct(share * 100, 2)}</b></div>
         <div class="stat"><span>Settore</span><b>${esc(sectorName(st.sector))}</b></div>
         <div class="stat"><span>Attività</span><b>${esc(st.industry || '—')}</b></div>
       </div>
       <h3 class="eco-sheet-h">Andamento</h3>
       <div class="eco-perf-grid">${perf.map(([label, f]) => `<div class="eco-perf"><span>${esc(label)}</span>${chgPill(st.row[COL[f]])}</div>`).join('')}</div>
-      <p class="hint">Capitalizzazione in dollari. Fonte TradingView, con un ritardo fino a 15 minuti.</p>
+      <p class="hint">Capitalizzazione in dollari.${mode === 'price' ? ` Il ${esc(indexName)} pesa le aziende in base al prezzo dell'azione, non alla capitalizzazione.` : ''} Fonte TradingView, con un ritardo fino a 15 minuti.</p>
     </div>`,
   };
 };
@@ -311,4 +329,4 @@ Object.assign(ACTIONS, {
   },
 });
 
-export const _test = { bucket, weightedChange, sectorName, stocks };
+export const _test = { bucket, weightedChange, weightShare, sectorName, stocks };

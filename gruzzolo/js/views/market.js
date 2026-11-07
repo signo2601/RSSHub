@@ -68,7 +68,7 @@ Object.assign(ACTIONS, {
     app.render();
   },
   'eco-quote': (el) => {
-    if (el.dataset.t) app.pushSheet('ecoQuote', { t: el.dataset.t, label: el.dataset.label || '' });
+    if (el.dataset.t) app.pushSheet('ecoQuote', { t: el.dataset.t, label: el.dataset.label || '', dp: el.dataset.dp || '' });
   },
   'eco-crypto': (el) => {
     if (el.dataset.t) app.pushSheet('ecoCrypto', { t: el.dataset.t });
@@ -124,9 +124,41 @@ if (typeof document !== 'undefined') {
   }, true);
 }
 
-// After each render of the tab: open the offline copy, download what is missing or old
+/* ---------- Sideways scroll positions ---------- */
+// Every render rebuilds the page, so rows of chips, the highlights strip and the yield table would
+// jump back to their start. Remember where each one (data-keep-x) was and put it back; the first time
+// a row appears, bring its pressed chip into view instead.
+const keepX = new Map();
+if (typeof document !== 'undefined') {
+  document.addEventListener('scroll', (e) => {
+    const t = e.target;
+    if (t && t.dataset && t.dataset.keepX) keepX.set(t.dataset.keepX, t.scrollLeft);
+  }, true);
+}
+
+function revealPressed(row) {
+  const cur = row.querySelector('[aria-pressed="true"]');
+  if (!cur || row.scrollWidth <= row.clientWidth) return;
+  const peek = 28;
+  // Position of the chip inside the scrolling content of the row
+  const left = cur.getBoundingClientRect().left - row.getBoundingClientRect().left + row.scrollLeft;
+  const right = left + cur.getBoundingClientRect().width;
+  if (right + peek > row.scrollLeft + row.clientWidth) row.scrollLeft = Math.min(left - peek, right + peek - row.clientWidth);
+  else if (left - peek < row.scrollLeft) row.scrollLeft = Math.max(0, left - peek);
+}
+
+function restoreSideways() {
+  if (typeof document === 'undefined') return;
+  for (const el of document.querySelectorAll('#view [data-keep-x]')) {
+    if (keepX.has(el.dataset.keepX)) el.scrollLeft = keepX.get(el.dataset.keepX);
+    else revealPressed(el);
+  }
+}
+
+// After each render of the tab: sideways positions back, offline copy open, download what is missing or old
 MOUNTS.push(() => {
   if (S.ui.tab !== 'market') return;
+  restoreSideways();
   eco.init();
   ensure(false);
 });

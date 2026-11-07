@@ -170,21 +170,36 @@ export function yieldAt(cc, months, period = '1D') {
   if (!p || !finiteNum(p[1])) return null;
   return { value: p[1], change: yieldChange(p, period), time: p[YCOL.time] };
 }
-// Change of a yield over the period, in percentage points. TradingView gives the 1-day change in
-// points and the other periods as % change of the yield itself: undo that to get the old level.
-export function yieldChange(p, period) {
+// Level of a yield at the start of the period (for the comparison curves). TradingView gives the
+// 1-day change in points and the other periods as % change of the yield, divided by the ABSOLUTE old
+// level (also when it was negative, e.g. Swiss bills): with r = change / 100,
+//   old > 0: y = old · (1 + r)     old < 0: y = old · (1 − r)
+// When the change is beyond ±100% both readings can fit: the published yields have at most 4 decimals,
+// so the reading that lands on that grid wins; on a tie, the smaller move (old > 0).
+const offGrid = (v) => Math.abs(v * 1e4 - Math.round(v * 1e4));
+export function yieldBefore(p, period) {
   if (!p || !finiteNum(p[1])) return null;
-  if (period === '1D') return finiteNum(p[2]) ? p[2] : null;
+  const y = p[1];
+  if (period === '1D') return finiteNum(p[2]) ? y - p[2] : null;
   const f = { '1W': YCOL.w, '1M': YCOL.m1, YTD: YCOL.ytd, '1Y': YCOL.y }[period];
   const perf = f !== undefined ? p[f] : null;
-  if (!finiteNum(perf) || perf <= -100) return null;
-  const old = p[1] / (1 + perf / 100);
-  return Number.isFinite(old) && Math.abs(old) < 100 ? p[1] - old : null;
+  if (!finiteNum(perf)) return null;
+  const r = perf / 100;
+  const pos = 1 + r !== 0 ? y / (1 + r) : NaN;
+  const neg = 1 - r !== 0 ? y / (1 - r) : NaN;
+  const okPos = pos > 0;
+  const okNeg = neg < 0;
+  let old = null;
+  if (okPos && okNeg) old = offGrid(neg) < 0.01 && offGrid(pos) >= 0.01 ? neg : pos;
+  else if (okPos) old = pos;
+  else if (okNeg) old = neg;
+  return old !== null && Math.abs(old) < 100 ? old : null;
 }
-// Old level of a yield over the period (for the comparison curves)
-export function yieldBefore(p, period) {
-  const ch = yieldChange(p, period);
-  return ch === null ? null : p[1] - ch;
+// Change of a yield over the period, in percentage points
+export function yieldChange(p, period) {
+  if (period === '1D') return p && finiteNum(p[1]) && finiteNum(p[2]) ? p[2] : null;
+  const old = yieldBefore(p, period);
+  return old === null ? null : p[1] - old;
 }
 
 // Crypto rows: [symbol, code, name, logo, priceUSD, chg, w, m1, ytd, y, mcapM, time]
@@ -193,6 +208,18 @@ function eurPerUsd() {
   const r = quote('FX_IDC:EURUSD');
   const p = qv(r, 'price');
   return p > 0 ? 1 / p : null;
+}
+// A change in dollars seen from the euro: a price in € is the price in $ divided by EUR/USD, so
+// (1 + change in €) = (1 + change in $) / (1 + change of EUR/USD). Percent units; null when unknown.
+export function inEuro(usdPerf, field) {
+  const fx = qv(quote('FX_IDC:EURUSD'), field);
+  if (!finiteNum(usdPerf) || !finiteNum(fx) || fx <= -100) return null;
+  return ((1 + usdPerf / 100) / (1 + fx / 100) - 1) * 100;
+}
+// Change of a crypto row over the period, in euro when the price is shown in euro
+function cryptoPerf(r, field, euro) {
+  const v = r[CCOL[field] ?? CCOL.chg];
+  return euro ? inEuro(v, field) : v;
 }
 
 /* ---------- Rendering ---------- */
@@ -207,7 +234,7 @@ function priceText(r, dp) {
 function quoteRow(ticker, title, sub, { dp, flags = '', logo = '', unit = '' } = {}, period) {
   const r = quote(ticker);
   const lead = logo || (flags ? `<span class="eco-flags">${flags.split(' ').map((c) => flagSpan(c)).join('')}</span>` : '');
-  return `<button class="row eco-row" type="button" data-act="eco-quote" data-t="${esc(ticker)}" data-label="${esc(title)}">
+  return `<button class="row eco-row" type="button" data-act="eco-quote" data-t="${esc(ticker)}" data-label="${esc(title)}"${dp !== undefined ? ` data-dp="${dp}"` : ''}>
     ${lead}
     <span class="row-main"><span class="row-title">${esc(title)}</span><span class="row-sub">${esc(sub)}</span></span>
     <span class="row-end"><span class="row-value num">${r ? priceText(r, dp) : '—'}${unit && r ? ` <small>${esc(unit)}</small>` : ''}</span>${r ? chgPill(perfOf(r, period)) : '<span class="row-sub">n.d.</span>'}</span>
@@ -294,7 +321,7 @@ function cryptoSection(period) {
   const d = eco.data('crypto');
   if (!d || !Array.isArray(d.rows)) return `<section class="section eco-sec" aria-label="Criptovalute"><div class="sec-head"><h2>Criptovalute</h2></div>${emptyState('crypto', { what: 'le criptovalute' })}</section>`;
   const fx = eurPerUsd();
-  const field = CCOL[periodField(period)] ?? CCOL.chg;
+  const field = periodField(period);
   const rows = d.rows.map((r) => {
     const [symbol, code, name, logo, usd, , , , , , mcap] = r;
     const price = fx ? usd * fx : usd;
@@ -303,7 +330,7 @@ function cryptoSection(period) {
     return `<button class="row eco-row" type="button" data-act="eco-crypto" data-t="${esc(symbol)}">
       ${logoImg(logo, code, 'round')}
       <span class="row-main"><span class="row-title">${esc(name)}</span><span class="row-sub">${esc(sub)}</span></span>
-      <span class="row-end"><span class="row-value num">${fmtNum(price, price >= 1 ? 2 : 4)} ${ccySign}</span>${chgPill(r[field])}</span>
+      <span class="row-end"><span class="row-value num">${fmtNum(price, price >= 1 ? 2 : 4)} ${ccySign}</span>${chgPill(cryptoPerf(r, field, Boolean(fx)))}</span>
     </button>`;
   });
   return `<section class="section eco-sec" aria-label="Criptovalute">
@@ -324,7 +351,7 @@ function highlight([kind, key, label], period) {
       value = fmtNum(qv(r, 'price'), kind === 'fx' ? 4 : 2);
       pill = chgPill(perfOf(r, period));
     }
-    act = `data-act="eco-quote" data-t="${esc(key)}" data-label="${esc(label)}"`;
+    act = `data-act="eco-quote" data-t="${esc(key)}" data-label="${esc(label)}"${kind === 'fx' ? ' data-dp="4"' : ''}`;
   } else if (kind === 'yield') {
     const y = yieldAt(key, 120, period);
     if (y) {
@@ -346,7 +373,7 @@ function highlight([kind, key, label], period) {
     const fx = eurPerUsd();
     if (r) {
       value = `${fmtNum(fx ? r[4] * fx : r[4], 0)} ${fx ? '€' : '$'}`;
-      pill = chgPill(r[CCOL[periodField(period)] ?? CCOL.chg]);
+      pill = chgPill(cryptoPerf(r, periodField(period), Boolean(fx)));
     }
     act = `data-act="eco-crypto" data-t="${esc(key)}"`;
   }
@@ -358,7 +385,7 @@ export function renderOverview() {
   const period = OVERVIEW_PERIODS.includes(p.period) ? p.period : '1D';
   const have = eco.data('overview');
   const top = `<div class="eco-toolbar">${periodSeg(OVERVIEW_PERIODS, period, 'eco-period', 'Variazione su')}</div>
-    <div class="eco-hl-strip" role="list" aria-label="In evidenza">${HIGHLIGHTS.map((h) => highlight(h, period)).join('')}</div>`;
+    <div class="eco-hl-strip" role="group" aria-label="In evidenza" data-keep-x="hl">${HIGHLIGHTS.map((h) => highlight(h, period)).join('')}</div>`;
   if (!have) {
     return `${top}${emptyState('overview', { what: 'i mercati' })}${govSection(period)}${cryptoSection(period)}`;
   }
@@ -384,10 +411,12 @@ SHEETS.ecoQuote = (args = {}) => {
   if (!r) return { title, body: '<div class="empty compact"><p>Dati non disponibili per questo strumento.</p></div>' };
   const isBond = finiteNum(qv(r, 'ytm'));
   const ccy = qv(r, 'ccy');
+  // Same decimals as the row the user tapped (exchange rates have 4)
+  const dp = Number.isInteger(+args.dp) && args.dp !== '' && args.dp !== undefined ? Math.min(6, Math.max(0, +args.dp)) : undefined;
   const head = isBond
     ? `<div class="quote-price"><div class="price-big num">${fmtPct(qv(r, 'ytm'))}</div><p class="src-line">Rendimento a scadenza · prezzo ${fmtNum(qv(r, 'price'))}${qv(r, 'maturity') ? ` · scade il ${fmtDate(qv(r, 'maturity'))}` : ''}</p></div>`
-    : `<div class="quote-price"><div class="price-big num">${fmtNum(qv(r, 'price'))}${ccy ? ` <small>${esc(ccy)}</small>` : ''}</div>
-       <div class="price-change">${chgPill(qv(r, 'chg'))} <span class="muted num">${finiteNum(qv(r, 'chgAbs')) ? (qv(r, 'chgAbs') >= 0 ? '+' : '−') + fmtNum(Math.abs(qv(r, 'chgAbs'))) : ''}</span></div></div>`;
+    : `<div class="quote-price"><div class="price-big num">${fmtNum(qv(r, 'price'), dp)}${ccy ? ` <small>${esc(ccy)}</small>` : ''}</div>
+       <div class="price-change">${chgPill(qv(r, 'chg'))} <span class="muted num">${finiteNum(qv(r, 'chgAbs')) ? (qv(r, 'chgAbs') >= 0 ? '+' : '−') + fmtNum(Math.abs(qv(r, 'chgAbs')), dp) : ''}</span></div></div>`;
   const when = dateOfSec(qv(r, 'time'));
   return {
     title,
@@ -405,19 +434,21 @@ SHEETS.ecoCrypto = (args = {}) => {
   const d = eco.data('crypto');
   const r = d && Array.isArray(d.rows) ? d.rows.find((x) => x[0] === args.t) : null;
   if (!r) return { title: 'Criptovaluta', body: '<div class="empty compact"><p>Dati non disponibili.</p></div>' };
-  const [, code, name, logo, usd, chg, w, m1, ytd, y, mcap] = r;
+  const [, code, name, logo, usd, , , , , , mcap] = r;
   const fx = eurPerUsd();
+  const euro = Boolean(fx);
+  const perf = (field) => cryptoPerf(r, field, euro);
   return {
     title: name,
     body: `<div class="eco-sheet">
       <div class="detail-head">${logoImg(logo, code, 'round lg')}<div class="detail-title"><h3>${esc(name)}</h3><div class="tags"><span class="tag">${esc(code)}</span></div></div></div>
       <div class="quote-price"><div class="price-big num">${fx ? `${fmtNum(usd * fx, usd * fx >= 1 ? 2 : 4)} €` : `${fmtNum(usd)} $`}</div>
         <p class="src-line">${fx ? `${fmtNum(usd, usd >= 1 ? 2 : 4)} $ · ` : ''}capitalizzazione ${fmtBig(mcap * 1e6, '$')}</p></div>
-      <h3 class="eco-sheet-h">Andamento</h3>
-      ${perfGrid([['24 ore', chg], ['1 settimana', w], ['1 mese', m1], ['Da inizio anno', ytd], ['1 anno', y]])}
-      <p class="hint">Fonte TradingView (${esc(args.t)}). Le criptovalute possono perdere gran parte del valore in poco tempo.</p>
+      <h3 class="eco-sheet-h">Andamento ${euro ? 'in euro' : 'in dollari'}</h3>
+      ${perfGrid([['24 ore', perf('chg')], ['1 settimana', perf('w')], ['1 mese', perf('m1')], ['Da inizio anno', perf('ytd')], ['1 anno', perf('y')]])}
+      <p class="hint">Fonte TradingView (${esc(args.t)}).${euro ? ' Le variazioni in euro tengono conto del cambio euro/dollaro.' : ''} Le criptovalute possono perdere gran parte del valore in poco tempo.</p>
     </div>`,
   };
 };
 
-export const _test = { yieldChange, yieldBefore, OVERVIEW_TICKERS, GOV_COUNTRIES, PERIODS, periodLabel, fmtBp, fmtPctSigned };
+export const _test = { yieldChange, yieldBefore, inEuro, OVERVIEW_TICKERS, GOV_COUNTRIES, PERIODS, periodLabel, fmtBp, fmtPctSigned };

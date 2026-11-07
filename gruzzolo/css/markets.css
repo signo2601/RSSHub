@@ -137,7 +137,7 @@
 .hm-sector {
   position: absolute; z-index: 1; display: flex; align-items: center; gap: 2px; margin: 0; padding: 0 5px;
   border: 0; border-radius: 0; background: var(--hm-head); color: var(--hm-head-ink);
-  font-size: 10px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; text-align: left; white-space: nowrap; overflow: hidden;
+  font-size: 10.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; text-align: left; white-space: nowrap; overflow: hidden;
 }
 .hm-sector span { overflow: hidden; text-overflow: ellipsis; }
 .hm-sector .ico { width: 11px; height: 11px; flex-shrink: 0; opacity: .8; }
@@ -186,12 +186,15 @@
 .eco-yc-table th[scope="row"] { font-size: 13px; font-weight: 700; letter-spacing: 0; text-transform: none; color: var(--ink-2); border-bottom: 1px solid var(--line); }
 .eco-yc-table tr:last-child th[scope="row"] { border-bottom: 0; }
 .eco-yc-table td:last-child, .eco-yc-table th:last-child { padding-right: 12px; }
-.eco-yc-country { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; white-space: nowrap; }
+/* The whole row toggles the country; the button in its header is the same action for keyboards and VoiceOver */
+.eco-yc-country {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 30px; margin: 0; padding: 0;
+  border: 0; background: none; color: var(--ink-2); font: inherit; font-weight: 700; white-space: nowrap; text-align: left;
+}
 .eco-yc-country .flag { width: auto; font-size: 16px; }
 .eco-yc-table tr[data-act] { cursor: pointer; }
-.eco-yc-table tr[aria-pressed="true"] th[scope="row"] { box-shadow: inset 3px 0 0 var(--accent); }
-.eco-yc-table tr[aria-pressed="true"] .eco-yc-country { color: var(--ink); }
-.eco-yc-table tr[aria-pressed="false"] .eco-yc-country { color: var(--ink-2); }
+.eco-yc-table tr.on th[scope="row"] { box-shadow: inset 3px 0 0 var(--accent); }
+.eco-yc-table tr.on .eco-yc-country { color: var(--ink); }
 .eco-heat0 { background: color-mix(in srgb, var(--yc-heat) 4%, transparent); }
 .eco-heat1 { background: color-mix(in srgb, var(--yc-heat) 10%, transparent); }
 .eco-heat2 { background: color-mix(in srgb, var(--yc-heat) 17%, transparent); }
@@ -210,8 +213,9 @@
 .mc-c.mc-out { opacity: .32; }
 .mc-c:active { opacity: .8; }
 .mc-sel-outline { fill: none; stroke: var(--ink); stroke-width: 2px; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
-.mc-dot { stroke: var(--mc-border); stroke-width: 1px; vector-effect: non-scaling-stroke; cursor: pointer; }
+.mc-dot { stroke: var(--mc-border); stroke-width: 1px; vector-effect: non-scaling-stroke; }
 .mc-dot.sel { stroke: var(--ink); stroke-width: 2px; }
+.mc-hit { fill: transparent; cursor: pointer; }
 .mc-c.mc-s0, .mc-dot.mc-s0 { fill: var(--mc0); } .mc-c.mc-s1, .mc-dot.mc-s1 { fill: var(--mc1); }
 .mc-c.mc-s2, .mc-dot.mc-s2 { fill: var(--mc2); } .mc-c.mc-s3, .mc-dot.mc-s3 { fill: var(--mc3); }
 .mc-c.mc-s4, .mc-dot.mc-s4 { fill: var(--mc4); } .mc-c.mc-s5, .mc-dot.mc-s5 { fill: var(--mc5); }

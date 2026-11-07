@@ -402,6 +402,9 @@ test('eco routes: input validation and upstream failures', async () => {
     // An empty answer is an error, never an empty page cached for minutes
     mockScanner(() => []);
     assert.equal((await call('/api/eco/heatmap?index=SPX')).status, 502);
+    const none = await call('/api/eco/quotes?t=NOPE:NOPE');
+    assert.equal(none.status, 502);
+    assert.equal(none.headers.get('cache-control'), 'no-store');
   } finally {
     globalThis.fetch = realFetch;
   }

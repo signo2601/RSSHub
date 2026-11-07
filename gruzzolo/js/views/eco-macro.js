@@ -59,6 +59,8 @@ export function valuesOf(code, nowMs = Date.now()) {
   if (!m) return out;
   const oldest = nowMs / 1000 - STALE_YEARS * 365.25 * 86400;
   for (const [cc, row] of Object.entries(m)) {
+    // Real countries and the euro area only: TradingView also has aggregates such as WW (the world)
+    if (!NAMES[cc] || !CONTINENT[cc]) continue;
     if (!Array.isArray(row) || !finiteNum(row[0])) continue;
     if (finiteNum(row[2]) && row[2] < oldest) continue;
     out[cc] = { value: row[0], prev: finiteNum(row[1]) ? row[1] : null, time: row[2] };
@@ -119,17 +121,22 @@ function mapHtml(vals, ind, reg, sel) {
     if (cc === sel) selPath = `<path class="mc-sel-outline" d="${d}" pointer-events="none"/>`;
     paths += p;
   }
-  // Countries too small for a shape (Singapore, Hong Kong, Malta…): a dot
-  const r = (2.6 * vw) / pxW;
+  // Countries too small for a shape (Singapore, Hong Kong, Malta…): a 7 px dot, and around it an
+  // invisible 30 px circle that takes the tap
+  const unit = vw / pxW; // map units per screen pixel
   let dots = '';
+  let hits = '';
   for (const [cc, v] of Object.entries(vals)) {
     if (PATHS[cc] || !POINTS[cc] || !inRegion(cc, reg)) continue;
     const [x, y] = POINTS[cc];
     if (x < vx || x > vx + vw || y < vy || y > vy + vh) continue;
     const k = step(v.value, thresholds);
-    dots += `<circle class="mc-dot mc-s${k}${cc === sel ? ' sel' : ''}" cx="${x}" cy="${y}" r="${r.toFixed(2)}" data-act="mc-sel" data-cc="${cc}"><title>${esc(countryName(cc))}: ${esc(fmtValue(v.value, ind[4]))}</title></circle>`;
+    const title = `<title>${esc(countryName(cc))}: ${esc(fmtValue(v.value, ind[4]))}</title>`;
+    dots += `<circle class="mc-dot mc-s${k}${cc === sel ? ' sel' : ''}" cx="${x}" cy="${y}" r="${(3.5 * unit).toFixed(2)}" pointer-events="none"/>`;
+    hits += `<circle class="mc-hit" cx="${x}" cy="${y}" r="${(15 * unit).toFixed(2)}" data-act="mc-sel" data-cc="${cc}">${title}</circle>`;
   }
-  return `<svg class="mc-map" viewBox="${vx} ${vy} ${vw} ${vh}" width="${pxW}" height="${pxH}" role="img" aria-label="Mappa: ${esc(ind[2])} per Paese">${paths}${selPath}${dots}</svg>`;
+  // The ranking below has the same numbers for screen readers
+  return `<svg class="mc-map" viewBox="${vx} ${vy} ${vw} ${vh}" width="${pxW}" height="${pxH}" role="img" aria-label="Mappa: ${esc(ind[2])} per Paese. La classifica qui sotto riporta gli stessi dati.">${paths}${selPath}${dots}${hits}</svg>`;
 }
 
 function legendHtml(ind) {
@@ -169,8 +176,8 @@ export function renderMacro() {
   const reg = region(p.mcRegion);
   p.mcInd = ind[0];
   p.mcRegion = reg[0];
-  const chips = `<div class="chips mc-ind-chips" role="group" aria-label="Indicatore">${INDICATORS.map(([code, label]) => `<button class="chip" type="button" data-act="mc-ind" data-v="${code}" aria-pressed="${code === ind[0]}">${esc(label)}</button>`).join('')}</div>
-    <div class="chips mc-reg-chips" role="group" aria-label="Paesi">${REGIONS.map(([key, label]) => `<button class="chip" type="button" data-act="mc-region" data-v="${key}" aria-pressed="${key === reg[0]}">${esc(label)}</button>`).join('')}</div>`;
+  const chips = `<div class="chips mc-ind-chips" role="group" aria-label="Indicatore" data-keep-x="mc-ind">${INDICATORS.map(([code, label]) => `<button class="chip" type="button" data-act="mc-ind" data-v="${code}" aria-pressed="${code === ind[0]}">${esc(label)}</button>`).join('')}</div>
+    <div class="chips mc-reg-chips" role="group" aria-label="Paesi" data-keep-x="mc-reg">${REGIONS.map(([key, label]) => `<button class="chip" type="button" data-act="mc-region" data-v="${key}" aria-pressed="${key === reg[0]}">${esc(label)}</button>`).join('')}</div>`;
   if (!eco.data('macro')) return `${chips}${emptyState('macro', { what: 'gli indicatori economici' })}`;
   const vals = valuesOf(ind[0]);
   const ranked = Object.entries(vals).filter(([cc]) => inRegion(cc, reg)).map(([cc, v]) => ({ cc, v })).sort((a, b) => b.v.value - a.v.value);

@@ -280,8 +280,11 @@ Mercati routes (one POST to `https://scanner.tradingview.com/{global|coin|econom
 - `GET /api/eco/heatmap?index=SPX|NDX|DJI|FTSEMIB|SX5E|SXXP|DAX|CAC|IBEX|AEX|SMI|UKX|NI225|HSI|CSI300` →
   `{ at, index, cols, rows: [[symbol, name, sector, industry, mcap (USD mln), price, ccy, chg, w, m1, m3, m6, ytd, y, logo]] }`. 120 s.
 - `GET /api/eco/yields` → `{ at, cols, curves: { [country]: [[months, yield, chgAbs, w, m1, ytd, y, time]] } }` (23 countries,
-  tenors in `YIELD_TENORS`; w/m1/ytd/y are % changes of the yield itself: the client turns them into levels). 120 s.
+  tenors in `YIELD_TENORS`; w/m1/ytd/y are % changes of the yield divided by the ABSOLUTE old level: `yieldBefore()` in
+  eco-overview.js turns them into levels, also across zero). 120 s.
 - `GET /api/eco/macro` → `{ at, cols, data: { IRYY|INTR|GDP|GDPYY|UR|GDG: { [country]: [value, prev, time] } } }`. 6 h.
+  Also contains aggregates (WW = world, EU = euro area): the view keeps only codes with a `NAMES` and `CONTINENT` entry.
+- An answer with no rows is a 502 (never an empty 200 kept in the edge cache or on the phone).
 - `GET /api/eco/crypto` → the 15 largest non-stablecoin cryptocurrencies, prices in USD. 120 s.
 - `GET /api/eco/logo?id=apple` → SVG logo, `Content-Security-Policy: sandbox`, 30 days.
 
@@ -412,7 +415,13 @@ These modules are finished and tested; the notes list behavior beyond the contra
   (at most 6 heatmaps kept). `eco.data(key)`, `eco.entry(key)` (`fetchedAt`), `eco.isLoading(key)`, `eco.failure(key)` (`{ message,
   offline }`), `eco.subscribe(fn)` (main.js re-renders the Mercati tab), `eco.logoUrl(id)`, `eco.clear()` (Altro → Svuota cache).
   Each page exports `wants()` → `[{ key, path, maxAge }]`; `views/market.js` loads them after every render of the tab and every 30 s
-  while it stays open; the header refresh button calls `refreshCurrent()` on this tab.
+  while it stays open; the header refresh button calls `refreshCurrent()` on this tab. Freshness is judged only after the
+  IndexedDB copy is in memory (no download at every start). Horizontal scrollers marked `data-keep-x="key"` keep their
+  position across renders (first appearance: the pressed chip is brought into view).
+- **Heatmap weights**: tiles are sized by market cap for every index; the "Indice" figure is the real change of the index
+  (Panoramica quotes); sector averages, sector weights and «Peso nel …» use market cap, except Dow Jones and Nikkei 225,
+  which are price-weighted (Nikkei: estimate, its price adjustment factors are not published by TradingView).
+- **Crypto** prices and changes are shown in euro: change in € = (1 + change in $) / (1 + EUR/USD change) − 1.
 - **metrics.js**: `cumulative()` first point is 0 on the period's first date; its `dates` equal `series.dates.slice(i0, i1 + 1)` — use them as the chart x axis. `benchReturns()` attaches `.dates` and `.coverageStart`: do not `.slice()` it if you need those (typed-array slices drop them); `periodStats` realigns a bench array by `.dates` when lengths differ, so passing the total's `bench.ret` for an account series is fine. `periodStats` extras: `i0, i1, shortPeriod` (days < 365: annualized CAGR/IRR/Sharpe are indicative — show a short note "periodo breve: valore annualizzato indicativo"), `gain, benchPartial, n`; `benchTwr`/`activeVsBench` are null without benchmark data. `resolvePeriod(period, { today, start, from, to })` → `{ from, to }` for the presets (use it in report.js). `riskStats(ret, { rf, benchRet, dates })` also returns `best, worst, maxDDFrom, maxDDTo`. `backProjected(...)`: `start` is the base date (not in `dates`); also returns `missingInfo [{ aid, name, reason: 'nohistory'|'short' }]`, `fxMissing`, `benchStart`, `n`; `bench` is 0 before `benchStart`. `rollingVol(dates, ret, window, { from, to })` can trim its output. Signs: `maxDD` negative; `var95`/`cvar95` positive daily losses; Sharpe/Sortino use CAGR − rf.
 - **markowitz.js**: easiest entry point `portfolioFrontier(positions, { today, rf })` → `{ ok, error?, missing, notes, weekly: { start, end, weeks }, frontier, minVar, maxSharpe, current, assets, … }`. When ≤ 5 instruments the 20% cap is dropped (`capRelaxed`, explained in `notes`). `frontierCsv(res)` already starts with a BOM: `saveFile('frontiera-efficiente.csv', frontierCsv(res), 'text/csv;charset=utf-8')`. Expected returns are historical averages (can look huge for stocks that boomed): label the frontier as descriptive, not a forecast.
 - **income.js**: `incomeStats({ accIds, from, to, today, settings? })`. Calendar items with `aid: null` are cash interest ("Interessi"); `forecast: true` items are estimates; use `years` for the year switch; `forecastByAsset[].perShare` is in `currency` (gross local for market data, net EUR for recorded). `missing[]` items carry `currency` and `kind`. Extras: `gross, count, value, income12m, twr, years`.

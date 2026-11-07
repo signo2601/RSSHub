@@ -8,7 +8,7 @@ import { chartData } from '../js/charts.js';
 import { curveChart } from '../js/charts.js';
 import { fmtNum, fmtBp, fmtBig, fmtPctSigned, flag, prefs, DEFAULTS } from '../js/views/eco-common.js';
 import { renderOverview, yieldAt, _test as ov } from '../js/views/eco-overview.js';
-import { renderHeatmap, bucket, weightedChange, sectorName } from '../js/views/eco-heatmap.js';
+import { renderHeatmap, bucket, weightedChange, weightShare, sectorName } from '../js/views/eco-heatmap.js';
 import { renderCurves, tenorShort, tenorLong, slopeOf } from '../js/views/eco-curves.js';
 import { renderMacro, valuesOf, step, periodText, INDICATORS } from '../js/views/eco-macro.js';
 import { renderMarket } from '../js/views/market.js';
@@ -62,7 +62,7 @@ const MACRO = {
   data: {
     IRYY: { IT: [5.4, 4.2, 1793404800], US: [3.7, 3.4, 1790726400], DE: [2.8, 3.3, 1793404800], YE: [10, 9, 1498780800], EU: [2.9, 2.8, 1793404800], SG: [1.1, 1, 1790726400] },
     INTR: { IT: [2.65, 2.65, 1793232000], US: [4, 4, 1793232000] },
-    GDP: { IT: [2551556954100.35, 2383435562458.12, 1767139200], US: [30769700000000, 29298013000000, 1767139200] },
+    GDP: { IT: [2551556954100.35, 2383435562458.12, 1767139200], US: [30769700000000, 29298013000000, 1767139200], WW: [118400000000000, 110000000000000, 1767139200] },
     GDPYY: { IT: [0.8, 1, 1790726400] },
     UR: { IT: [6.3, 6.2, 1790726400] },
     GDG: { IT: [137.1, 134.7, 1767139200] },
@@ -181,8 +181,34 @@ test('yield changes: 1 day in points; other periods undo TradingView\'s % change
   close(ov.yieldBefore(p, '1W'), weekAgo);
   close(ov.yieldBefore(p, '1Y'), 4.853 / 1.168553);
   assert.equal(ov.yieldChange(p, '6M'), null, 'no 6-month data for yields');
-  assert.equal(ov.yieldChange([120, 1, 0, -100, 0, 0, 0, 0], '1W'), null, 'a −100% change has no level before');
+  assert.equal(ov.yieldChange([120, 1, 0, -100, 0, 0, 0, 0], '1W'), null, 'a positive yield cannot come from a −100% change');
   assert.equal(ov.yieldChange([120, 1, null, null, null, null, null, 0], '1D'), null);
+});
+
+test('yield changes across zero: TradingView divides by the absolute old level (Swiss bills)', () => {
+  // Real answers of /api/eco/yields for Switzerland: [months, yield, chgAbs, w, m1, ytd, y, time]
+  const m1 = [1, -0.11, 0, 0, 8.3333, 42.1053, -1200, 0];
+  const m2 = [2, -0.1, 0, 16.6667, 0, 37.5, 16.6667, 0];
+  const m3 = [3, -0.08, 0, -100, 0, -300, -60, 0];
+  close(ov.yieldBefore(m1, 'YTD'), -0.19, 1e-6); // was negative: y = old · (1 − r)
+  close(ov.yieldBefore(m2, '1W'), -0.12, 1e-6);
+  close(ov.yieldBefore(m2, 'YTD'), -0.16, 1e-6);
+  close(ov.yieldBefore(m3, '1W'), -0.04, 1e-6); // −100%: from −0,04 to −0,08
+  close(ov.yieldBefore(m3, '1Y'), -0.05, 1e-6);
+  // Beyond ±100% both readings can fit: the one on the 4-decimal grid wins, else the smaller move
+  close(ov.yieldBefore(m1, '1Y'), 0.01, 1e-6); // +0,01 → −0,11 is −1200%
+  close(ov.yieldBefore(m3, 'YTD'), 0.04, 1e-6);
+  close(ov.yieldChange(m1, 'YTD'), 0.08, 1e-6, 'the yield rose 8 bp, it did not fall');
+  close(ov.yieldBefore([12, 0.15, -0.03, -42.3077, 200, 150, 200, 0], '1M'), 0.05, 1e-6);
+});
+
+test('crypto in euro: a dollar change seen through the EUR/USD change of the same period', async () => {
+  await loadAll();
+  // EUR/USD fell 0,6918% today: a crypto flat in dollars gained in euro
+  close(ov.inEuro(0, 'chg'), (1 / (1 - 0.006918) - 1) * 100, 1e-9);
+  close(ov.inEuro(-0.2979, 'chg'), ((1 - 0.002979) / (1 - 0.006918) - 1) * 100, 1e-9);
+  assert.equal(ov.inEuro(null, 'chg'), null);
+  assert.equal(ov.inEuro(1, 'nope'), null);
 });
 
 test('heatmap: color steps scale with the period, cap-weighted change, Italian sectors', () => {
@@ -193,9 +219,12 @@ test('heatmap: color steps scale with the period, cap-weighted change, Italian s
   assert.equal(bucket(-1.6, '1D'), 'n2');
   assert.equal(bucket(-1.6, '1Y'), '0', 'the same move is small over a year');
   assert.equal(bucket(null, '1D'), 'na');
-  const list = [{ mcap: 3, row: [0, 0, 0, 0, 0, 0, 0, 2] }, { mcap: 1, row: [0, 0, 0, 0, 0, 0, 0, -2] }, { mcap: 5, row: [0, 0, 0, 0, 0, 0, 0, null] }];
+  const list = [{ mcap: 3, price: 10, row: [0, 0, 0, 0, 0, 0, 0, 2] }, { mcap: 1, price: 30, row: [0, 0, 0, 0, 0, 0, 0, -2] }, { mcap: 5, price: 1, row: [0, 0, 0, 0, 0, 0, 0, null] }];
   close(weightedChange(list, '1D'), 1);
+  close(weightedChange(list, '1D', 'price'), (10 * 2 - 30 * 2) / 40, 1e-9, 'Dow and Nikkei weigh by price');
   assert.equal(weightedChange([], '1D'), null);
+  close(weightShare(list[1], list, 'cap'), 1 / 9);
+  close(weightShare(list[1], list, 'price'), 30 / 41);
   assert.equal(sectorName('Electronic Technology'), 'Tecnologia elettronica');
   assert.equal(sectorName('Something New'), 'Something New');
 });
@@ -216,6 +245,7 @@ test('macro: stale observations left out, color steps, periods by indicator', as
   await loadAll();
   const v = valuesOf('IRYY');
   assert.ok(v.IT && v.US && v.EU);
+  assert.equal(valuesOf('GDP').WW, undefined, 'the world total is not a country');
   assert.equal(v.YE, undefined, 'Yemen 2017: too old');
   assert.deepEqual(v.IT, { value: 5.4, prev: 4.2, time: 1793404800 });
   const t = INDICATORS[0][5];
@@ -250,10 +280,12 @@ test('pages render with data: overview, heatmap, curves, macro', async () => {
   clean(renderOverview());
 
   p.hmIndex = 'SPX';
+  p.hmPeriod = '1D';
   const h = renderHeatmap();
   clean(h);
   assert.ok(h.includes('data-s="NASDAQ:AAPL"') && h.includes('hm-tile'));
   assert.ok(h.includes('Tecnologia elettronica'));
+  assert.ok(h.includes('<span>Indice</span><b class="num">+0,81%</b>'), 'the real change of the S&P 500 from the quotes');
   p.hmSector = 'Finance';
   clean(renderHeatmap());
   p.hmSector = 'Nope';
@@ -280,6 +312,9 @@ test('pages render with data: overview, heatmap, curves, macro', async () => {
       clean(renderMacro());
     }
   }
+  p.mcInd = 'GDP';
+  p.mcRegion = 'world';
+  assert.ok(!renderMacro().includes('data-cc="WW"'), 'no world total in the ranking');
   p.mcInd = 'IRYY';
   p.mcSel = 'IT';
   const m = renderMacro();
