@@ -622,3 +622,29 @@ test('eco calendar: medium and high releases of the main economies, sorted by ti
     globalThis.fetch = realFetch;
   }
 });
+
+test('eco inflation: Eurostat JSON-stat turned into monthly series of Italy and the euro area', async () => {
+  try {
+    let asked = '';
+    globalThis.fetch = async (url) => {
+      asked = String(url);
+      return yjson({
+        id: ['freq', 'unit', 'coicop18', 'geo', 'time'],
+        size: [1, 1, 1, 2, 3],
+        dimension: { geo: { category: { index: { EA: 0, IT: 1 } } }, time: { category: { index: { '1996-01': 0, '1996-02': 1, '1996-03': 2 } } } },
+        value: { 0: 55.12, 1: 55.37, 2: 55.5, 3: 54.3, 5: 54.6 },
+      });
+    };
+    const r = await call('/api/eco/inflation');
+    assert.equal(r.status, 200);
+    assert.match(asked, /prc_hicp_minr\?geo=IT&geo=EA&coicop18=TOTAL&unit=I25/);
+    assert.equal(r.json.start, '1996-01');
+    assert.deepEqual(r.json.series.IT, [54.3, null, 54.6]);
+    assert.deepEqual(r.json.series.EA, [55.12, 55.37, 55.5]);
+    assert.match(r.headers.get('cache-control'), /max-age=43200/);
+    globalThis.fetch = async () => yjson({ error: 'x' }, 500);
+    assert.equal((await call('/api/eco/inflation')).status, 502);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});

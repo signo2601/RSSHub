@@ -9,7 +9,7 @@
 //   prices it downloaded in IndexedDB). Other sites are not handled: the app contacts none.
 // Bump VERSION whenever APP_FILES or the caching rules change. tests/offline.test.mjs checks that
 // APP_FILES lists exactly the files that index.html, the stylesheets and the JS imports load.
-const VERSION = 'gruzzolo-v2.3.0';
+const VERSION = 'gruzzolo-v2.4.0';
 const CACHE = `${VERSION}-app`;
 const CACHE_PREFIX = 'gruzzolo-';
 
@@ -52,6 +52,7 @@ const APP_FILES = [
   './js/info.js',
   './js/importer.js',
   './js/backupcrypt.js',
+  './js/inflation.js',
   './js/views/home.js',
   './js/views/market.js',
   './js/views/eco-common.js',

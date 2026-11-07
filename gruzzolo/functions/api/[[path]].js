@@ -20,6 +20,7 @@
 //   GET  /api/eco/crypto                          → { at, cols, rows: [[...], ...] }
 //   GET  /api/eco/logo?id=apple                   → SVG logo (image/svg+xml)
 //   GET  /api/eco/calendar                        → { at, from, to, cols, rows: [[id, date, country, title, ...]] }
+//   GET  /api/eco/inflation                       → { at, base, start, series: { IT: [...], EA: [...] } } (monthly HICP)
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
 const YAHOO_HEADERS = {
@@ -686,7 +687,48 @@ async function handleEcoCalendar(context, url) {
   });
 }
 
+// GET /api/eco/inflation → monthly consumer price index (HICP, Eurostat, 2025 = 100) of Italy and the
+// euro area since January 1996: the app deflates returns with it ("rendimento reale")
+const EUROSTAT_HICP = 'https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/prc_hicp_minr?geo=IT&geo=EA&coicop18=TOTAL&unit=I25&sinceTimePeriod=1996-01&format=JSON';
+const TTL_ECO_INFLATION = 12 * 3600;
+async function handleEcoInflation(context, url) {
+  const cacheUrl = `${url.origin}/api/eco/inflation`;
+  return withEdgeCache(context, cacheUrl, TTL_ECO_INFLATION, async () => {
+    let res;
+    try {
+      res = await fetch(EUROSTAT_HICP, { headers: { 'User-Agent': UA, Accept: 'application/json' }, signal: timeoutSignal(UPSTREAM_TIMEOUT_MS) });
+    } catch {
+      throw new HttpError(502, 'Eurostat non risponde in questo momento: riprova più tardi.');
+    }
+    let d = null;
+    try {
+      d = await res.json();
+    } catch {
+      d = null;
+    }
+    const dim = d && d.dimension;
+    const times = dim && dim.time && dim.time.category && dim.time.category.index;
+    const geos = dim && dim.geo && dim.geo.category && dim.geo.category.index;
+    if (!res.ok || !times || !geos || !d.value || !Array.isArray(d.size)) throw new HttpError(502, 'Eurostat ha risposto con un errore: riprova più tardi.');
+    // JSON-stat: value index = position in the flattened [freq, unit, coicop18, geo, time] array
+    const months = Object.entries(times).filter(([m]) => /^\d{4}-\d{2}$/.test(m)).sort((a, b) => a[1] - b[1]);
+    const nt = d.size[d.size.length - 1];
+    const series = {};
+    for (const geo of ['IT', 'EA']) {
+      const gi = geos[geo];
+      if (!Number.isInteger(gi)) continue;
+      series[geo] = months.map(([, ti]) => {
+        const v = d.value[String(gi * nt + ti)];
+        return finite(v) ? round(v) : null;
+      });
+    }
+    if (!months.length || !series.IT || !series.IT.some((v) => v !== null)) throw new HttpError(502, 'Eurostat non ha restituito i prezzi al consumo: riprova più tardi.');
+    return { data: { at: Date.now(), base: '2025=100', start: months[0][0], series } };
+  });
+}
+
 const ECO_ROUTES = {
+  inflation: handleEcoInflation,
   calendar: handleEcoCalendar,
   quotes: handleEcoQuotes,
   heatmap: handleEcoHeatmap,

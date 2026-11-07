@@ -1,9 +1,12 @@
 // Report sheet 1 "Riepilogo": headline KPIs of the period (balances, TWR, P&L, flows, IRR, risk)
 // and the per-account snapshot.
-import { D, cached } from '../state.js';
+import { S, D, cached } from '../state.js';
+import { MOUNTS } from '../registry.js';
+import { eco } from '../eco.js';
+import { inflationBetween, realReturn, annualize, addMonth } from '../inflation.js';
 import { positions, realizedEvents, cashAt } from '../engine.js';
 import { periodStats, businessDays, annualizedVolatility } from '../metrics.js';
-import { esc, icon, money, moneySigned, pct, pctSigned, num, fmtDate, addDays, tone, sum } from '../util.js';
+import { esc, icon, money, moneySigned, pct, pctSigned, num, fmtDate, fmtMonth, addDays, tone, sum } from '../util.js';
 import { infoBtn } from '../info.js';
 import { registerSheet, kpiCard, tableCard, badgeFor, accColor, benchShort } from './report.js';
 
@@ -46,10 +49,31 @@ function benchVol(ctx, st) {
   return annualizedVolatility(bd.ret);
 }
 
+// Italian inflation (HICP, Eurostat) for the real return; downloaded once a day, kept for offline use
+const INFLATION = { key: 'inflation', path: '/eco/inflation', maxAge: 24 * 3600e3 };
+MOUNTS.push(() => {
+  if (S.ui.tab !== 'report') return;
+  eco.init();
+  eco.load(INFLATION.key, INFLATION.path, { maxAge: INFLATION.maxAge });
+});
+
+// TWR of the period net of Italian inflation: { real, infl, realYear?, toMonth, partial } or null
+export function realOf(st, data) {
+  const infl = data ? inflationBetween(data, st.from, st.to, 'IT') : null;
+  if (!infl) return null;
+  const real = realReturn(st.twr, infl.rate);
+  if (real === null) return null;
+  const out = { real, infl: infl.rate, toMonth: infl.toMonth, partial: infl.partial };
+  if (st.days >= 365 && Number.isFinite(st.cagr)) out.realYear = realReturn(st.cagr, annualize(infl.rate, st.days));
+  return out;
+}
+
 function summaryData(ctx) {
-  const key = `rep-summary:${ctx.scopeKey}:${ctx.from}:${ctx.to}:${ctx.rf}:${ctx.bench.symbol}:${ctx.bench.status}`;
+  const infl = eco.entry(INFLATION.key);
+  const key = `rep-summary:${ctx.scopeKey}:${ctx.from}:${ctx.to}:${ctx.rf}:${ctx.bench.symbol}:${ctx.bench.status}:${infl ? infl.fetchedAt : 0}`;
   return cached(key, () => {
     const st = periodStats(ctx.series, ctx.from, ctx.to, { rf: ctx.rf, benchRet: ctx.bench.ret });
+    const real = st ? realOf(st, eco.data(INFLATION.key)) : null;
     const snap = snapshot(ctx.accIds, ctx.to);
     const realized = realizedIn(ctx.accIds, ctx.from, ctx.to);
     const bvol = benchVol(ctx, st);
@@ -63,7 +87,7 @@ function summaryData(ctx) {
       const ast = periodStats(s, ctx.from, ctx.to, { rf: ctx.rf, benchRet: ctx.bench.ret });
       accounts.push({ a, st: ast, snap: snapshot([a.id], ctx.to), active: s.start <= ctx.to });
     }
-    return { st, snap, realized, bvol, accounts };
+    return { st, real, snap, realized, bvol, accounts };
   });
 }
 
@@ -75,6 +99,32 @@ function benchSub(ctx, st) {
   if (b.status === 'failed' || b.status === 'none') return 'Benchmark non disponibile';
   if (st.benchTwr === null) return `Nessun dato di ${esc(benchShort(b))} nel periodo`;
   return `${esc(benchShort(b))} ${pctSigned(st.benchTwr)}${st.benchPartial ? ' (dati parziali)' : ''}`;
+}
+
+function realCard(data) {
+  const { st, real } = data;
+  if (!real) {
+    const fail = eco.failure(INFLATION.key);
+    return kpiCard({
+      label: 'Rendimento reale',
+      value: '—',
+      valueClass: 'muted',
+      sub: fail ? 'Dati sull\'inflazione non disponibili: servono internet e qualche secondo' : eco.isLoading(INFLATION.key) ? 'Scarico i dati sull\'inflazione…' : 'Al netto dell\'inflazione italiana',
+      info: 'rendimentoReale',
+    });
+  }
+  // Prices are published with about a month of delay: say up to when only when the gap is larger
+  const stale = real.partial && addMonth(real.toMonth, 2) < st.to.slice(0, 7);
+  const upTo = stale ? ` · prezzi fino a ${fmtMonth(real.toMonth, true)}` : '';
+  const year = real.realYear !== undefined && real.realYear !== null ? ` · ${pctSigned(real.realYear)} reale l'anno` : '';
+  return kpiCard({
+    label: 'Rendimento reale',
+    value: pctSigned(real.real),
+    valueClass: tone(real.real, 0.00005),
+    badge: badgeFor(real.real),
+    sub: `Inflazione Italia ${pctSigned(real.infl)}${year}${upTo}`,
+    info: 'rendimentoReale',
+  });
 }
 
 function kpis(ctx, data) {
@@ -100,6 +150,7 @@ function kpis(ctx, data) {
     info: 'twr',
     cls: 'hero',
   }));
+  cards.push(realCard(data));
   cards.push(kpiCard({
     label: 'Saldo iniziale',
     value: money(st.startValue),

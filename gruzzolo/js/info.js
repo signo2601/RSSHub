@@ -21,6 +21,11 @@ export const INFO = {
     text: 'Il TWR (rendimento ponderato nel tempo) misura quanto hanno reso i tuoi investimenti, senza l\'effetto di quando hai versato o prelevato soldi.\n\nÈ il numero giusto per confrontarti con un indice o con un fondo: +10% vuol dire che 100 € investiti all\'inizio del periodo sarebbero diventati 110 €.',
     formula: 'TWR = (1 + r₁) × (1 + r₂) × … × (1 + rₙ) − 1, dove r è il rendimento di ogni giorno al netto di versamenti e prelievi',
   },
+  rendimentoReale: {
+    title: 'Rendimento reale',
+    text: 'Quanto è cresciuto davvero il potere d\'acquisto dei tuoi soldi: il rendimento TWR del periodo al netto dell\'inflazione italiana (indice dei prezzi al consumo armonizzato, Eurostat).\n\nSe hai guadagnato il 5% ma i prezzi sono saliti del 3%, con i tuoi soldi compri circa il 2% in più. Se il rendimento reale è negativo, il portafoglio è cresciuto meno dei prezzi.',
+    formula: 'Rendimento reale = (1 + TWR) ÷ (1 + inflazione del periodo) − 1. L\'inflazione del periodo va dall\'indice del mese prima dell\'inizio a quello del mese finale (o all\'ultimo pubblicato).',
+  },
   liquidita: {
     title: 'Liquidità',
     text: 'I contanti fermi sui conti del broker (solo per i conti in cui registri depositi e prelievi) più gli strumenti di tipo «liquidità», come un conto deposito.\n\nRende poco o nulla, ma riduce le oscillazioni ed è pronta per i prossimi acquisti.',

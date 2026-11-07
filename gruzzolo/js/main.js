@@ -920,7 +920,8 @@ function listen() {
     scheduleRender();
   });
   eco.subscribe(() => {
-    if (S.ui.tab === 'market') scheduleRender();
+    // Mercati pages, and the inflation behind the real return in the Report
+    if (S.ui.tab === 'market' || S.ui.tab === 'report') scheduleRender();
   });
   setInterval(() => {
     if (!S.loaded || document.visibilityState !== 'visible') return;
