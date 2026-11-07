@@ -590,3 +590,35 @@ test('live: eco quotes for an index, a currency, a commodity, a bond yield and c
   assert.equal(c.status, 200);
   assert.equal(c.json.rows[0][1], 'BTC');
 });
+
+test('eco calendar: medium and high releases of the main economies, sorted by time', async () => {
+  try {
+    const seen = [];
+    globalThis.fetch = async (url, init = {}) => {
+      seen.push({ url: String(url), headers: init.headers });
+      return yjson({
+        status: 'ok',
+        result: [
+          { id: 2, date: '2026-11-10T13:30:00.000Z', country: 'US', title: 'Inflation Rate YoY', period: 'Oct. 2026', actual: null, forecast: 3.9, previous: 3.7, unit: '%', importance: 1, comment: 'long text' },
+          { id: 1, date: '2026-11-09T07:00:00.000Z', country: 'DE', title: 'Balance of Trade', period: 'Sep. 2026', actual: 19.61234, forecast: 19.6, previous: 19.5, unit: '€', scale: 'B', importance: 0 },
+          { id: 3, date: '2026-11-09T08:00:00.000Z', country: 'US', title: 'USDA Pork', importance: -1 },
+          { id: 4, date: 'not a date', country: 'US', title: 'Broken', importance: 1 },
+          { id: 5, date: '2026-11-09T08:00:00.000Z', country: 'USA', title: 'Bad country', importance: 1 },
+        ],
+      });
+    };
+    const r = await call('/api/eco/calendar');
+    assert.equal(r.status, 200);
+    assert.match(seen[0].url, /^https:\/\/economic-calendar\.tradingview\.com\/events\?from=.*&to=.*&countries=US,EU,IT,DE,FR,ES,GB,CH,JP,CN$/);
+    assert.equal(seen[0].headers.Origin, 'https://www.tradingview.com');
+    assert.deepEqual(r.json.rows, [
+      ['1', '2026-11-09T07:00:00.000Z', 'DE', 'Balance of Trade', 'Sep. 2026', 19.6123, 19.6, 19.5, '€', 'B', 0],
+      ['2', '2026-11-10T13:30:00.000Z', 'US', 'Inflation Rate YoY', 'Oct. 2026', null, 3.9, 3.7, '%', '', 1],
+    ]);
+    assert.match(r.headers.get('cache-control'), /max-age=600/);
+    globalThis.fetch = async () => yjson({ status: 'ok', result: [] });
+    assert.equal((await call('/api/eco/calendar')).status, 502);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});

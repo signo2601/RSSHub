@@ -31,7 +31,8 @@
 /* ---------- Page frame ---------- */
 .eco-page { gap: 16px; }
 .eco-body { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
-.eco-tabs button { padding: 0 6px; font-size: 13.5px; }
+/* Five pages: each button as wide as its label, the free space shared (fits a 375 px iPhone) */
+.eco-tabs button { flex: 1 1 auto; padding: 0 6px; font-size: 13px; }
 .eco-page .chips { padding: 4px 1px; margin: -4px 0; }
 .eco-page .chip, .eco-page .link-btn, .eco-page .btn.sm { position: relative; }
 .eco-page .chip::after, .eco-page .link-btn::after, .eco-page .btn.sm::after { content: ""; position: absolute; inset: -4px 0; }
@@ -202,6 +203,22 @@
 .eco-heat4 { background: color-mix(in srgb, var(--yc-heat) 34%, transparent); }
 .eco-heat5 { background: color-mix(in srgb, var(--yc-heat) 45%, transparent); }
 .eco-heat6 { background: color-mix(in srgb, var(--yc-heat) 58%, transparent); font-weight: 800; }
+
+/* ---------- Agenda (economic calendar) ---------- */
+.cal-seg { display: flex; width: 100%; }
+.cal-seg button { flex: 1 1 0; min-height: 34px; font-size: 13px; }
+.cal-row { gap: 9px; }
+.cal-time { flex: 0 0 38px; font-size: 12.5px; font-weight: 800; color: var(--ink-2); text-align: left; white-space: nowrap; }
+.cal-row .flag { width: 24px; font-size: 20px; }
+.cal-row .row-title { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.25; }
+.cal-hi { color: var(--accent-line); font-size: 9px; vertical-align: 2px; }
+.cal-exp { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.cal-fc { color: var(--ink-2); }
+.cal-vs { font-size: 11.5px; font-weight: 700; white-space: nowrap; }
+.cal-vs.up { color: var(--up); } .cal-vs.down { color: var(--down); } .cal-vs.flat { color: var(--muted); }
+.cal-day { margin-top: 10px; }
+.cal-explain { margin: 12px 0 0; padding: 12px 14px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); font-size: 14px; line-height: 1.45; color: var(--ink-2); }
+.cal-tag-hi { background: var(--accent-soft); color: var(--accent-line); }
 
 /* ---------- Macro ---------- */
 .mc-head { display: flex; flex-direction: column; gap: 2px; margin: 0 4px -6px; }

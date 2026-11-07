@@ -366,3 +366,60 @@ test('curveChart: lines bridge missing points, tooltip data registered as a line
   assert.ok(html.includes('stroke-dasharray'));
   assert.ok(curveChart('t-empty', { cats: [], series: [] }).includes('Nessun dato'));
 });
+
+/* ---------- Agenda (economic calendar) ---------- */
+import { renderCalendar, _test as cal } from '../js/views/eco-calendar.js';
+
+test('calendar: Italian titles, periods and values with units', () => {
+  assert.equal(cal.titleIt('Inflation Rate YoY'), 'Inflazione annua');
+  assert.equal(cal.titleIt('GDP Growth Rate QoQ Prel'), 'PIL trimestrale · stima preliminare');
+  assert.equal(cal.titleIt('HCOB Manufacturing PMI'), 'PMI manifatturiero');
+  assert.equal(cal.titleIt('Unemployment Rate s.a'), 'Tasso di disoccupazione (destag.)');
+  assert.equal(cal.titleIt('Loan Prime Rate 5Y'), 'Tasso di riferimento sui prestiti a 5 anni');
+  assert.equal(cal.titleIt('USDA Pork Net Export Sales'), 'USDA Pork Net Export Sales', 'unknown titles stay as they are');
+  assert.equal(cal.periodIt('Oct. 2026'), 'ott 2026');
+  assert.equal(cal.periodIt('Q3 2026'), '3° trim. 2026');
+  assert.equal(cal.valueText(4.1, '%', ''), '4,1%');
+  assert.equal(cal.valueText(3.75, '%', ''), '3,75%');
+  assert.equal(cal.valueText(165, '', 'K'), '165 mila');
+  assert.equal(cal.valueText(19.6, '€', 'B'), '19,6 mld €');
+  assert.equal(cal.valueText(null, '%', ''), '—');
+  assert.ok(cal.explain('Inflation Rate YoY').includes('prezzi'));
+  assert.equal(cal.isKey(['1', '2026-11-10T13:30:00.000Z', 'US', 'Inflation Rate YoY', '', null, 3.9, 3.7, '%', '', 0]), true);
+  assert.equal(cal.isKey(['2', '2026-11-10T13:30:00.000Z', 'US', 'MBA 30-Year Mortgage Rate', '', null, null, 6, '%', '', 0]), false);
+  assert.equal(cal.isKey(['3', '2026-11-10T13:30:00.000Z', 'US', 'Anything', '', null, null, 6, '%', '', 1]), true, 'high importance always counts');
+});
+
+test('calendar page: latest results against expectations, then the coming days', async () => {
+  const now = Date.now();
+  const iso = (h) => new Date(now + h * 3600e3).toISOString();
+  const CAL = {
+    at: now,
+    cols: ['id', 'date', 'country', 'title', 'period', 'actual', 'forecast', 'previous', 'unit', 'scale', 'high'],
+    rows: [
+      ['a', iso(-30), 'US', 'Non Farm Payrolls', 'Oct. 2026', 165, 65, 60, '', 'K', 1],
+      ['b', iso(-26), 'US', 'Unemployment Rate', 'Oct. 2026', 4.1, 4.2, 4.2, '%', '', 1],
+      ['c', iso(30), 'IT', 'Inflation Rate YoY', 'Oct. 2026', null, 5.5, 5.4, '%', '', 0],
+      ['d', iso(40), 'US', 'MBA 30-Year Mortgage Rate', 'Nov. 2026', null, null, 6.1, '%', '', 0],
+    ],
+  };
+  mockApi({ '/api/eco/calendar': CAL });
+  try {
+    await eco.load('calendar', '/eco/calendar', { force: true });
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+  S.ui.eco = null;
+  const p = prefs();
+  const html = renderCalendar();
+  clean(html);
+  assert.ok(html.includes('Nuovi occupati (non agricoli)') && html.includes('165 mila') && html.includes('sopra le attese'));
+  assert.ok(html.includes('sotto le attese'), 'unemployment below the forecast');
+  assert.ok(html.includes('Inflazione annua') && html.includes('5,5%'), 'an upcoming Italian release with its forecast');
+  assert.ok(!html.includes('MBA'), 'niche releases only with «Tutti»');
+  p.calAll = true;
+  assert.ok(renderCalendar().includes('MBA'));
+  p.calRegion = 'it';
+  const it = renderCalendar();
+  assert.ok(it.includes('Inflazione annua') && !it.includes('Nuovi occupati'));
+});

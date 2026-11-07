@@ -19,6 +19,7 @@
 //   GET  /api/eco/macro                           → { at, cols, data: { [indicator]: { [country]: [...] } } }
 //   GET  /api/eco/crypto                          → { at, cols, rows: [[...], ...] }
 //   GET  /api/eco/logo?id=apple                   → SVG logo (image/svg+xml)
+//   GET  /api/eco/calendar                        → { at, from, to, cols, rows: [[id, date, country, title, ...]] }
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
 const YAHOO_HEADERS = {
@@ -642,7 +643,51 @@ async function handleEcoLogo(context, url) {
   return out;
 }
 
+// GET /api/eco/calendar → economic calendar of the main economies, from 3 days ago to 15 days ahead:
+// medium and high importance releases (low ones are mostly auctions and niche statistics)
+const TV_CALENDAR = 'https://economic-calendar.tradingview.com/events';
+const CALENDAR_COUNTRIES = ['US', 'EU', 'IT', 'DE', 'FR', 'ES', 'GB', 'CH', 'JP', 'CN'];
+const TTL_ECO_CALENDAR = 600;
+const num2 = (v) => (finite(v) ? Math.round(v * 1e4) / 1e4 : null);
+async function handleEcoCalendar(context, url) {
+  const now = new Date();
+  const day = now.toISOString().slice(0, 10);
+  // One answer per day (the window moves at midnight UTC), refreshed every 10 minutes for new results
+  const cacheUrl = `${url.origin}/api/eco/calendar?d=${day}`;
+  return withEdgeCache(context, cacheUrl, TTL_ECO_CALENDAR, async () => {
+    const at = (days) => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + days)).toISOString();
+    const from = at(-3);
+    const to = at(15);
+    let res;
+    try {
+      res = await fetch(`${TV_CALENDAR}?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&countries=${CALENDAR_COUNTRIES.join(',')}`, { headers: TV_HEADERS, signal: timeoutSignal(UPSTREAM_TIMEOUT_MS) });
+    } catch {
+      throw new HttpError(502, 'Il calendario economico non risponde in questo momento: riprova più tardi.');
+    }
+    if (res.status === 429) throw new HttpError(503, 'TradingView sta limitando le richieste: riprova tra qualche minuto.');
+    let body = null;
+    try {
+      body = await res.json();
+    } catch {
+      body = null;
+    }
+    const list = body && Array.isArray(body.result) ? body.result : null;
+    if (!res.ok || !list) throw new HttpError(502, 'Il calendario economico ha risposto con un errore: riprova più tardi.');
+    const rows = [];
+    for (const e of list) {
+      if (!e || !(e.importance >= 0) || typeof e.date !== 'string' || !/^[A-Z]{2}$/.test(e.country || '') || !e.title) continue;
+      const t = Date.parse(e.date);
+      if (!Number.isFinite(t)) continue;
+      rows.push([str(String(e.id ?? ''), 24), new Date(t).toISOString(), e.country, str(e.title, 100), str(e.period || '', 24), num2(e.actual), num2(e.forecast), num2(e.previous), str(e.unit || '', 8), str(e.scale || '', 4), e.importance >= 1 ? 1 : 0]);
+    }
+    rows.sort((a, b) => (a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0));
+    if (!rows.length) throw new HttpError(502, 'Il calendario economico è vuoto in questo momento: riprova più tardi.');
+    return { data: { at: Date.now(), from, to, cols: ['id', 'date', 'country', 'title', 'period', 'actual', 'forecast', 'previous', 'unit', 'scale', 'high'], rows } };
+  });
+}
+
 const ECO_ROUTES = {
+  calendar: handleEcoCalendar,
   quotes: handleEcoQuotes,
   heatmap: handleEcoHeatmap,
   yields: handleEcoYields,

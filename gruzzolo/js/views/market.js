@@ -3,6 +3,7 @@
 //   Heatmap    — the stocks of an index by size and performance, grouped by sector
 //   Curve      — government yield curves and a table of every country and maturity
 //   Macro      — world map and ranking of inflation, central bank rates, GDP, unemployment, debt
+//   Agenda     — economic calendar: latest results against expectations, releases of the coming days
 // Public data from TradingView through the app's own /api/eco/* routes (js/eco.js): the last
 // answers stay on the phone, so the pages also open offline.
 import { S } from '../state.js';
@@ -15,12 +16,14 @@ import * as overview from './eco-overview.js';
 import * as heatmap from './eco-heatmap.js';
 import * as curves from './eco-curves.js';
 import * as macro from './eco-macro.js';
+import * as calendar from './eco-calendar.js';
 
 const PAGES = {
   overview: { label: 'Panoramica', render: overview.renderOverview, wants: overview.wants },
   heatmap: { label: 'Heatmap', render: heatmap.renderHeatmap, wants: heatmap.wants },
   curves: { label: 'Curve', render: curves.renderCurves, wants: curves.wants },
   macro: { label: 'Macro', render: macro.renderMacro, wants: macro.wants },
+  calendar: { label: 'Agenda', render: calendar.renderCalendar, wants: calendar.wants },
 };
 const RECHECK_MS = 30e3;
 

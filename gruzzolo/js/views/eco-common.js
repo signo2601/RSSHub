@@ -17,6 +17,8 @@ export const DEFAULTS = {
   mcInd: 'IRYY',
   mcRegion: 'g20',
   mcSel: null,
+  calRegion: 'all',
+  calAll: false,
 };
 
 export function prefs() {
