@@ -51,6 +51,7 @@ const APP_FILES = [
   './js/costs.js',
   './js/info.js',
   './js/importer.js',
+  './js/backupcrypt.js',
   './js/views/home.js',
   './js/views/market.js',
   './js/views/eco-common.js',

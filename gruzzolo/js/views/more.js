@@ -15,6 +15,7 @@ import { PRESETS, parseCsv, detectPreset, guessMapping, buildTxns } from '../imp
 import { CATALOG, findInCatalog } from '../catalog.js';
 import { fiscalBackpack } from '../costs.js';
 import { infoBtn } from '../info.js';
+import { encryptBackup, decryptBackup, isEncryptedBackup, MIN_PASSWORD } from '../backupcrypt.js';
 import { avatar, demoBanner, txAmount, txFx } from './home.js';
 import { tickerOf } from './sheets.js';
 import { benchShort } from './report.js';
@@ -824,8 +825,12 @@ function dataGroup() {
       sub: esc(dev ? `Si apre Condividi: scegli «Salva su File» → «Sul mio ${dev}»` : 'Tutti i tuoi dati in un file .json da conservare'),
     }),
     navRow({
+      act: 'more-backup-lock', ico: 'lock', title: 'Esporta backup protetto',
+      sub: 'Con password: puoi tenerlo su iCloud o mandarlo al computer',
+    }),
+    navRow({
       act: 'more-backup-import', ico: 'upload', title: 'Importa backup', chev: false,
-      sub: esc(dev ? 'Scegli il file .json nell\'app File: sostituisce i dati attuali' : 'Da un file .json di Gruzzolo: sostituisce i dati attuali'),
+      sub: esc(dev ? 'Scegli il file .json nell\'app File (anche protetto): sostituisce i dati attuali' : 'Da un file .json di Gruzzolo, anche protetto: sostituisce i dati attuali'),
     }),
     navRow({ act: 'more-csv-export', ico: 'file', title: 'Esporta transazioni', sub: 'File .csv per Numbers, Excel o Fogli Google', chev: false }),
     navRow({ act: 'prices', ico: 'edit', title: 'Prezzi manuali', sub: 'Per i titoli senza quotazione automatica' }),
@@ -833,7 +838,7 @@ function dataGroup() {
   if (demo) rows.push(navRow({ act: 'demo-remove', ico: 'close', title: 'Rimuovi i dati di esempio', sub: 'Tiene solo quello che hai inserito tu', chev: false }));
   else if (!realTx) rows.push(navRow({ act: 'demo-load', ico: 'chart', title: 'Carica un esempio', sub: 'Un portafoglio dimostrativo con prezzi simulati', chev: false }));
   rows.push(navRow({ act: 'more-wipe', ico: 'trash', tone: 'danger', title: '<span class="down">Cancella tutti i dati</span>', sub: 'Conti, operazioni, titoli e prezzi', chev: false }));
-  const foot = `Il backup è un file con tutti i tuoi dati: conservane sempre una copia recente. Con «Importa backup» li ripristini, anche su un nuovo ${dev || 'dispositivo'}.`;
+  const foot = `Il backup è un file con tutti i tuoi dati: conservane sempre una copia recente. Con «Importa backup» li ripristini, anche su un nuovo ${dev || 'dispositivo'} o sul computer. Il backup protetto è cifrato sul ${dev || 'dispositivo'}: senza la password nessuno può leggerlo.`;
   return group('data', 'shield', 'Backup e dati', `<div class="list">${rows.join('')}</div>`, esc(foot));
 }
 
@@ -1719,6 +1724,12 @@ function askImportBackup(text) {
     app.toast('Il file non è un backup valido di Gruzzolo (non si riesce a leggere).');
     return;
   }
+  // A protected backup: ask the password, then come back here with the decrypted text
+  if (isEncryptedBackup(raw)) {
+    unlock.file = raw;
+    app.pushSheet('more-backup-unlock');
+    return;
+  }
   const chk = checkBackup(raw);
   if (!chk.ok) {
     app.toast(chk.error);
@@ -1746,6 +1757,121 @@ function askImportBackup(text) {
     },
   });
 }
+
+/* ---------- Protected backups (password) ---------- */
+// Export: the form encrypts (a second or so on the iPhone), then «Salva il file» opens the share sheet
+// with a fresh tap (Safari wants the share sheet to start from a tap, not after a long wait).
+const lockState = { file: null, name: '' };
+const unlock = { file: null };
+
+SHEETS['more-backup-lock'] = () => {
+  if (lockState.file) {
+    return {
+      title: 'Backup protetto pronto',
+      body: `<div class="more-lead-block">
+        <div class="banner info more-banner">${icon('lock')}<p><b>File cifrato con la tua password.</b> Salvalo dove vuoi (iCloud Drive, email, chiavetta): senza la password nessuno può leggerlo.</p></div>
+        <p class="hint">Per aprirlo sul computer o su un altro iPhone: Gruzzolo → Altro → <b>Importa backup</b>, scegli il file e scrivi la password.</p>
+        <div class="sheet-actions"><button class="btn primary" type="button" data-act="more-backup-lock-save">${icon('download')}Salva il file</button></div>
+      </div>`,
+    };
+  }
+  return {
+    title: 'Backup protetto',
+    body: `<form class="form more-form" data-form="more-backup-lock" novalidate autocomplete="off">
+      <p class="hint more-lead">Scegli una password: il backup viene cifrato qui sul telefono prima di uscire. <b>Se la dimentichi il file non si può più aprire</b>: nessuno può recuperarla, nemmeno noi.</p>
+      <div class="field"><label for="mbl-pw">Password</label>
+        <input id="mbl-pw" name="pw" type="password" autocomplete="new-password" autocapitalize="off" autocorrect="off" spellcheck="false" minlength="${MIN_PASSWORD}" placeholder="Almeno ${MIN_PASSWORD} caratteri"></div>
+      <div class="field"><label for="mbl-pw2">Ripeti la password</label>
+        <input id="mbl-pw2" name="pw2" type="password" autocomplete="new-password" autocapitalize="off" autocorrect="off" spellcheck="false" minlength="${MIN_PASSWORD}"></div>
+      <p class="hint">Consiglio: una frase di più parole, facile da ricordare per te (es. «gatto-rosso-sale-sul-tetto»). Tienila nel portachiavi di iCloud o in un posto sicuro.</p>
+      <p class="form-error" data-error role="alert" hidden></p>
+      <div class="sheet-actions more-sticky"><button class="btn primary" type="submit">${icon('lock')}Crea il backup protetto</button></div>
+    </form>`,
+  };
+};
+FORM_SHEETS.add('more-backup-lock');
+
+FORMS['more-backup-lock'] = async (form) => {
+  clearErrors(form);
+  const showErr = formError(form);
+  const pw = form.elements.pw.value;
+  if (pw.length < MIN_PASSWORD) return showErr(`La password deve avere almeno ${MIN_PASSWORD} caratteri.`, form.elements.pw);
+  if (pw !== form.elements.pw2.value) return showErr('Le due password non sono uguali.', form.elements.pw2);
+  const btn = form.querySelector('[type="submit"]');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Cifro il backup…';
+  }
+  blurActive();
+  try {
+    lockState.file = await encryptBackup(JSON.stringify(D()), pw);
+    lockState.name = `gruzzolo-backup-protetto-${todayISO()}.json`;
+    app.renderSheet();
+  } catch (e) {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Crea il backup protetto';
+    }
+    showErr(e && e.message ? e.message : 'Non sono riuscito a cifrare il backup.');
+  }
+};
+
+ACTIONS['more-backup-lock'] = () => {
+  lockState.file = null;
+  lockState.name = '';
+  app.pushSheet('more-backup-lock');
+};
+ACTIONS['more-backup-lock-save'] = async () => {
+  if (!lockState.file) return;
+  const ok = await saveFile(lockState.name, lockState.file, 'application/json');
+  if (!ok) return;
+  markBackup();
+  lockState.file = null;
+  app.closeSheets();
+  app.render();
+  app.toast('Backup protetto salvato: per aprirlo serve la password');
+};
+
+SHEETS['more-backup-unlock'] = () => ({
+  title: 'Backup protetto',
+  body: `<form class="form more-form" data-form="more-backup-unlock" novalidate autocomplete="off">
+    <p class="hint more-lead">Questo backup è cifrato: scrivi la password che hai scelto quando l'hai creato.</p>
+    <div class="field"><label for="mbu-pw">Password del backup</label>
+      <input id="mbu-pw" name="pw" type="password" autocomplete="current-password" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
+    <p class="form-error" data-error role="alert" hidden></p>
+    <div class="sheet-actions more-sticky"><button class="btn primary" type="submit">${icon('lock')}Apri il backup</button></div>
+  </form>`,
+});
+FORM_SHEETS.add('more-backup-unlock');
+
+FORMS['more-backup-unlock'] = async (form) => {
+  clearErrors(form);
+  const showErr = formError(form);
+  if (!unlock.file) {
+    app.popSheet();
+    return;
+  }
+  const pw = form.elements.pw.value;
+  if (!pw) return showErr('Scrivi la password del backup.', form.elements.pw);
+  const btn = form.querySelector('[type="submit"]');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Apro il backup…';
+  }
+  blurActive();
+  try {
+    const text = await decryptBackup(unlock.file, pw);
+    unlock.file = null;
+    app.popSheet();
+    askImportBackup(text);
+  } catch (e) {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Apri il backup';
+    }
+    showErr(e && e.message ? e.message : 'Non riesco ad aprire il backup.', e && e.code === 'password' ? form.elements.pw : null);
+  }
+};
 
 INPUTS['more-import-file'] = async (el, ev) => {
   if (ev && ev.type !== 'change') return;
