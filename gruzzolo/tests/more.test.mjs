@@ -337,12 +337,16 @@ test('newAccName: a free name for each broker', () => {
 });
 
 /* ---------- Page and sheets HTML ---------- */
-test('renderMore: eight groups, names escaped, demo rows depend on the data', () => {
+test('renderMore: nine groups, names escaped, demo rows depend on the data', () => {
   const d = realData();
   d.accounts[0].name = '<img src=x onerror=alert(1)>';
   useData(d);
   const html = renderMore();
-  assert.equal((html.match(/class="more-group"/g) || []).length, 8);
+  assert.equal((html.match(/class="more-group"/g) || []).length, 9);
+  assert.match(html, /id="mg-plans"/, 'savings plans right after the accounts');
+  assert.ok(html.indexOf('id="mg-plans"') > html.indexOf('id="mg-accounts"') && html.indexOf('id="mg-plans"') < html.indexOf('id="mg-import"'));
+  assert.match(html, /data-act="plan-new"/);
+  assert.doesNotMatch(html, /data-act="plan-open"/, 'no plans yet');
   assert.ok(!html.includes('<img src=x'), 'account names are escaped');
   assert.ok(html.includes('&lt;img src=x'));
   assert.match(html, /data-act="demo-load"/, 'empty portfolio: offer the example');
@@ -352,6 +356,7 @@ test('renderMore: eight groups, names escaped, demo rows depend on the data', ()
   const demo = renderMore();
   assert.match(demo, /data-act="demo-remove"/);
   assert.doesNotMatch(demo, /data-act="demo-load"/);
+  assert.equal((demo.match(/data-act="plan-open"/g) || []).length, 2, 'the two plans of the example');
   assert.match(demo, /more-switch" type="button" role="switch" aria-checked="false"/);
 });
 
@@ -500,7 +505,7 @@ test('privacy group: data only on this device, storage status (unknown, granted,
   useData(realData());
   _test.resetStorage();
   let html = renderMore();
-  assert.equal((html.match(/class="more-group"/g) || []).length, 8);
+  assert.equal((html.match(/class="more-group"/g) || []).length, 9);
   let g = groupHtml(html, 'privacy');
   assert.match(g, /Dove sono i tuoi dati/);
   assert.match(g, /I tuoi dati restano solo su questo dispositivo/);

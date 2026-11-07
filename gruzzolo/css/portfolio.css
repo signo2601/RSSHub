@@ -351,3 +351,24 @@
   .price-input input { width: 96px; }
   .acc-strip { grid-auto-columns: minmax(148px, 1fr); }
 }
+
+/* ---------- Savings plans (views/plans.js) ---------- */
+.plan-hero {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  margin: 0 0 12px; padding: 14px 15px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface);
+}
+.plan-amount { font-family: var(--font-display); font-size: 26px; font-weight: 700; line-height: 1.15; letter-spacing: -.02em; }
+.plan-hero-sub { margin: 4px 0 0; font-size: 13.5px; color: var(--muted); }
+.pf-sheet .plan-note { margin: 0 0 12px; }
+.plan-stats { margin: 0 0 12px; }
+.plan-totals { margin: 0 0 6px; }
+.pf-sheet .plan-link { margin: 12px 0 0; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.plan-ico {
+  display: grid; place-items: center; flex-shrink: 0; width: 40px; height: 40px; border-radius: 12px;
+  background: var(--accent-soft); color: var(--accent-line);
+}
+.plan-ico .ico { width: 19px; height: 19px; }
+.plan-form .plan-lead { margin: 0 0 2px; }
+.plan-form .plan-when { margin: -6px 2px 0; color: var(--ink-2); }
+.plan-actions > .btn { flex: 1 1 0; min-width: 0; padding: 0 8px; white-space: nowrap; }
+.more-row.plan-paused .row-value { color: var(--muted); }

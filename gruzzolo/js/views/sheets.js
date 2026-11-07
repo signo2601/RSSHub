@@ -17,6 +17,7 @@ import {
   fmtDate, fmtTime, tone, todayISO, addDays, addMonths, newId, debounce, isDesktop, iso, compact,
 } from '../util.js';
 import { avatar, pctPill, txRow, unitFor, txLabel, txAmount, txFx, feeKindLabel, taxKindLabel } from './home.js';
+import { planById, plansOf, planSummary } from '../plans.js';
 
 /* ======================================================================
    Shared helpers (also used by market.js)
@@ -141,6 +142,15 @@ export function priceChartBlock({ id, points, range, ccy = 'EUR', act, w, h = 18
 
 const stat = (label, value, cls = '') => `<div class="stat"><span>${label}</span><b class="${cls}">${value}</b></div>`;
 
+// Row that opens a savings plan (transaction and asset details)
+function planLink(p) {
+  return `<button class="row plan-link" type="button" data-act="plan-open" data-id="${esc(p.id)}">
+    <span class="plan-ico" aria-hidden="true">${icon('repeat')}</span>
+    <span class="row-main"><span class="row-title">PAC · ${esc(planSummary(p))}</span><span class="row-sub">${esc(accName(p.acc))}${p.paused ? ' · in pausa' : ''}</span></span>
+    <span class="chev-wrap">${icon('chevRight')}</span>
+  </button>`;
+}
+
 /* ======================================================================
    Asset detail
    ====================================================================== */
@@ -246,7 +256,9 @@ SHEETS.asset = (args = {}) => {
     <button class="btn primary" type="button" data-act="add-tx" data-aid="${esc(aid)}" data-type="buy">${icon('plus')}Compra</button>
     ${held ? `<button class="btn" type="button" data-act="add-tx" data-aid="${esc(aid)}" data-type="sell">${icon('upArrow')}Vendi</button>` : ''}
     ${held ? `<button class="btn" type="button" data-act="add-tx" data-aid="${esc(aid)}" data-type="div">${icon('euro')}${incomeWord}</button>` : ''}
-  </div>`;
+    ${cash ? '' : `<button class="btn" type="button" data-act="plan-new" data-aid="${esc(aid)}">${icon('repeat')}PAC</button>`}
+  </div>
+  ${plansOf(aid).map(planLink).join('')}`;
 
   let manual = '';
   if (!cash) {
@@ -448,6 +460,9 @@ FORMS['pf-asset'] = (form) => {
    Asset search (combobox) shared by the transaction form and the asset editor
    ====================================================================== */
 const combos = {}; // name → { items, q, gen }
+// Other forms reuse the search: COMBO_HOOKS[name] = { results: '#box', own: true (list own assets), choose(form, item) }
+export const COMBO_HOOKS = {};
+const listsOwn = (name) => name === 'tx' || Boolean(COMBO_HOOKS[name] && COMBO_HOOKS[name].own);
 
 function fromAsset(a) {
   return { kind: 'asset', aid: a.id, symbol: a.symbol || '', name: a.name, exchange: a.exchange || '', type: a.type, currency: a.currency || 'EUR', ccyOk: true };
@@ -482,7 +497,7 @@ export function pickFromSymbol(symbol, extra = {}) {
   };
 }
 
-const assetBySymbol = (symbol) => (symbol ? Object.values(D().assets).find((a) => a.symbol === symbol) || null : null);
+export const assetBySymbol = (symbol) => (symbol ? Object.values(D().assets).find((a) => a.symbol === symbol) || null : null);
 
 function localAssetMatches(q) {
   const k = q.trim().toLowerCase();
@@ -503,14 +518,19 @@ function comboItems(name, q, live = []) {
     if (it.symbol) seen.add('s:' + it.symbol);
     items.push(it);
   };
-  if (name === 'tx') for (const a of localAssetMatches(q).slice(0, q ? 6 : 5)) add(fromAsset(a));
+  const ownToo = listsOwn(name);
+  if (ownToo) {
+    let own = localAssetMatches(q).filter((x) => name === 'tx' || x.type !== 'cash');
+    if (COMBO_HOOKS[name] && COMBO_HOOKS[name].order) own = COMBO_HOOKS[name].order(own);
+    for (const a of own.slice(0, q ? 6 : 5)) add(fromAsset(a));
+  }
   if (q.trim()) {
     for (const c of searchCatalog(q, 8)) {
-      const own = name === 'tx' ? assetBySymbol(c.symbol) : null;
+      const own = ownToo ? assetBySymbol(c.symbol) : null;
       add(own ? fromAsset(own) : fromCatalog(c));
     }
     for (const r of live.slice(0, 12)) {
-      const own = name === 'tx' ? assetBySymbol(r.symbol) : null;
+      const own = ownToo ? assetBySymbol(r.symbol) : null;
       add(own ? fromAsset(own) : fromSearch(r));
     }
   }
@@ -531,7 +551,8 @@ function itemRow(name, it, i) {
 
 function renderCombo(name, root, { pending = false } = {}) {
   const st = combos[name];
-  const box = root && root.querySelector(name === 'tx' ? '#tx-results' : '#af-results');
+  const sel = name === 'tx' ? '#tx-results' : name === 'af' ? '#af-results' : (COMBO_HOOKS[name] || {}).results;
+  const box = root && sel && root.querySelector(sel);
   if (!box || !st) return;
   const q = st.q.trim();
   let html = st.items.map((it, i) => itemRow(name, it, i)).join('');
@@ -544,7 +565,7 @@ function renderCombo(name, root, { pending = false } = {}) {
       <span class="tx-ico">${icon('edit')}</span>
       <span class="row-main"><span class="row-title">Titolo non quotato: inseriscilo a mano</span><span class="row-sub">Per fondi, polizze, obbligazioni o titoli che Yahoo non conosce</span></span></button>`;
   }
-  if (!q && name === 'tx' && st.items.length) note = '<p class="combo-note">I tuoi titoli. Scrivi per cercarne altri.</p>';
+  if (!q && listsOwn(name) && st.items.length) note = '<p class="combo-note">I tuoi titoli. Scrivi per cercarne altri.</p>';
   box.innerHTML = html ? `${note}<div class="list combo-list" role="listbox">${html}</div>` : note;
 }
 
@@ -560,7 +581,7 @@ const liveSearch = debounce((name, q, gen) => {
   });
 }, 300);
 
-function runCombo(name, input) {
+export function runCombo(name, input) {
   const q = input.value || '';
   const st = (combos[name] ||= { items: [], q: '', gen: 0 });
   st.q = q;
@@ -582,7 +603,7 @@ INPUTS['pf-tx-asset'] = (input, ev) => {
 };
 
 // Enter in a search field chooses the first result instead of submitting the form
-function enterPicksFirst(name, input) {
+export function enterPicksFirst(name, input) {
   if (!input || input.dataset.enterBound) return;
   input.dataset.enterBound = '1';
   input.addEventListener('keydown', (e) => {
@@ -601,7 +622,8 @@ function pickFirst(name, form) {
 function choose(name, form, item) {
   if (!form) return;
   if (name === 'af') setAfLink(form, item);
-  else setTxAsset(form, item);
+  else if (name === 'tx') setTxAsset(form, item);
+  else if (COMBO_HOOKS[name]) COMBO_HOOKS[name].choose(form, item);
 }
 
 ACTIONS['pf-pick'] = (el) => {
@@ -648,9 +670,12 @@ SHEETS.tx = (args = {}) => {
     if (t.type === 'tax') rows.push(stat('Tipo di imposta', esc(taxKindLabel(t.kind))));
     if (t.type === 'interest' && tax) rows.push(stat('Ritenuta', money(tax)));
   }
+  if (t.type === 'buy' && t.sepa && (account(t.acc) || {}).cashMode === 'track') rows.push(stat('Pagamento', 'Addebito SEPA da un altro conto'));
   if (t.ref) rows.push(stat('Riferimento', esc(t.ref)));
   if (t.src) rows.push(stat('Origine', 'Importata da file'));
+  else if (t.gen) rows.push(stat('Origine', 'Registrata dal PAC'));
   if (t.demo) rows.push(stat('Origine', 'Dati di esempio'));
+  const plan = t.plan ? planById(t.plan) : null;
   const head = a
     ? `<button class="row asset-link" type="button" data-act="open-asset" data-aid="${esc(t.aid)}">${avatar(a)}<span class="row-main"><span class="row-title">${esc(a.name)}</span><span class="row-sub">${esc([assetCode(a), a.exchange, ccy].filter(Boolean).join(' · '))}</span></span><span class="chev-wrap">${icon('chevRight')}</span></button>`
     : '';
@@ -658,6 +683,7 @@ SHEETS.tx = (args = {}) => {
     title: txLabel(t),
     body: `${head}
       <div class="stats tx-stats">${rows.join('')}</div>
+      ${plan ? planLink(plan) : ''}
       ${t.note ? `<p class="tx-note">${esc(t.note)}</p>` : ''}
       <div class="btn-row sheet-foot-actions">
         <button class="btn" type="button" data-act="edit-tx" data-id="${esc(t.id)}">${icon('edit')}Modifica</button>
@@ -766,6 +792,7 @@ SHEETS.txForm = (args = {}) => {
     : `<input type="hidden" name="acc" value="${esc(acc)}">`}
       <div class="field"><span class="label">Tipo di operazione</span>
         <div class="seg full type-seg" role="radiogroup" aria-label="Tipo di operazione">${[...MAIN_TYPES, ['other', 'Altro']].map(typeRadio).join('')}</div>
+        ${editing ? '' : `<button class="link-btn tx-plan-link" id="tx-plan-link" type="button" data-act="plan-new">${icon('repeat')}Compri ogni mese? Imposta un PAC</button>`}
       </div>
       <div class="field" id="tx-other-f"${kind === 'other' ? '' : ' hidden'}><label for="tx-other">Quale operazione?</label>
         <select id="tx-other" name="otherType">${OTHER_TYPES.map(([k, l]) => opt(k, l, k === other)).join('')}</select>
@@ -1018,6 +1045,7 @@ function syncTxForm(form) {
   const tracked = accObj && accObj.cashMode === 'track';
 
   setHidden(form, '#tx-other-f', st.kind !== 'other');
+  setHidden(form, '#tx-plan-link', type !== 'buy');
   // Deposits and withdrawals exist only for accounts that track cash
   for (const o of el.otherType.options) if (o.value === 'deposit' || o.value === 'withdraw') o.disabled = !tracked;
   if (!tracked && (type === 'deposit' || type === 'withdraw')) {
@@ -1106,7 +1134,7 @@ INPUTS['pf-tx'] = (form, ev) => {
 };
 
 // Show a validation message under the form and focus the field
-function formError(form) {
+export function formError(form) {
   return (msg, fieldEl = null) => {
     const e = form.querySelector('[data-error]');
     if (e) {
@@ -1123,7 +1151,7 @@ function formError(form) {
   };
 }
 
-function assetFromPick(p) {
+export function assetFromPick(p) {
   return {
     id: newId('a'), name: p.name || p.symbol, ticker: tickerOf(p.symbol), symbol: p.symbol, isin: p.isin || '', type: TYPE_KEYS.includes(p.type) ? p.type : 'other',
     currency: p.currency || 'EUR', exchange: p.exchange || '', sector: p.sector || '', region: p.region || '', ter: p.ter > 0 ? p.ter : null, priceSource: 'auto',
@@ -1205,6 +1233,14 @@ FORMS['pf-tx'] = async (form) => {
   if (editing && editing.src) tx.src = editing.src;
   if (editing && editing.demo) tx.demo = true;
   if (aid) tx.aid = aid;
+  if (editing && type === 'buy' && editing.type === 'buy') {
+    // a purchase of a savings plan stays one (and keeps being paid by SEPA debit)
+    if (editing.sepa) tx.sepa = true;
+    if (editing.plan && aid === editing.aid && acc.id === editing.acc) {
+      tx.plan = editing.plan;
+      if (editing.gen) tx.gen = true;
+    }
+  }
   const ccy = newAsset ? newAsset.currency : (aid ? asset(aid).currency : 'EUR') || 'EUR';
   const optional = (input, label) => {
     if (!input || !input.value.trim()) return 0;
@@ -1423,21 +1459,26 @@ Object.assign(ACTIONS, {
     const a = D().assets[aid];
     if (!a) return;
     const n = D().txns.filter((t) => t.aid === aid).length;
+    const pacs = (D().plans || []).filter((p) => p.aid === aid).length;
+    const pacText = pacs ? (pacs === 1 ? ', il suo PAC' : `, i suoi ${pacs} PAC`) : '';
     app.askConfirm({
       title: `Eliminare ${a.name}?`,
       text: n
-        ? `Elimino il titolo, le sue ${n === 1 ? 'operazione' : `${n} operazioni`} e i prezzi inseriti a mano. Valori e report verranno ricalcolati. Non si può annullare.`
-        : 'Elimino il titolo e i prezzi inseriti a mano. Non si può annullare.',
+        ? `Elimino il titolo, le sue ${n === 1 ? 'operazione' : `${n} operazioni`}${pacText} e i prezzi inseriti a mano. Valori e report verranno ricalcolati. Non si può annullare.`
+        : `Elimino il titolo${pacText} e i prezzi inseriti a mano. Non si può annullare.`,
       ok: 'Elimina',
       onOk: () => {
         const d = D();
         const gone = new Set(d.txns.filter((t) => t.aid === aid).map((t) => t.id));
         d.txns = d.txns.filter((t) => t.aid !== aid);
+        const planIds = new Set((d.plans || []).filter((p) => p.aid === aid).map((p) => p.id));
+        if (planIds.size) d.plans = d.plans.filter((p) => !planIds.has(p.id));
         delete d.prices[aid];
         delete d.assets[aid];
         S.sheets = S.sheets.filter((s) => {
           const x = s.args || {};
           if ((s.name === 'asset' || s.name === 'assetForm') && x.aid === aid) return false;
+          if ((s.name === 'plan' || s.name === 'planForm') && planIds.has(x.id)) return false;
           if ((s.name === 'tx' || s.name === 'txForm') && gone.has(x.id)) return false;
           return true;
         });

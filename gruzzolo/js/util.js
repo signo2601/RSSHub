@@ -213,6 +213,9 @@ export const ICONS = {
   grid: '<rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/>',
   check: '<path d="M5 12.5l4.5 4.5L19 7"/>',
   alert: '<path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17v.5"/>',
+  repeat: '<path d="M17 2l3 3-3 3"/><path d="M4 11V9a4 4 0 0 1 4-4h12"/><path d="M7 22l-3-3 3-3"/><path d="M20 13v2a4 4 0 0 1-4 4H4"/>',
+  pause: '<path d="M9 5v14M15 5v14"/>',
+  play: '<path d="M8 5l11 7-11 7z"/>',
 };
 export function icon(name, attrs = '') {
   return `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true" ${attrs}>${ICONS[name] || ''}</svg>`;

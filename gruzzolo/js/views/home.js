@@ -56,7 +56,7 @@ const TX_ICON = { buy: 'down', sell: 'upArrow', div: 'euro', interest: 'euro', d
 // Short Italian label of a transaction ("Acquisto", "Cedola", "Imposta di bollo"…)
 export function txLabel(t) {
   switch (t.type) {
-    case 'buy': return 'Acquisto';
+    case 'buy': return t.plan ? 'Acquisto PAC' : 'Acquisto';
     case 'sell': return 'Vendita';
     case 'div': return t.aid ? incomeLabel(t.aid) : 'Dividendo';
     case 'interest': return 'Interessi';
@@ -121,7 +121,7 @@ export function txRow(t, { showAsset = true, showYear = true, showAcc = multiAcc
   } else if (t.type === 'sell' || t.type === 'deposit') text = moneySigned(amt);
   else if (t.type === 'withdraw') text = moneySigned(amt);
   return `<button class="row tx-row" type="button" data-act="open-tx" data-id="${esc(t.id)}">
-    <span class="tx-ico ${esc(t.type)}">${icon(TX_ICON[t.type] || 'receipt')}</span>
+    <span class="tx-ico ${esc(t.type)}">${icon(t.plan && t.type === 'buy' ? 'repeat' : TX_ICON[t.type] || 'receipt')}</span>
     <span class="row-main"><span class="row-title">${esc(title)}</span><span class="row-sub">${subParts.filter(Boolean).map(esc).join(' · ')}</span></span>
     <span class="row-end"><span class="row-value ${cls}">${text}</span>${showAcc ? `<span class="row-sub">${esc(accName(t.acc))}</span>` : ''}</span>
   </button>`;

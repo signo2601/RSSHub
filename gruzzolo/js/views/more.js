@@ -16,6 +16,7 @@ import { CATALOG, findInCatalog } from '../catalog.js';
 import { fiscalBackpack } from '../costs.js';
 import { infoBtn } from '../info.js';
 import { encryptBackup, decryptBackup, isEncryptedBackup, MIN_PASSWORD } from '../backupcrypt.js';
+import { plans as allPlans, nextRun, pendingRuns, currentAmount, everyOf, EVERY_SHORT, replaceWithReal } from '../plans.js';
 import { avatar, demoBanner, txAmount, txFx } from './home.js';
 import { tickerOf } from './sheets.js';
 import { benchShort } from './report.js';
@@ -366,6 +367,7 @@ export function dropAccount(data, id) {
   const before = data.txns.length;
   data.txns = data.txns.filter((t) => t.acc !== id);
   data.accounts = data.accounts.filter((a) => a.id !== id);
+  if (Array.isArray(data.plans)) data.plans = data.plans.filter((p) => p.acc !== id);
   return before - data.txns.length;
 }
 
@@ -591,7 +593,7 @@ export function renderMore() {
     <div class="page-head"><div><p class="eyebrow">Impostazioni e strumenti</p><h1 class="page-title">Altro</h1></div></div>
     ${demoBanner()}
     <div class="more-cols">
-      <div class="more-col">${accountsGroup()}${importGroup(today)}${fiscalGroup()}${appearanceGroup()}</div>
+      <div class="more-col">${accountsGroup()}${plansGroup(today)}${importGroup(today)}${fiscalGroup()}${appearanceGroup()}</div>
       <div class="more-col">${privacyGroup(today)}${dataGroup()}${serverGroup(today)}${guideGroup()}</div>
     </div>
   </div>`;
@@ -618,6 +620,30 @@ function accountsGroup() {
   rows.push(navRow({ act: 'more-account', attrs: ' data-id=""', ico: 'plus', tone: 'accent', title: 'Aggiungi un conto', sub: 'Uno per ogni broker o deposito titoli', cls: 'more-add' }));
   return group('accounts', 'wallet', 'Conti', `<div class="list">${rows.join('')}</div>`,
     'Un conto è il deposito titoli presso un broker (DEGIRO, Scalable Capital…). Portafoglio e report li mostrano insieme o uno alla volta.');
+}
+
+/* ---------- 1b. Savings plans (views/plans.js) ---------- */
+function plansGroup(today) {
+  const list = allPlans().filter((p) => D().assets[p.aid] && account(p.acc));
+  const rows = list.map((p) => {
+    const a = D().assets[p.aid];
+    const next = nextRun(p, today);
+    const waiting = pendingRuns(p, today).some((r) => r.date < today);
+    const when = p.paused ? 'In pausa' : waiting ? 'Acquisto in attesa del prezzo' : next ? `Prossimo ${next.date === today ? 'oggi' : fmtDate(next.date, false)}` : 'Concluso';
+    const multi = D().accounts.length > 1 ? ` · ${(account(p.acc) || {}).name || ''}` : '';
+    return navRow({
+      act: 'plan-open',
+      attrs: ` data-id="${esc(p.id)}"`,
+      avatarHtml: avatar(a),
+      title: esc(a.name),
+      sub: esc(when + multi),
+      end: `<span class="row-value">${money(currentAmount(p, today))}</span><span class="row-sub">${esc(EVERY_SHORT[everyOf(p)])}</span>`,
+      cls: `plan-row${p.paused ? ' plan-paused' : ''}`,
+    });
+  });
+  rows.push(navRow({ act: 'plan-new', ico: 'plus', tone: 'accent', title: 'Nuovo piano di accumulo', sub: 'Acquisti automatici, pagati con addebito SEPA', cls: 'more-add' }));
+  return group('plans', 'repeat', 'Piani di accumulo (PAC)', `<div class="list">${rows.join('')}</div>`,
+    'Gruzzolo registra da solo gli acquisti di ogni PAC, al prezzo di chiusura del giorno di esecuzione. I soldi arrivano da un altro conto: non serve inserire liquidità.');
 }
 
 /* ---------- 2. Import ---------- */
@@ -1367,12 +1393,14 @@ async function runImport() {
       }
     }
     const { txns } = finalizeTxns(res.txns, { map: resolved.map, pence: resolved.pence, acc: acc.id, src: imp.src || newBatchId() });
+    // the real purchases of a savings plan take the place of the ones the plan simulated
+    const replaced = replaceWithReal(d, txns);
     d.txns.push(...txns);
     const created = resolved.created.length;
     resetImport();
     app.closeSheets();
     S.ui.tab = 'home';
-    commit(`Importate ${plural(txns.length, 'operazione', 'operazioni').replace(/^1 operazione$/, '1 operazione')}${created ? ` · ${plural(created, 'nuovo titolo', 'nuovi titoli')}` : ''}`);
+    commit(`Importate ${plural(txns.length, 'operazione', 'operazioni').replace(/^1 operazione$/, '1 operazione')}${created ? ` · ${plural(created, 'nuovo titolo', 'nuovi titoli')}` : ''}${replaced ? ` · ${replaced === 1 ? '1 acquisto del PAC sostituito da quello reale' : `${num(replaced, 0)} acquisti del PAC sostituiti da quelli reali`}` : ''}`);
     util.scrollToTop();
     app.refreshPrices();
   } catch (e) {

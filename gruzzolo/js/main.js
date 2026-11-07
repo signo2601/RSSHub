@@ -9,6 +9,7 @@ import { ACTIONS, FORMS, INPUTS, SHEETS, FORM_SHEETS, MOUNTS } from './registry.
 import { market } from './market.js';
 import { eco } from './eco.js';
 import { getSeries, trackedSymbols } from './engine.js';
+import { runPlans } from './plans.js';
 import { esc, fmt, icon, money, todayISO, debounce, isDesktop, fmtTime, newId, requestPersistentStorage, scrollToTop } from './util.js';
 import { initCharts } from './charts.js';
 import { pickStore, localStore } from './store.js';
@@ -25,6 +26,7 @@ import './views/sheet-income.js';
 import './views/sheet-costs.js';
 import './views/sheet-risk.js';
 import * as moreView from './views/more.js';
+import './views/plans.js';
 
 // Tell the start-up guard in index.html that the code loaded
 if (typeof window !== 'undefined') window.__gruzzoloStarted = true;
@@ -538,19 +540,24 @@ function resetViewport() {
 
 /* ---------- Confirm dialog ---------- */
 const confirmFns = new Map();
-SHEETS.confirm = ({ title = 'Confermi?', text = '', ok = 'Conferma', danger = true, key = '' } = {}) => ({
-  title,
-  body: `<p class="confirm-text">${esc(text).replace(/\n/g, '<br>')}</p>
-    <div class="sheet-actions">
-      <button class="btn" type="button" data-act="back-sheet">Annulla</button>
-      <button class="btn ${danger ? 'danger solid' : 'primary'}" type="button" data-act="confirm-ok" data-key="${esc(key)}">${esc(ok)}</button>
-    </div>`,
-});
+// alt: a second way to go on (e.g. "keep the purchases"), shown between the main button and Annulla
+SHEETS.confirm = ({ title = 'Confermi?', text = '', ok = 'Conferma', danger = true, key = '', alt = '' } = {}) => {
+  const okBtn = `<button class="btn ${danger ? 'danger solid' : 'primary'}" type="button" data-act="confirm-ok" data-key="${esc(key)}">${esc(ok)}</button>`;
+  const cancel = '<button class="btn" type="button" data-act="back-sheet">Annulla</button>';
+  return {
+    title,
+    body: `<p class="confirm-text">${esc(text).replace(/\n/g, '<br>')}</p>
+      ${alt
+    ? `<div class="sheet-actions stacked">${okBtn}<button class="btn" type="button" data-act="confirm-ok" data-key="${esc(key)}" data-alt="1">${esc(alt)}</button>${cancel}</div>`
+    : `<div class="sheet-actions">${cancel}${okBtn}</div>`}`,
+  };
+};
 
-function askConfirm({ title = 'Confermi?', text = '', ok = 'Conferma', danger = true, onOk } = {}) {
+function askConfirm({ title = 'Confermi?', text = '', ok = 'Conferma', danger = true, onOk, alt = '', onAlt } = {}) {
   const key = newId('c');
   confirmFns.set(key, onOk);
-  pushSheet('confirm', { title, text, ok, danger, key });
+  if (alt) confirmFns.set(`${key}:alt`, onAlt);
+  pushSheet('confirm', { title, text, ok, danger, key, alt });
 }
 
 /* ---------- Scope picker ---------- */
@@ -653,9 +660,28 @@ function refreshPrices(opts = {}) {
     }
     renderChrome();
     scheduleRender();
+    if (!offline) syncPlans();
     return res;
   });
   return shell.refreshPromise;
+}
+
+/* ---------- Savings plans ---------- */
+// Record the purchases of the PAC that came due: at start (with the saved market data) and after
+// every price update (a purchase waits for the closing price of its day)
+function syncPlans() {
+  if (!S.loaded || !canSave || !Array.isArray(D().plans) || !D().plans.length) return;
+  let res;
+  try {
+    res = runPlans();
+  } catch (e) {
+    console.error('[gruzzolo] PAC', e);
+    return;
+  }
+  if (!res.changed) return;
+  const n = res.added.length;
+  const first = n ? D().assets[res.added[0].aid] : null;
+  commit(n === 1 ? `PAC: registrato l'acquisto di ${first ? first.name : 'un titolo'}` : n > 1 ? `PAC: registrati ${n} acquisti` : '');
 }
 
 /* ---------- Storage (this device only) ---------- */
@@ -756,8 +782,9 @@ Object.assign(ACTIONS, {
   'back-sheet': () => popSheet(),
   'confirm-ok': (el) => {
     const key = el.dataset.key;
-    const fn = confirmFns.get(key);
+    const fn = confirmFns.get(el.dataset.alt ? `${key}:alt` : key);
     confirmFns.delete(key);
+    confirmFns.delete(`${key}:alt`);
     const entry = S.sheets.find((s) => s.name === 'confirm' && s.args && s.args.key === key);
     try {
       if (typeof fn === 'function') runHandler('conferma', fn);
@@ -989,8 +1016,11 @@ async function boot() {
   //    state with util.storageStatus(). Not awaited: rendering never waits for it.
   requestPersistentStorage().catch(() => null);
 
-  // 5. Fresh prices in the background
-  marketReady.then(() => refreshPrices());
+  // 5. Purchases of the savings plans with the saved prices, then fresh prices in the background
+  marketReady.then(() => {
+    syncPlans();
+    refreshPrices();
+  });
 }
 
 boot().catch((e) => {

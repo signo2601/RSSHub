@@ -33,6 +33,7 @@ export function blankData() {
     assets: {},
     txns: [],
     prices: {},
+    plans: [], // savings plans (plans.js)
   };
 }
 
@@ -76,6 +77,7 @@ export function migrate(raw) {
     d.assets = raw.assets && typeof raw.assets === 'object' ? raw.assets : {};
     d.txns = Array.isArray(raw.txns) ? raw.txns : [];
     d.prices = raw.prices && typeof raw.prices === 'object' ? raw.prices : {};
+    d.plans = Array.isArray(raw.plans) ? raw.plans.filter((p) => p && typeof p === 'object' && p.id) : [];
     delete d.watch; // the watchlist was removed from the Mercati tab
     return d;
   }

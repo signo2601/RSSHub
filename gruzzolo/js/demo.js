@@ -506,27 +506,39 @@ export function demoData({ today } = {}) {
     degiro.push(e);
   }
 
-  /* --- Scalable Capital (cash not tracked): monthly savings plans and Bitcoin --- */
+  /* --- Scalable Capital (cash not tracked): two monthly savings plans (PAC) and Bitcoin --- */
   const ACC2 = DEMO_ACCOUNTS.scalable;
   const scalable = [];
   const s1 = addMonths(T, -28);
-  const planBuy = (key, date, euros, fee = 0, note = '') => {
+  const PLAN_ID = { vwce: 'demo-pac-vwce', eimi: 'demo-pac-eimi' };
+  const planDone = {};
+  const planBuy = (key, date, euros, fee = 0, due = '') => {
     const price = priceOf(key, date);
     const t = { acc: ACC2, type: 'buy', date, aid: aidOf(key), qty: round(euros / price, 6), price, fee };
-    if (note) t.note = note;
+    if (due) {
+      // a purchase of a savings plan, as plans.js records them (scheduled on `due`)
+      Object.assign(t, { plan: PLAN_ID[key], gen: true, sepa: true, id: `p-${PLAN_ID[key]}-${due}` });
+      planDone[key] = due;
+    }
     scalable.push(t);
   };
   for (let m = 0; ; m++) {
     const first = monthStart(addMonths(s1, m));
-    const d = mk.bizOnOrAfter(addDays(first, 1));
+    const due = addDays(first, 1);
+    const d = mk.bizOnOrAfter(due);
     if (!d || d > last) break;
-    planBuy('vwce', d, 200, 0, 'Piano di accumulo');
-    if (m >= 3) planBuy('eimi', d, 50, 0, 'Piano di accumulo');
+    planBuy('vwce', d, 200, 0, due);
+    if (m >= 3) planBuy('eimi', d, 50, 0, due);
     if (m === 4 || m === 15) {
       const db = mk.bizOnOrAfter(addDays(first, 9));
       if (db && db <= last) planBuy('btc', db, m === 4 ? 500 : 300, 0.99);
     }
   }
+  const demoPlan = (key, amount, start) => ({
+    id: PLAN_ID[key], acc: ACC2, aid: aidOf(key), amount, every: 1, day: 2, start, step: 0, fee: 0, sepa: true,
+    ...(planDone[key] ? { done: planDone[key] } : {}), createdAt: 0, demo: true,
+  });
+  data.plans = [demoPlan('vwce', 200, monthStart(s1)), demoPlan('eimi', 50, monthStart(addMonths(s1, 3)))];
 
   data.txns = sortEvents([...degiro, ...scalable]).map((t, i) => ({ id: 'demo-t' + String(i + 1).padStart(3, '0'), ...t, demo: true }));
 
@@ -553,6 +565,7 @@ export function demoData({ today } = {}) {
 export function removeDemo(data) {
   const d = JSON.parse(JSON.stringify(data || blankData()));
   d.txns = (Array.isArray(d.txns) ? d.txns : []).filter((t) => t && !t.demo);
+  d.plans = (Array.isArray(d.plans) ? d.plans : []).filter((p) => p && !p.demo);
   delete d.watch; // left by versions with a watchlist
   d.assets = d.assets && typeof d.assets === 'object' ? d.assets : {};
   d.prices = d.prices && typeof d.prices === 'object' ? d.prices : {};
@@ -576,6 +589,7 @@ export function removeDemo(data) {
     return rest;
   });
   if (!d.accounts.length) d.accounts = blankData().accounts;
+  d.plans = d.plans.filter((p) => d.accounts.some((a) => a.id === p.acc) && d.assets[p.aid]);
   d.settings = { ...blankData().settings, ...(d.settings || {}) };
   const marks = (d.settings.demoMarks && d.settings.demoMarks.externalPL) || {};
   const ext = { ...(d.settings.externalPL || {}) };

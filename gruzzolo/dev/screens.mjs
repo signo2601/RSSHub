@@ -51,8 +51,10 @@ const SCREENS = [
   ['market-macro', { tab: 'market', eco: { page: 'macro' } }, null, 'market'],
   ['market-calendar', { tab: 'market', eco: { page: 'calendar' } }, null, 'market'],
   ['more', { tab: 'more' }],
-  ['sheet-new-transaction', { tab: 'home' }, async (p) => p.click('.tabbar .fab, .side-add .btn')],
+  ['sheet-new-transaction', { tab: 'home' }, async (p) => p.locator('.tabbar .fab:visible, .side-add .btn:visible').first().click()],
   ['sheet-asset', { tab: 'home' }, async (p) => p.click('[data-act="open-asset"]')],
+  ['sheet-plan', { tab: 'more' }, async (p) => p.locator('[data-act="plan-open"]').first().click()],
+  ['sheet-plan-form', { tab: 'more' }, async (p) => p.locator('[data-act="plan-new"]').first().click()],
   ['sheet-heatmap-stock', { tab: 'market', eco: { page: 'heatmap' } }, async (p) => p.click('.hm-tile >> nth=0'), 'market'],
 ];
 

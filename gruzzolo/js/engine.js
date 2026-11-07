@@ -214,7 +214,8 @@ export function getSeries(key = 'all') {
 
 // External flows of a day are netted: a sale and a purchase on the same day in an 'auto' account
 // (a switch from one security to another) is money that stays invested, not a deposit plus a
-// withdrawal. Two more cases count as money from outside: shares sold beyond those recorded
+// withdrawal. A purchase paid by SEPA direct debit (sepa: true, savings plans) is handled like one
+// of an 'auto' account: its money comes from outside and the cash of a tracked account stays as is. Two more cases count as money from outside: shares sold beyond those recorded
 // (they enter at the sale price) and the overdraft of a tracked account (its cash is valued at
 // 0 and the shortfall is money that must have come in; a later deposit pays it back).
 function computeSeries(accIds, key) {
@@ -260,7 +261,8 @@ function computeSeries(accIds, key) {
     let inc = 0;
     while (ti < txns.length && txns[ti].date <= d) {
       const t = txns[ti++];
-      const mode = modeOf.get(t.acc) || 'auto';
+      // a purchase paid by SEPA direct debit (savings plans) is money from outside, even in a tracked account
+      const mode = t.sepa && t.type === 'buy' ? 'auto' : modeOf.get(t.acc) || 'auto';
       if (mode === 'auto' && (t.type === 'deposit' || t.type === 'withdraw')) continue;
       const fx = t.type === 'buy' || t.type === 'sell' ? txFx(t) : 1;
       const delta = cashDelta(t, fx);
@@ -368,7 +370,7 @@ function replay(accIds, date) {
   for (const t of txnsFor(accIds)) {
     if (t.date > date) break;
     const fx = t.type === 'buy' || t.type === 'sell' ? txFx(t) : 1;
-    if (modeOf.get(t.acc) === 'track') cashByAcc.set(t.acc, (cashByAcc.get(t.acc) || 0) + cashDelta(t, fx));
+    if (modeOf.get(t.acc) === 'track' && !(t.sepa && t.type === 'buy')) cashByAcc.set(t.acc, (cashByAcc.get(t.acc) || 0) + cashDelta(t, fx));
     if (!t.aid) continue;
     const hk = t.acc + '|' + t.aid;
     const p = per.get(hk) || { acc: t.acc, aid: t.aid, qty: 0, cost: 0, costLocal: 0, costNoFee: 0, realized: 0, income: 0, fees: 0, taxes: 0 };
