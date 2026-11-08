@@ -236,6 +236,7 @@ export function renderCalendar() {
   const groups = [...days].map(([day, list]) => `<p class="eco-group-label cal-day">${esc(dayLabel(day, today))}</p><div class="list eco-list">${list.map((r) => rowHtml(r)).join('')}</div>`).join('');
   return `${controls}
     ${stampLine('calendar', { note: 'orari italiani' })}
+    <div class="eco-cols">
     <section class="section eco-sec" aria-label="Ultimi risultati">
       <div class="sec-head"><h2>Ultimi risultati</h2><span class="hint">dato e attese</span></div>
       ${released.length ? `<div class="list eco-list">${released.map((r) => rowHtml(r, { past: true })).join('')}</div>` : '<div class="empty compact"><p>Nessun dato uscito negli ultimi giorni per questi Paesi.</p></div>'}
@@ -244,6 +245,7 @@ export function renderCalendar() {
       <div class="sec-head"><h2>In arrivo</h2><span class="hint">prossime 2 settimane</span></div>
       ${groups || '<div class="empty compact"><p>Nessun dato in calendario per questi Paesi.</p></div>'}
     </section>
+    </div>
     <p class="hint eco-foot">«Attese» è la previsione media degli analisti. Un dato molto diverso dalle attese di solito muove Borse, rendimenti e valute. Fonte: calendario economico di TradingView.</p>`;
 }
 

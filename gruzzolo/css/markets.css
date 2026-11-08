@@ -37,6 +37,8 @@
 .eco-page .chip, .eco-page .link-btn, .eco-page .btn.sm { position: relative; }
 .eco-page .chip::after, .eco-page .link-btn::after, .eco-page .btn.sm::after { content: ""; position: absolute; inset: -4px 0; }
 .eco-sec { gap: 8px; }
+/* phones: the columns of the computer are just the sections one under the other */
+.eco-cols, .eco-col { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
 .eco-sec > .hint, .eco-foot { margin: 0 4px; }
 .eco-page .sec-head { align-items: center; min-height: 30px; }
 .eco-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
@@ -265,12 +267,18 @@
 
 /* ---------- Desktop ---------- */
 @media (min-width: 900px) {
-  .eco-body { max-width: 980px; }
+  /* the whole column, like Portafoglio, Report and Altro: long lists go side by side */
   .eco-tabs { max-width: 560px; }
+  .eco-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 28px; align-items: start; }
   .eco-hl-strip { margin: 0; padding: 2px 0 4px; grid-auto-columns: minmax(150px, 1fr); }
   .eco-periods { width: auto; }
   .eco-periods button { flex: 0 0 auto; padding: 0 14px; }
   .eco-hl:hover, .eco-row:hover { background: var(--surface-2); }
   .eco-yc-cards { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
   .mc-card { padding: 12px; }
+}
+
+/* Phones: smaller highlight figures */
+@media (max-width: 899px) {
+  .eco-hl-value { font-size: 19px; }
 }

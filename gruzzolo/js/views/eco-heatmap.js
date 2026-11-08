@@ -121,8 +121,8 @@ export function weightShare(st, all, mode = 'cap') {
 
 /* ---------- The map ---------- */
 function mapSize() {
-  // Desktop: as wide as the Mercati column (max 980px, css/markets.css)
-  const w = Math.max(280, Math.floor(Math.min(contentWidth(), isDesktop() ? 980 : Infinity)));
+  // As wide as the column (on a computer the whole page, like the other tabs)
+  const w = Math.max(280, Math.floor(contentWidth()));
   const h = isDesktop() ? Math.round(Math.min(720, w * 0.56)) : Math.round(Math.max(400, Math.min(680, w * 1.3)));
   return { w, h };
 }

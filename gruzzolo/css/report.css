@@ -347,3 +347,16 @@ tr.row-expired td { color: var(--muted); }
   .summary-kpis > .rkpi.hero { grid-row: span 2; }
   .summary-kpis > .rkpi.hero .kpi-value { font-size: 44px; margin-top: 6px; }
 }
+
+/* Phones: smaller sheet titles and hero figures */
+@media (max-width: 899px) {
+  .rs-title { font-size: 20px; }
+  .rs-sub { font-size: 13px; }
+  .rkpi.hero .kpi-value { font-size: 26px; }
+  .rkpi .kpi-value { font-size: 18px; }
+  .rkpi { min-height: 100px; }
+}
+@media (max-width: 374px) {
+  .rkpi.hero .kpi-value { font-size: 24px; }
+  .rkpi .kpi-value { font-size: 17px; }
+}

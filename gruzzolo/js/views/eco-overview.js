@@ -389,14 +389,13 @@ export function renderOverview() {
   if (!have) {
     return `${top}${emptyState('overview', { what: 'i mercati' })}${govSection(period)}${cryptoSection(period)}`;
   }
+  // on a computer the sections sit in two columns (css .eco-cols)
   return `${top}
     ${stampLine('overview', { note: `Variazioni ${esc(periodLong(period))}` })}
-    ${indicesSection(period)}
-    ${govSection(period)}
-    ${bondsSection(period)}
-    ${commoditiesSection(period)}
-    ${currenciesSection(period)}
-    ${cryptoSection(period)}
+    <div class="eco-cols">
+      <div class="eco-col">${indicesSection(period)}${bondsSection(period)}${currenciesSection(period)}</div>
+      <div class="eco-col">${govSection(period)}${commoditiesSection(period)}${cryptoSection(period)}</div>
+    </div>
     <p class="hint eco-foot">Dati di TradingView, in ritardo fino a 15 minuti. Solo informativi: non sono consigli di investimento.</p>`;
 }
 

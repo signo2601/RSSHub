@@ -321,7 +321,6 @@
 
   .home-grid { grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: 24px; }
 
-  .tx-page { max-width: 880px; }
   .tx-page .tx-filters { margin-bottom: -10px; }
 
   .pf-sheet .combo-list { max-height: 352px; overflow-y: auto; overscroll-behavior: contain; }
@@ -351,7 +350,7 @@
 
 /* Narrow phones */
 @media (max-width: 374px) {
-  .home .hero-value { font-size: 34px; }
+  .home .hero-value { font-size: 30px; }
   .price-input input { width: 96px; }
   .acc-strip { grid-auto-columns: minmax(148px, 1fr); }
 }
@@ -377,3 +376,14 @@
 .plan-actions > .btn { flex: 1 1 0; min-width: 0; padding: 0 8px; white-space: nowrap; }
 .more-row.plan-paused .row-value { color: var(--muted); }
 .pf-sheet .asset-facts { margin: 0 0 6px; }
+
+/* Phones: a smaller hero and plan figures (the user asked for denser screens) */
+@media (max-width: 899px) {
+  .home .hero-value { font-size: 34px; margin: 0 0 6px; }
+  .home .hero-label { min-height: 0; font-size: 13.5px; }
+  .home .hero-day { margin-top: 4px; }
+  .plan-amount { font-size: 22px; }
+}
+@media (max-width: 374px) {
+  .home .hero-value { font-size: 30px; }
+}

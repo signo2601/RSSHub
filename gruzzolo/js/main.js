@@ -532,6 +532,24 @@ function fitSheetToViewport() {
   } else clear();
 }
 
+// iOS 26 (WebKit bug 301108): the app added to the Home Screen gets a viewport one status-bar height
+// shorter than the screen, so the frame stopped above the bottom edge and left an empty strip under the
+// tab bar. Measure that gap against the screen and let the frame reach the edge (css --frame-fix).
+// Only on an iPhone and only for a gap the size of a status bar: never the keyboard, never other bugs.
+function fixStandaloneFrame() {
+  if (typeof window === 'undefined' || !window.screen || typeof document === 'undefined') return;
+  const nav = window.navigator || {};
+  const standalone = nav.standalone === true || (typeof window.matchMedia === 'function' && window.matchMedia('(display-mode: standalone)').matches);
+  let fix = 0;
+  if (standalone && /iPhone/.test(nav.userAgent || '')) {
+    const portrait = window.innerHeight >= window.innerWidth;
+    const full = portrait ? Math.max(screen.width, screen.height) : Math.min(screen.width, screen.height);
+    const gap = Math.round(full - window.innerHeight);
+    if (gap >= 16 && gap <= 90) fix = gap;
+  }
+  document.documentElement.style.setProperty('--frame-fix', `${fix}px`);
+}
+
 // iPhone: the page never scrolls (css/app.css), but after the keyboard closes iOS can leave the
 // visible area panned down. Once the keyboard is gone, put it back at the top of the screen.
 function resetViewport() {
@@ -914,6 +932,9 @@ function onVisibility() {
 }
 
 function listen() {
+  fixStandaloneFrame();
+  window.addEventListener('resize', debounce(fixStandaloneFrame, 100));
+  window.addEventListener('orientationchange', () => setTimeout(fixStandaloneFrame, 300));
   // the fades of a chip strip follow its scroll (scroll events do not bubble: capture them)
   document.addEventListener('scroll', (e) => {
     const t = e.target;

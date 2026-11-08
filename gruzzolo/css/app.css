@@ -71,7 +71,9 @@
   --radius: 18px;
   --radius-sm: 12px;
   --sidebar-w: 248px;
-  --tabbar-h: 62px;
+  --tabbar-h: 58px;
+  /* under the tab bar: room for the home indicator, not the whole safe area (that left an empty band) */
+  --tab-pad: max(8px, calc(env(safe-area-inset-bottom, 0px) - 12px));
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -161,6 +163,10 @@ img { display: block; max-width: 100%; }
 
 /* ---------- App frame (phone) ---------- */
 .app { position: fixed; inset: 0; display: flex; overflow: hidden; }
+/* iOS 26 (WebKit bug 301108): the app added to the Home Screen gets a viewport one status-bar height
+   shorter than the screen, which left an empty strip under the tab bar. main.js measures the gap
+   (--frame-fix, 0 elsewhere) and the frame and the sheets reach the real bottom edge. */
+.app, .sheet-layer { bottom: calc(-1 * var(--frame-fix, 0px)); }
 .sidebar { display: none; }
 .shell { position: relative; display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; min-height: 0; }
 
@@ -172,16 +178,28 @@ img { display: block; max-width: 100%; }
   transition: border-color .2s;
 }
 .top.scrolled { border-bottom-color: var(--line); }
-/* Installed on iPhone in light mode the status bar text is white: give it a dark band */
+/* Installed on iPhone the status bar text is always white. In the light theme the whole header turns
+   dark (the dark tokens re-declared on .top), so status bar and header are one app bar instead of an
+   empty black strip over a light header. */
 .top::before {
   content: ""; position: absolute; left: 0; right: 0; top: 0;
   height: env(safe-area-inset-top, 0px); pointer-events: none;
 }
-@media (display-mode: standalone) {
+@media (display-mode: standalone) and (max-width: 899px) {
   @media (prefers-color-scheme: light) {
-    :root:not([data-theme="dark"]) .top::before { background: var(--statusbar); }
+    :root:not([data-theme="dark"]) .top {
+      --bg: var(--statusbar); --surface: #1a1f27; --surface-2: #232934; --line: #2b323d;
+      --ink: #f2f4f7; --ink-2: #c3cad4; --muted: #8f98a6; --accent-line: #f2b63d;
+      --up: #3ccf86; --up-soft: rgba(60, 207, 134, .16);
+      color: var(--ink);
+    }
   }
-  :root[data-theme="light"] .top::before { background: var(--statusbar); }
+  :root[data-theme="light"] .top {
+    --bg: var(--statusbar); --surface: #1a1f27; --surface-2: #232934; --line: #2b323d;
+    --ink: #f2f4f7; --ink-2: #c3cad4; --muted: #8f98a6; --accent-line: #f2b63d;
+    --up: #3ccf86; --up-soft: rgba(60, 207, 134, .16);
+    color: var(--ink);
+  }
 }
 .top-inner {
   display: flex; align-items: center; gap: 4px; min-height: 56px;
@@ -227,7 +245,7 @@ img { display: block; max-width: 100%; }
 #view {
   display: block; flex: 1 1 auto; min-height: 0; outline: none;
   overflow-x: hidden; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain;
-  padding: 6px max(16px, env(safe-area-inset-right, 0px)) calc(var(--tabbar-h) + 36px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  padding: 6px max(16px, env(safe-area-inset-right, 0px)) calc(var(--tabbar-h) + 36px + var(--tab-pad)) max(16px, env(safe-area-inset-left, 0px));
 }
 /* An open sheet freezes the page under it */
 html.locked #view { overflow: hidden; }
@@ -241,7 +259,7 @@ html.locked #view { overflow: hidden; }
   -webkit-backdrop-filter: saturate(1.6) blur(20px);
   backdrop-filter: saturate(1.6) blur(20px);
   border-top: 1px solid var(--line);
-  padding: 0 max(6px, env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px) max(6px, env(safe-area-inset-left, 0px));
+  padding: 0 max(6px, env(safe-area-inset-right, 0px)) var(--tab-pad) max(6px, env(safe-area-inset-left, 0px));
 }
 .tabbar-inner { max-width: 560px; margin: 0 auto; height: var(--tabbar-h); display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: center; }
 .tab {
@@ -586,7 +604,7 @@ button.row:active, a.row:active { background: var(--surface-2); }
 .inline-form .field { flex: 1; }
 
 /* ---------- Sheets (bottom sheets on phones, dialogs on desktop) ---------- */
-.sheet-layer { position: fixed; inset: 0; z-index: 50; display: flex; align-items: flex-end; justify-content: center; }
+.sheet-layer { position: fixed; inset: 0; bottom: calc(-1 * var(--frame-fix, 0px)); z-index: 50; display: flex; align-items: flex-end; justify-content: center; }
 .backdrop { position: absolute; inset: 0; background: var(--scrim); animation: fade-in .2s ease-out; touch-action: none; }
 .sheet {
   position: relative; display: flex; flex-direction: column; width: 100%; max-width: 640px;
@@ -618,7 +636,7 @@ button.row:active, a.row:active { background: var(--surface-2); }
 /* ---------- Toast ---------- */
 .toast {
   position: fixed; left: 50%; z-index: 70; transform: translateX(-50%);
-  bottom: calc(var(--tabbar-h) + 18px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(var(--tabbar-h) + 18px + var(--tab-pad) - var(--frame-fix, 0px));
   width: max-content; max-width: calc(100% - 32px);
   padding: 11px 16px; border-radius: 14px; box-shadow: var(--shadow);
   background: var(--ink); color: var(--bg); font-size: 14px; font-weight: 700; line-height: 1.35;
@@ -727,4 +745,18 @@ button.row:active, a.row:active { background: var(--surface-2); }
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
   .skeleton { animation: none; }
   .icon-btn.spinning .ico { animation: none; }
+}
+
+/* ---------- Phones: denser screens ----------
+   The big figures stay the focal point of each screen, at a size that leaves room for the rest. */
+@media (max-width: 899px) {
+  .page { gap: 18px; }
+  .page-title { font-size: 24px; }
+  .kpi.hero .kpi-value { font-size: 24px; }
+  .price-big { font-size: 26px; }
+  .detail-head { margin: 2px 0 10px; }
+  .detail-head h3 { font-size: 19px; }
+  .top-inner { min-height: 50px; padding-top: 2px; padding-bottom: 2px; }
+  .brand-name { font-size: 17px; }
+  .brand-mark { width: 26px; height: 26px; }
 }
