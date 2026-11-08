@@ -26,6 +26,11 @@ export const INFO = {
     text: 'Quanto è cresciuto davvero il potere d\'acquisto dei tuoi soldi: il rendimento TWR del periodo al netto dell\'inflazione italiana (indice dei prezzi al consumo armonizzato, Eurostat).\n\nSe hai guadagnato il 5% ma i prezzi sono saliti del 3%, con i tuoi soldi compri circa il 2% in più. Se il rendimento reale è negativo, il portafoglio è cresciuto meno dei prezzi.',
     formula: 'Rendimento reale = (1 + TWR) ÷ (1 + inflazione del periodo) − 1. L\'inflazione del periodo va dall\'indice del mese prima dell\'inizio a quello del mese finale (o all\'ultimo pubblicato).',
   },
+  lookThrough: {
+    title: 'Dentro i tuoi ETF',
+    text: 'Un ETF è un paniere: con VWCE possiedi un pezzetto di migliaia di aziende. Qui Gruzzolo apre i tuoi ETF e somma quello che contengono alle azioni e alle obbligazioni che hai direttamente, pesando ogni ETF per quanto vale nel tuo portafoglio.\n\nCosì vedi quanto pesano davvero, sul totale, un\'azienda come Apple, un paese come gli Stati Uniti o un settore come la tecnologia. «Non classificato» è quello che non ha paese né settore: liquidità, crypto, oro, ETF di cui non si conosce la composizione.',
+    formula: 'Peso = (valore dell\'ETF × peso nell\'ETF + valore posseduto direttamente) ÷ valore totale. La composizione degli ETF viene da justETF (prime 10 aziende, paesi e settori) e si aggiorna una volta a settimana; il paese di un\'azione è quello del suo ISIN.',
+  },
   liquidita: {
     title: 'Liquidità',
     text: 'I contanti fermi sui conti del broker (solo per i conti in cui registri depositi e prelievi) più gli strumenti di tipo «liquidità», come un conto deposito.\n\nRende poco o nulla, ma riduce le oscillazioni ed è pronta per i prossimi acquisti.',

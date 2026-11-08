@@ -648,3 +648,80 @@ test('eco inflation: Eurostat JSON-stat turned into monthly series of Italy and 
     globalThis.fetch = realFetch;
   }
 });
+
+/* ---------- ETF composition (justETF profile) ---------- */
+const jRow = (kind, name, pct) => `<tr data-testid="etf-holdings_${kind}_row"> <td data-testid="tl_etf-holdings_${kind}_value_name">${name}</td> <td> <div class="right ws"> <span data-testid="tl_etf-holdings_${kind}_value_percentage">${pct}</span> <div class="constituents-weight progress-pill ml-2"> <div class="progress-pill__bar" style="width:1%;"></div> </div> </div> </td> </tr>`;
+const jTop = (isin, name, pct) => `<tr data-testid="etf-holdings_top-holdings_row"> <td>  <a data-testid="tl_etf-holdings_top-holdings_link_name" href="/it/stock-profiles/${isin}" title="${name}"><span>${name}</span></a> </td> <td> <div class="right ws"> <span data-testid="tl_etf-holdings_top-holdings_value_percentage">${pct}</span> </div> </td> </tr>`;
+const JPAGE = `<html><head><title>Vanguard FTSE All-World UCITS ETF (USD) Accumulating | VWCE | IE00BK5BQT80</title></head><body>
+  <div data-testid="tl_etf-holdings_top-holdings_count">su 3.797</div>
+  <table>${jTop('US67066G1040', 'NVIDIA Corp.', '5,01%')}${jTop('US0378331005', 'Apple', '4,52%')}${jTop('', 'AT&amp;T Inc.', '0,40%').replace('href="/it/stock-profiles/"', 'href="#"')}</table>
+  <table>${jRow('countries', 'Stati Uniti', '60,33%')}${jRow('countries', 'Giappone', '6,04%')}${jRow('countries', 'Altri', '33,63%')}</table>
+  <table>${jRow('sectors', 'Informatica', '38,27%')}${jRow('sectors', 'Altri', '61,73%')}</table>
+  <div class="disclaimer_txt text-right" data-testid="tl_etf-holdings_reference-date">Al 30/09/2026</div>
+  <script>Wicket.Ajax.ajax({"u":"/it/etf-profile.html?0-1.0-holdingsSection-countries-loadMoreCountries&isin=IE00BK5BQT80&_wicket=1","c":"loadMoreCountries5","e":"click","pd":true});
+  Wicket.Ajax.ajax({"u":"/it/etf-profile.html?0-1.0-holdingsSection-sectors-loadMoreSectors&isin=IE00BK5BQT80&_wicket=1","c":"loadMoreSectors6","e":"click","pd":true});</script>
+</body></html>`;
+const JMORE = `<?xml version="1.0" encoding="UTF-8"?><ajax-response><component id="countriesTable2f"><![CDATA[<table>${jRow('countries', 'Stati Uniti', '60,33%')}${jRow('countries', 'Giappone', '6,04%')}${jRow('countries', 'Paesi bassi', '1,46%')}${jRow('countries', 'Altri', '32,17%')}</table>]]></component></ajax-response>`;
+const htmlRes = (text, status = 200, headers = {}) => new Response(text, { status, headers: { 'Content-Type': 'text/html', ...headers } });
+
+test('eco etf: justETF profile turned into holdings, countries and sectors (whole lists)', async () => {
+  try {
+    const seen = [];
+    globalThis.fetch = async (url, init = {}) => {
+      const u = String(url);
+      seen.push({ url: u, headers: init.headers || {}, redirect: init.redirect });
+      if (u.includes('loadMoreCountries')) return htmlRes(JMORE);
+      if (u.includes('loadMoreSectors')) return htmlRes('error', 500);
+      const h = new Headers({ 'Content-Type': 'text/html' });
+      h.append('Set-Cookie', 'AWSALB=abc; Path=/; Secure');
+      h.append('Set-Cookie', 'AWSALBCORS=def; Path=/; SameSite=None');
+      return new Response(JPAGE, { status: 200, headers: h });
+    };
+    const r = await call('/api/eco/etf?isin=ie00bk5bqt80');
+    assert.equal(r.status, 200);
+    assert.equal(seen[0].url, 'https://www.justetf.com/it/etf-profile.html?isin=IE00BK5BQT80');
+    assert.equal(seen[0].redirect, 'manual');
+    const more = seen.find((x) => x.url.includes('loadMoreCountries'));
+    assert.equal(more.url, 'https://www.justetf.com/it/etf-profile.html?0-1.0-holdingsSection-countries-loadMoreCountries&isin=IE00BK5BQT80&_wicket=1');
+    assert.equal(more.headers.Cookie, 'AWSALB=abc; AWSALBCORS=def', 'same session as the page');
+    assert.equal(more.headers['Wicket-Ajax'], 'true');
+    const j = r.json;
+    assert.equal(j.isin, 'IE00BK5BQT80');
+    assert.equal(j.name, 'Vanguard FTSE All-World UCITS ETF (USD) Accumulating');
+    assert.equal(j.date, '2026-09-30');
+    assert.equal(j.count, 3797);
+    assert.deepEqual(j.top, [['NVIDIA Corp.', 5.01, 'US67066G1040'], ['Apple', 4.52, 'US0378331005'], ['AT&T Inc.', 0.4, '']]);
+    assert.deepEqual(j.countries, [['Stati Uniti', 60.33], ['Giappone', 6.04], ['Paesi bassi', 1.46], ['Altri', 32.17]], 'the whole list');
+    assert.deepEqual(j.sectors, [['Informatica', 38.27], ['Altri', 61.73]], 'the first rows when "more" fails');
+    assert.equal(j.source, 'justETF');
+    assert.match(r.headers.get('cache-control'), /max-age=604800/);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test('eco etf: unknown ISIN, product without holdings, bad input, upstream errors', async () => {
+  try {
+    globalThis.fetch = async () => new Response(null, { status: 302, headers: { Location: '/it/search.html?query=XX' } });
+    let r = await call('/api/eco/etf?isin=XS0000000009');
+    assert.equal(r.status, 200);
+    assert.equal(r.json.none, true);
+    assert.match(r.headers.get('cache-control'), /max-age=604800/, 'remembered for a week');
+    globalThis.fetch = async () => htmlRes('<html><head><title>Xetra-Gold | 4GLD | DE000A0S9GB0</title></head><body>ETC</body></html>');
+    r = await call('/api/eco/etf?isin=DE000A0S9GB0');
+    assert.deepEqual([r.json.none, r.json.name], [true, 'Xetra-Gold']);
+    assert.equal((await call('/api/eco/etf?isin=VWCE')).status, 400);
+    assert.equal((await call('/api/eco/etf')).status, 400);
+    assert.equal((await call('/api/eco/etf?isin=IE00BK5BQT8X')).status, 400, 'the last character is a digit');
+    globalThis.fetch = async () => htmlRes('busy', 429);
+    assert.equal((await call('/api/eco/etf?isin=IE00B4L5Y983')).status, 503);
+    globalThis.fetch = async () => htmlRes('down', 500);
+    assert.equal((await call('/api/eco/etf?isin=IE00B4L5Y983')).status, 502);
+    globalThis.fetch = async () => {
+      throw new Error('offline');
+    };
+    assert.equal((await call('/api/eco/etf?isin=IE00B4L5Y983')).status, 502);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});

@@ -317,3 +317,23 @@ tr.row-expired td { color: var(--muted); }
 @media (prefers-reduced-motion: reduce) {
   .rn-dot i { transition: none; }
 }
+
+/* ---------- Look-through: what the ETFs contain (sheet-composition.js, ETF sheet) ---------- */
+.lt-seg { margin: 2px 0 12px; }
+.lt-list { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.lt-row { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.lt-top { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.lt-flag { flex-shrink: 0; font-size: 16px; line-height: 1; }
+.lt-name { flex: 1; min-width: 0; font-size: 14px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lt-share { flex-shrink: 0; min-width: 44px; text-align: right; font-size: 14px; font-variant-numeric: tabular-nums; }
+.lt-val { flex-shrink: 0; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.lt-bar { height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+.lt-bar i { display: block; height: 100%; border-radius: 3px; background: var(--accent); }
+.lt-meta { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; color: var(--muted); min-width: 0; }
+.lt-meta span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lt-row.muted-row .lt-name, .lt-row.muted-row .lt-share { color: var(--muted); }
+.lt-row.muted-row .lt-bar i { background: var(--c-other); }
+.lt-note { margin: 14px 0 0; line-height: 1.5; }
+.etf-inside { padding: 14px 15px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.etf-inside .etf-inside-sub { margin: -4px 0 12px; }
+.etf-inside .etf-inside-src { margin: 14px 0 0; }

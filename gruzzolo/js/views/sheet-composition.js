@@ -1,7 +1,10 @@
 // Report sheet 3 "Composizione": allocation donut by class / security / sector / region / currency,
-// diversification KPIs, positions table, best and worst positions by unrealized return.
-import { S, cached, TYPE_KEYS, TYPE_PLURAL, REGIONS, CURRENCIES, assetCode } from '../state.js';
-import { ACTIONS } from '../registry.js';
+// what the ETFs contain (look-through), diversification KPIs, positions table, best and worst
+// positions by unrealized return.
+import { S, cached, TYPE_KEYS, TYPE_PLURAL, REGIONS, CURRENCIES, assetCode, asset } from '../state.js';
+import { ACTIONS, MOUNTS } from '../registry.js';
+import { lookThrough, isFund } from '../lookthrough.js';
+import { entryOf, ensureEtfs, barRows, sourceLine } from './lookthrough-view.js';
 import { app } from '../app.js';
 import { positions, cashAt } from '../engine.js';
 import { donutChart } from '../charts.js';
@@ -133,6 +136,70 @@ function allocationCard(ctx, data) {
   </section>`;
 }
 
+/* ---------- Look-through: what the ETFs contain ---------- */
+const LT_BY = [['holdings', 'Aziende'], ['countries', 'Paesi'], ['sectors', 'Settori']];
+const LT_ROWS = 10;
+let ltWanted = []; // ISINs the last render needed (downloaded by the mount below)
+MOUNTS.push(() => {
+  if (S.ui.tab === 'report' && ltWanted.length) ensureEtfs(ltWanted);
+});
+
+const codeOf = (aid) => {
+  const a = asset(aid);
+  return assetCode(a) || a.name;
+};
+function viaText(h) {
+  const etfs = h.via.filter((aid) => isFund(asset(aid))).map(codeOf);
+  const list = etfs.length > 2 ? `${etfs.slice(0, 2).join(', ')} e altri ${etfs.length - 2}` : etfs.join(' e ');
+  if (h.direct) return list ? `Azione tua e dentro ${list}` : 'Azione che possiedi direttamente';
+  return `Dentro ${list}`;
+}
+
+function lookThroughCard(ctx, data) {
+  const funds = data.open.filter((p) => isFund(p.asset));
+  ltWanted = funds.map((p) => p.asset.isin).filter(Boolean);
+  if (!funds.length) return '';
+  const cash = data.cashBal > 0.005 ? [{ aid: '__cash', value: data.cashBal, asset: { type: 'cash', name: 'Liquidità' } }] : [];
+  const lt = lookThrough(data.open.concat(cash), entryOf);
+  const by = LT_BY.some(([k]) => k === S.ui.ltBy) ? S.ui.ltBy : 'holdings';
+  const ok = lt.funds.filter((f) => f.state === 'ok');
+  const loading = lt.funds.filter((f) => f.state === 'loading');
+  const seg = `<div class="seg full lt-seg" role="group" aria-label="Mostra">${LT_BY.map(([k, l]) => `<button type="button" data-act="lt-by" data-by="${k}" aria-pressed="${by === k}">${l}</button>`).join('')}</div>`;
+  let body = '';
+  if (!ok.length) {
+    const failed = lt.funds.find((f) => f.state === 'failed');
+    body = loading.length
+      ? `<div class="eco-loading" aria-busy="true"><p class="boot-text">Scarico la composizione ${loading.length === 1 ? 'del tuo ETF' : `dei tuoi ${loading.length} ETF`}…</p><div class="skeleton skel-line"></div><div class="skeleton skel-line" style="width: 80%"></div><div class="skeleton skel-line" style="width: 60%"></div></div>`
+      : `<p class="chart-note">${failed ? `Composizione non scaricata: ${esc(entryOf(failed.isin).failed || 'riprova più tardi')}.` : 'justETF non ha la composizione dei tuoi ETF (oppure manca il loro ISIN).'}</p>`;
+  } else if (by === 'holdings') {
+    body = barRows(lt.holdings.slice(0, LT_ROWS).map((h) => ({ label: h.name, share: h.share, value: h.value, sub: viaText(h) })));
+  } else {
+    const list = by === 'countries' ? lt.countries : lt.sectors;
+    const named = list.filter((r) => !r.others && !r.none);
+    const others = list.find((r) => r.others);
+    const none = list.find((r) => r.none);
+    const rest = named.slice(LT_ROWS).reduce((s, r) => s + r.value, 0) + (others ? others.value : 0);
+    const rows = named.slice(0, LT_ROWS).map((r) => ({ label: r.name, code: r.code, share: r.share, value: r.value }));
+    if (rest > 0.005) rows.push({ label: by === 'countries' ? 'Altri paesi' : 'Altri settori', share: rest / lt.total, value: rest, muted: true });
+    if (none) rows.push({ label: 'Non classificato', sub: 'Liquidità, crypto, oro, titoli senza dati', share: none.share, value: none.value, muted: true });
+    body = barRows(rows);
+  }
+  // Which ETFs are inside, and when their data is from
+  const dates = ok.map((f) => f.date).filter(Boolean).sort();
+  const missing = lt.funds.filter((f) => f.state === 'none' || f.state === 'noisin' || f.state === 'failed').map((f) => codeOf(f.aid));
+  const notes = [];
+  if (ok.length) notes.push(`${sourceLine(dates[0])} · ${ok.length === lt.funds.length ? (ok.length === 1 ? 'il tuo ETF' : `tutti i tuoi ${ok.length} ETF`) : `${ok.length} ETF su ${lt.funds.length}`}`);
+  if (loading.length && ok.length) notes.push(`Ne sto scaricando ${loading.length === 1 ? 'un altro' : `altri ${loading.length}`}…`);
+  if (missing.length) notes.push(`Senza composizione: ${missing.join(', ')}`);
+  if (by === 'holdings' && ok.length) notes.push('Di ogni ETF si conoscono le prime 10 aziende: il peso vero di quelle grandi può essere un po\' più alto.');
+  return `<section class="card rcard lt-card full">
+    <header class="rcard-head"><div class="rcard-titles"><h3 class="rcard-title">Dentro i tuoi ETF</h3><p class="rcard-sub">Le aziende, i paesi e i settori che possiedi davvero, sommando ETF e titoli diretti</p></div>${infoBtn('lookThrough')}</header>
+    ${seg}
+    ${body}
+    ${notes.length ? `<p class="hint lt-note">${notes.map(esc).join('<br>')}</p>` : ''}
+  </section>`;
+}
+
 /* ---------- Diversification ---------- */
 function diversificationKpis(data) {
   const d = data.div;
@@ -246,6 +313,7 @@ function renderComposition(ctx) {
   }
   return `<div class="comp-sheet stack-lg">
     ${allocationCard(ctx, data)}
+    ${lookThroughCard(ctx, data)}
     <div class="sec-head comp-sec"><h3>Diversificazione</h3></div>
     ${diversificationKpis(data)}
     ${positionsBlock(ctx, data)}
@@ -259,6 +327,12 @@ Object.assign(ACTIONS, {
     if (S.ui.allocBy === by) return;
     S.ui.allocBy = by;
     S.ui.allocSel = null;
+    app.render();
+  },
+  'lt-by': (el) => {
+    const by = LT_BY.some(([k]) => k === el.dataset.by) ? el.dataset.by : 'holdings';
+    if (S.ui.ltBy === by) return;
+    S.ui.ltBy = by;
     app.render();
   },
   'comp-sel': (el) => {

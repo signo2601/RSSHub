@@ -829,7 +829,7 @@ function privacyGroup(today) {
     static2('lock', 'accent', `I tuoi dati restano solo su ${hereText()}`,
       `Conti, operazioni, titoli e impostazioni sono salvati nella memoria di Gruzzolo, qui sul ${ios ? 'telefono' : 'dispositivo'}. Niente account e niente cloud: nessuno oltre a te può vederli.`, ' more-hero'),
     static2('globe', '', 'Cosa passa da internet',
-      'Solo il nome, il ticker o l\'ISIN dei titoli, per cercarli e chiederne i prezzi pubblici al server dell\'app. Mai importi, quantità, conti o operazioni.'),
+      'Solo il nome, il ticker o l\'ISIN dei titoli, per cercarli e chiederne al server dell\'app i prezzi pubblici e la composizione degli ETF. Mai importi, quantità, conti o operazioni.'),
     storageRow(),
     installRow(),
     navRow({ act: 'more-backup-export', ico: 'download', tone: rem.due ? 'warn' : 'accent', title: 'Esporta backup', sub: esc(rem.text), chev: false, cls: 'more-backup-now' }),

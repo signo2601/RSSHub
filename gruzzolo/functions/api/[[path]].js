@@ -727,7 +727,100 @@ async function handleEcoInflation(context, url) {
   });
 }
 
+// GET /api/eco/etf?isin=IE00BK5BQT80 → what is inside an ETF, read from its public justETF profile:
+// the 10 largest holdings, the countries and the sectors (the whole lists, opened like the page's
+// "Mostra di più" links) and the date of the data. An ISIN justETF does not know, or a product without
+// holdings (an ETC on gold), answers { none: true }: cached like the others, so it is not asked again.
+const JUSTETF = 'https://www.justetf.com';
+const TTL_ECO_ETF = 7 * 24 * 3600;
+const JUSTETF_HEADERS = { 'User-Agent': UA, 'Accept-Language': 'it-IT,it;q=0.9', Accept: 'text/html,application/xhtml+xml' };
+const htmlText = (s) => String(s || '').replace(/<[^>]*>/g, ' ').replace(/&amp;/g, '&').replace(/&#0?39;|&apos;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+// '5,01%' → 5.01; '3.797' → 3797
+const itNum = (s) => {
+  const v = Number(String(s || '').replace(/[%\s]/g, '').replace(/\./g, '').replace(',', '.'));
+  return Number.isFinite(v) ? v : null;
+};
+// Rows [name, percent] of the countries or sectors table in a piece of the page
+function justEtfRows(html, kind) {
+  const re = new RegExp(`data-testid="tl_etf-holdings_${kind}_value_name"[^>]*>([\\s\\S]*?)</td>[\\s\\S]*?data-testid="tl_etf-holdings_${kind}_value_percentage"[^>]*>([^<]*)<`, 'g');
+  const out = [];
+  for (const m of String(html || '').matchAll(re)) {
+    const name = str(htmlText(m[1]), 60);
+    const pct = itNum(m[2]);
+    if (name && pct !== null && pct >= 0 && pct <= 100) out.push([name, Math.round(pct * 100) / 100]);
+  }
+  return out.slice(0, 40);
+}
+export function parseJustEtf(html) {
+  const holdings = [];
+  const re = /data-testid="tl_etf-holdings_top-holdings_link_name"([^>]*)>([\s\S]*?)<\/a>[\s\S]*?data-testid="tl_etf-holdings_top-holdings_value_percentage"[^>]*>([^<]*)</g;
+  for (const m of String(html || '').matchAll(re)) {
+    const attrs = m[1];
+    const title = (attrs.match(/title="([^"]*)"/) || [])[1];
+    const isin = ((attrs.match(/href="[^"]*\/([A-Z]{2}[A-Z0-9]{9}[0-9])(?:[?#"][^"]*)?"/) || [])[1]) || '';
+    const name = str(htmlText(title || m[2]), 80);
+    const pct = itNum(m[3]);
+    if (name && pct !== null && pct >= 0 && pct <= 100) holdings.push([name, Math.round(pct * 100) / 100, isin]);
+  }
+  const date = (String(html || '').match(/data-testid="tl_etf-holdings_reference-date"[^>]*>[^<]*?(\d{2})\/(\d{2})\/(\d{4})/) || []);
+  const count = (String(html || '').match(/data-testid="tl_etf-holdings_top-holdings_count"[^>]*>([^<]*)</) || [])[1];
+  const title = (String(html || '').match(/<title>([^<|]*)/) || [])[1];
+  return {
+    name: str(htmlText(title), 120),
+    date: date.length === 4 ? `${date[3]}-${date[2]}-${date[1]}` : null,
+    count: count ? itNum(count.replace(/[^\d.,]/g, '')) : null,
+    top: holdings.slice(0, 10),
+    countries: justEtfRows(html, 'countries'),
+    sectors: justEtfRows(html, 'sectors'),
+  };
+}
+async function justEtfMore(html, isin, kind, cookie) {
+  const name = kind === 'countries' ? 'Countries' : 'Sectors';
+  const path = (String(html).match(new RegExp(`"u":"(/it/etf-profile\\.html\\?[^"]*loadMore${name}[^"]*)"`)) || [])[1];
+  if (!path) return null;
+  try {
+    const res = await fetch(JUSTETF + path, {
+      headers: { ...JUSTETF_HEADERS, Accept: 'text/xml', Cookie: cookie, 'Wicket-Ajax': 'true', 'Wicket-Ajax-BaseURL': `it/etf-profile.html?isin=${isin}`, 'X-Requested-With': 'XMLHttpRequest' },
+      signal: timeoutSignal(UPSTREAM_TIMEOUT_MS),
+    });
+    if (!res.ok) return null;
+    const rows = justEtfRows(await res.text(), kind);
+    return rows.length ? rows : null;
+  } catch {
+    return null;
+  }
+}
+async function handleEcoEtf(context, url) {
+  const isin = String(url.searchParams.get('isin') || '').trim().toUpperCase();
+  if (!ISIN_RE.test(isin)) throw new HttpError(400, 'ISIN non valido: servono 12 caratteri, come IE00BK5BQT80.');
+  const cacheUrl = `${url.origin}/api/eco/etf?isin=${isin}`;
+  return withEdgeCache(context, cacheUrl, TTL_ECO_ETF, async () => {
+    let res;
+    try {
+      res = await fetch(`${JUSTETF}/it/etf-profile.html?isin=${isin}`, { headers: JUSTETF_HEADERS, redirect: 'manual', signal: timeoutSignal(UPSTREAM_TIMEOUT_MS) });
+    } catch {
+      throw new HttpError(502, 'justETF non risponde in questo momento: riprova più tardi.');
+    }
+    // An unknown ISIN sends to the search page
+    if (res.status >= 300 && res.status < 400) return { data: { at: Date.now(), isin, none: true } };
+    if (res.status === 404) return { data: { at: Date.now(), isin, none: true } };
+    if (res.status === 429) throw new HttpError(503, 'justETF sta limitando le richieste: riprova tra qualche minuto.');
+    if (!res.ok) throw new HttpError(502, 'justETF ha risposto con un errore: riprova più tardi.');
+    const html = await res.text();
+    const out = parseJustEtf(html);
+    if (!out.top.length && !out.countries.length && !out.sectors.length) return { data: { at: Date.now(), isin, name: out.name, none: true } };
+    // The whole lists of countries and sectors (the page shows the first 4): same session as the page
+    const setCookies = typeof res.headers.getSetCookie === 'function' ? res.headers.getSetCookie() : [res.headers.get('set-cookie') || ''];
+    const cookie = setCookies.map((c) => String(c).split(';')[0].trim()).filter((c) => c.includes('=')).join('; ');
+    const [countries, sectors] = await Promise.all([justEtfMore(html, isin, 'countries', cookie), justEtfMore(html, isin, 'sectors', cookie)]);
+    if (countries) out.countries = countries;
+    if (sectors) out.sectors = sectors;
+    return { data: { at: Date.now(), isin, ...out, source: 'justETF' } };
+  });
+}
+
 const ECO_ROUTES = {
+  etf: handleEcoEtf,
   inflation: handleEcoInflation,
   calendar: handleEcoCalendar,
   quotes: handleEcoQuotes,

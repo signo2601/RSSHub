@@ -18,6 +18,9 @@ import {
 } from '../util.js';
 import { avatar, pctPill, txRow, unitFor, txLabel, txAmount, txFx, feeKindLabel, taxKindLabel } from './home.js';
 import { planById, plansOf, planSummary } from '../plans.js';
+import { eco } from '../eco.js';
+import { isFund, validIsin, fundState, countryCode, etfKey, etfPath, ETF_MAX_AGE } from '../lookthrough.js';
+import { entryOf, barRows, sourceLine as etfSourceLine } from './lookthrough-view.js';
 
 /* ======================================================================
    Shared helpers (also used by market.js)
@@ -141,6 +144,36 @@ export function priceChartBlock({ id, points, range, ccy = 'EUR', act, w, h = 18
 }
 
 const stat = (label, value, cls = '') => `<div class="stat"><span>${label}</span><b class="${cls}">${value}</b></div>`;
+
+// What an ETF or a fund contains (justETF): its largest holdings, countries and sectors
+const ETF_TABS = [['holdings', 'Aziende'], ['countries', 'Paesi'], ['sectors', 'Settori']];
+function etfBlock(a, args) {
+  const head = '<div class="group-label">Cosa contiene</div>';
+  if (!validIsin(a.isin)) return `${head}<p class="hint">Per vedere cosa contiene, aggiungi il suo ISIN da «Modifica».</p>`;
+  const e = entryOf(a.isin);
+  const st = fundState(a, () => e);
+  if (st.state === 'loading') return `${head}<div class="eco-loading" aria-busy="true"><div class="skeleton skel-line"></div><div class="skeleton skel-line" style="width: 75%"></div><div class="skeleton skel-line" style="width: 55%"></div></div>`;
+  if (st.state === 'failed') return `${head}<p class="hint">Composizione non scaricata: ${esc(e.failed || 'riprova più tardi')}.</p>`;
+  if (st.state === 'none') return `${head}<p class="hint">justETF non ha la composizione di questo titolo (succede con gli ETC, per esempio sull'oro, e con i fondi non quotati).</p>`;
+  const d = st.data;
+  const by = ETF_TABS.some(([k]) => k === args.ltBy) ? args.ltBy : 'holdings';
+  const tabs = `<div class="seg full lt-seg" role="group" aria-label="Mostra">${ETF_TABS.map(([k, l]) => `<button type="button" data-act="asset-lt-by" data-by="${k}" aria-pressed="${by === k}">${l}</button>`).join('')}</div>`;
+  let rows;
+  let sub = '';
+  if (by === 'holdings') {
+    rows = (d.top || []).map(([name, p]) => ({ label: name, share: p / 100 }));
+    const topShare = rows.reduce((s, r) => s + r.share, 0);
+    sub = `Le prime ${rows.length}${d.count ? ` di ${num(d.count, 0)} aziende` : ''}: ${pct(topShare, 1)} del fondo`;
+  } else {
+    const list = (by === 'countries' ? d.countries : d.sectors) || [];
+    rows = list.map(([name, p]) => {
+      const others = /^altri$/i.test(name);
+      return { label: others ? (by === 'countries' ? 'Altri paesi' : 'Altri settori') : name, code: by === 'countries' && !others ? countryCode(name) : null, share: p / 100, muted: others };
+    });
+  }
+  return `${head}<div class="etf-inside">${tabs}${sub ? `<p class="hint etf-inside-sub">${esc(sub)}</p>` : ''}${rows.length ? barRows(rows, { showValue: false }) : '<p class="hint">Nessun dato.</p>'}
+    <p class="hint etf-inside-src">${esc(etfSourceLine(d.date))} (fonte non ufficiale), aggiornati ogni settimana.</p></div>`;
+}
 
 // Row that opens a savings plan (transaction and asset details)
 function planLink(p) {
@@ -280,6 +313,7 @@ SHEETS.asset = (args = {}) => {
       ${chartBlock}
       ${stats}
       ${actions}
+      ${isFund(a) ? etfBlock(a, args) : ''}
       ${manual}
       <div class="group-label">Operazioni</div>
       ${txList}
@@ -288,6 +322,13 @@ SHEETS.asset = (args = {}) => {
         <button class="btn danger" type="button" data-act="delete-asset" data-aid="${esc(aid)}">${icon('trash')}Elimina</button>
       </div>`,
     after: () => {
+      // The composition of an ETF: downloaded once a week, the sheet redraws when it arrives
+      if (isFund(a) && validIsin(a.isin)) {
+        const v = eco.version;
+        eco.load(etfKey(a.isin), etfPath(a.isin), { maxAge: ETF_MAX_AGE }).then(() => {
+          if (eco.version !== v && isTop('asset', (x) => x.aid === aid)) app.renderSheet();
+        });
+      }
       // Linked asset without (enough) market history: download it once, then show it
       if (!a.symbol || a.priceSource !== 'auto' || args.histTried) return;
       const h = market.getHistory(a.symbol);
@@ -1491,6 +1532,12 @@ Object.assign(ACTIONS, {
     const top = topSheet();
     if (!top || top.name !== 'asset') return;
     top.args.range = el.dataset.range;
+    app.renderSheet();
+  },
+  'asset-lt-by': (el) => {
+    const top = topSheet();
+    if (!top || top.name !== 'asset') return;
+    top.args.ltBy = el.dataset.by;
     app.renderSheet();
   },
 });
