@@ -53,6 +53,8 @@ Non serve configurare altro: niente database, niente chiavi.
 
 Perché proprio dall'icona? In Safari, iOS può cancellare i dati dei siti che non apri per 7 giorni; l'app sulla schermata Home no, e può ricevere la «memoria permanente».
 
+**Icona aggiunta prima della versione 2.9?** Con iOS 26 la barra in alto restava scura e in fondo rimaneva una striscia: iOS legge l'impostazione della barra di stato solo quando aggiungi l'icona. Aggiungila di nuovo una volta: **Altro → Esporta backup** → elimina l'icona → aggiungila di nuovo da Safari → **Altro → Importa backup** (in Altro → Guida trovi i passaggi).
+
 ## Backup
 
 Il backup è un file `.json` con tutti i tuoi dati. Fallo ogni tanto (l'app te lo ricorda dopo 30 giorni).

@@ -107,12 +107,17 @@ test('the app loads nothing from other sites (no Google Fonts, no CDN)', () => {
     assert.doesNotMatch(read(css), /@import|url\(\s*['"]?https?:/, css);
   }
   // iPhone home screen app: meta tags, icon, standalone manifest without desktop shortcuts
-  for (const meta of ['apple-mobile-web-app-capable', 'apple-mobile-web-app-status-bar-style', 'apple-mobile-web-app-title']) assert.match(html, new RegExp(`name="${meta}"`));
+  for (const meta of ['apple-mobile-web-app-capable', 'apple-mobile-web-app-title']) assert.match(html, new RegExp(`name="${meta}"`));
+  // no status bar style (Apple's advice for iOS 26, WebKit bug 317153): the status bar is opaque, in the
+  // colour of the page (theme-color follows the app's theme), and the iOS 26 short layout does not happen
+  assert.doesNotMatch(html, /apple-mobile-web-app-status-bar-style/);
+  assert.match(html, /name="theme-color" content="#eef1f5" media="\(prefers-color-scheme: light\)"/);
   assert.match(html, /rel="apple-touch-icon" href="icon-180.png"/);
   const man = JSON.parse(read('manifest.webmanifest'));
   assert.equal(man.display, 'standalone');
   assert.equal(man.short_name, 'Gruzzolo');
   assert.equal(man.shortcuts, undefined);
+  assert.equal(man.theme_color, undefined, 'the theme-color meta tags decide, light or dark');
   assert.ok(man.icons.some((i) => i.sizes === '512x512'));
   // Licence of the bundled fonts
   assert.match(read('fonts/OFL.txt'), /SIL OPEN FONT LICENSE Version 1\.1/);

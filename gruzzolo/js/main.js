@@ -532,22 +532,35 @@ function fitSheetToViewport() {
   } else clear();
 }
 
-// iOS 26 (WebKit bug 301108): the app added to the Home Screen gets a viewport one status-bar height
-// shorter than the screen, so the frame stopped above the bottom edge and left an empty strip under the
-// tab bar. Measure that gap against the screen and let the frame reach the edge (css --frame-fix).
+// The app on the iPhone Home Screen. Installs made with the translucent status bar (before v2.9) have
+// two iOS 26 problems: white status bar text over the page (html.translucent-bar: the header turns dark
+// in the light theme) and a layout one status-bar height short of the screen, below which nothing fixed
+// is painted (html.short-frame: the strip shows the page background, given the tab bar colour).
+// The gap is measured where a fixed box really ends, not with innerHeight (iOS can report the full height).
 // Only on an iPhone and only for a gap the size of a status bar: never the keyboard, never other bugs.
-function fixStandaloneFrame() {
-  if (typeof window === 'undefined' || !window.screen || typeof document === 'undefined') return;
+let frameProbe = null;
+function measureStandaloneFrame() {
+  if (typeof window === 'undefined' || !window.screen || typeof document === 'undefined' || !document.body) return;
   const nav = window.navigator || {};
   const standalone = nav.standalone === true || (typeof window.matchMedia === 'function' && window.matchMedia('(display-mode: standalone)').matches);
-  let fix = 0;
+  const root = document.documentElement;
+  let short = false;
+  let translucent = false;
   if (standalone && /iPhone/.test(nav.userAgent || '')) {
+    if (!frameProbe) {
+      frameProbe = document.createElement('div');
+      frameProbe.setAttribute('aria-hidden', 'true');
+      frameProbe.style.cssText = 'position:fixed;top:0;bottom:0;left:0;width:1px;visibility:hidden;pointer-events:none;padding-top:env(safe-area-inset-top,0px);box-sizing:content-box';
+      document.body.appendChild(frameProbe);
+    }
+    translucent = (parseFloat(getComputedStyle(frameProbe).paddingTop) || 0) > 0;
     const portrait = window.innerHeight >= window.innerWidth;
     const full = portrait ? Math.max(screen.width, screen.height) : Math.min(screen.width, screen.height);
-    const gap = Math.round(full - window.innerHeight);
-    if (gap >= 16 && gap <= 90) fix = gap;
+    const gap = Math.round(full - frameProbe.getBoundingClientRect().bottom);
+    short = translucent && gap >= 16 && gap <= 90;
   }
-  document.documentElement.style.setProperty('--frame-fix', `${fix}px`);
+  root.classList.toggle('translucent-bar', translucent);
+  root.classList.toggle('short-frame', short);
 }
 
 // iPhone: the page never scrolls (css/app.css), but after the keyboard closes iOS can leave the
@@ -932,9 +945,14 @@ function onVisibility() {
 }
 
 function listen() {
-  fixStandaloneFrame();
-  window.addEventListener('resize', debounce(fixStandaloneFrame, 100));
-  window.addEventListener('orientationchange', () => setTimeout(fixStandaloneFrame, 300));
+  measureStandaloneFrame();
+  setTimeout(measureStandaloneFrame, 500);
+  window.addEventListener('resize', debounce(measureStandaloneFrame, 100));
+  window.addEventListener('orientationchange', () => setTimeout(measureStandaloneFrame, 300));
+  window.addEventListener('pageshow', measureStandaloneFrame);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') setTimeout(measureStandaloneFrame, 200);
+  });
   // the fades of a chip strip follow its scroll (scroll events do not bubble: capture them)
   document.addEventListener('scroll', (e) => {
     const t = e.target;

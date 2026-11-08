@@ -163,10 +163,12 @@ img { display: block; max-width: 100%; }
 
 /* ---------- App frame (phone) ---------- */
 .app { position: fixed; inset: 0; display: flex; overflow: hidden; }
-/* iOS 26 (WebKit bug 301108): the app added to the Home Screen gets a viewport one status-bar height
-   shorter than the screen, which left an empty strip under the tab bar. main.js measures the gap
-   (--frame-fix, 0 elsewhere) and the frame and the sheets reach the real bottom edge. */
-.app, .sheet-layer { bottom: calc(-1 * var(--frame-fix, 0px)); }
+/* iOS 26 Home Screen apps installed with the translucent status bar (WebKit bug 301108) lay out the
+   page one status-bar height short of the screen, and nothing fixed is painted below that edge: only
+   the page background is. main.js marks that case (html.short-frame): the strip below takes the colour
+   of the tab bar, which needs no padding of its own there. Apps installed after the status bar became
+   opaque (index.html) do not have the strip. */
+html.short-frame { background: var(--surface); --tab-pad: 0px; }
 .sidebar { display: none; }
 .shell { position: relative; display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; min-height: 0; }
 
@@ -178,23 +180,24 @@ img { display: block; max-width: 100%; }
   transition: border-color .2s;
 }
 .top.scrolled { border-bottom-color: var(--line); }
-/* Installed on iPhone the status bar text is always white. In the light theme the whole header turns
-   dark (the dark tokens re-declared on .top), so status bar and header are one app bar instead of an
-   empty black strip over a light header. */
+/* Installed with the translucent status bar (before v2.9), iOS writes the status bar in white and
+   iOS 26.1 even draws a dark veil over it: in the light theme the whole header turns dark (the dark
+   tokens re-declared on .top), one app bar instead of a black strip over a light header. main.js sets
+   html.translucent-bar only in that case; new installs get an opaque status bar in the page colour. */
 .top::before {
   content: ""; position: absolute; left: 0; right: 0; top: 0;
   height: env(safe-area-inset-top, 0px); pointer-events: none;
 }
-@media (display-mode: standalone) and (max-width: 899px) {
+@media (max-width: 899px) {
   @media (prefers-color-scheme: light) {
-    :root:not([data-theme="dark"]) .top {
+    :root.translucent-bar:not([data-theme="dark"]) .top {
       --bg: var(--statusbar); --surface: #1a1f27; --surface-2: #232934; --line: #2b323d;
       --ink: #f2f4f7; --ink-2: #c3cad4; --muted: #8f98a6; --accent-line: #f2b63d;
       --up: #3ccf86; --up-soft: rgba(60, 207, 134, .16);
       color: var(--ink);
     }
   }
-  :root[data-theme="light"] .top {
+  :root.translucent-bar[data-theme="light"] .top {
     --bg: var(--statusbar); --surface: #1a1f27; --surface-2: #232934; --line: #2b323d;
     --ink: #f2f4f7; --ink-2: #c3cad4; --muted: #8f98a6; --accent-line: #f2b63d;
     --up: #3ccf86; --up-soft: rgba(60, 207, 134, .16);
@@ -604,7 +607,7 @@ button.row:active, a.row:active { background: var(--surface-2); }
 .inline-form .field { flex: 1; }
 
 /* ---------- Sheets (bottom sheets on phones, dialogs on desktop) ---------- */
-.sheet-layer { position: fixed; inset: 0; bottom: calc(-1 * var(--frame-fix, 0px)); z-index: 50; display: flex; align-items: flex-end; justify-content: center; }
+.sheet-layer { position: fixed; inset: 0; z-index: 50; display: flex; align-items: flex-end; justify-content: center; }
 .backdrop { position: absolute; inset: 0; background: var(--scrim); animation: fade-in .2s ease-out; touch-action: none; }
 .sheet {
   position: relative; display: flex; flex-direction: column; width: 100%; max-width: 640px;
@@ -636,7 +639,7 @@ button.row:active, a.row:active { background: var(--surface-2); }
 /* ---------- Toast ---------- */
 .toast {
   position: fixed; left: 50%; z-index: 70; transform: translateX(-50%);
-  bottom: calc(var(--tabbar-h) + 18px + var(--tab-pad) - var(--frame-fix, 0px));
+  bottom: calc(var(--tabbar-h) + 18px + var(--tab-pad));
   width: max-content; max-width: calc(100% - 32px);
   padding: 11px 16px; border-radius: 14px; box-shadow: var(--shadow);
   background: var(--ink); color: var(--bg); font-size: 14px; font-weight: 700; line-height: 1.35;

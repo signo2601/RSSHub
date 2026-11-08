@@ -891,16 +891,27 @@ function serverGroup(today) {
 }
 
 /* ---------- 8. Guide ---------- */
+// Installed before v2.9 with the translucent status bar (main.js marks it on <html>): a one-time
+// reinstall gives the status bar the colour of the app and the whole screen to the app
+const oldInstall = () => typeof document !== 'undefined' && document.documentElement.classList.contains('translucent-bar');
+
 function guideGroup() {
   const installed = isStandalone();
-  const rows = [
+  const rows = [];
+  if (oldInstall()) {
+    rows.push(navRow({
+      act: 'more-guide', attrs: ' data-topic="reinstall"', ico: 'refresh', tone: 'warn', title: 'Aggiorna l\'icona sulla schermata Home',
+      sub: 'Una volta sola: la barra in alto prende il colore dell\'app e lo schermo si riempie fino in fondo',
+    }));
+  }
+  rows.push(
     navRow({
       act: 'more-guide', attrs: ' data-topic="iphone"', ico: installed ? 'check' : 'download', title: 'Installa su iPhone',
       sub: esc(installed ? 'Fatto: stai usando l\'app installata' : 'Safari → Condividi → Aggiungi alla schermata Home'),
     }),
     navRow({ act: 'more-guide', attrs: ' data-topic="offline"', ico: 'cloud', title: 'Senza internet', sub: 'Cosa funziona offline e quando si aggiornano i prezzi' }),
     navRow({ act: 'more-guide', attrs: ' data-topic="prices"', ico: 'info', title: 'Da dove arrivano i prezzi', sub: 'Fonte, ritardo e prezzi manuali' }),
-  ];
+  );
   return group('guide', 'info', 'Guida', `<div class="list">${rows.join('')}</div>`,
     `<b>${esc(VERSION)}</b> · prezzi da Yahoo Finance e mercati da TradingView tramite il server dell'app, solo a scopo informativo.`);
 }
@@ -1682,6 +1693,17 @@ FORMS['more-server'] = async (form) => {
    Sheet: guide
    ====================================================================== */
 const GUIDE = {
+  reinstall: {
+    title: 'Aggiorna l\'icona',
+    body: () => `<p>La tua icona di Gruzzolo è stata aggiunta con una vecchia impostazione della barra di stato: con iOS 26 la barra in alto resta scura e in fondo allo schermo rimane una striscia. Basta aggiungere di nuovo l'icona, una volta sola. <b>I dati li porti con il backup</b>, perché eliminando l'icona iOS cancella anche i suoi dati.</p>
+    ${stepsHtml([
+      'Qui in Altro tocca <b>Esporta backup</b> e scegli <b>Salva su File</b> → <b>Sul mio iPhone</b>.',
+      'Tieni premuta l\'icona di Gruzzolo sulla schermata Home e scegli <b>Elimina app</b>.',
+      'Apri l\'indirizzo di Gruzzolo in <b>Safari</b> → <b>Condividi</b> → <b>Aggiungi alla schermata Home</b> → <b>Aggiungi</b>.',
+      'Apri Gruzzolo dalla nuova icona → <b>Altro</b> → <b>Importa backup</b> → scegli il file salvato al punto 1.',
+    ])}
+    <button class="btn primary block" type="button" data-act="more-backup-export">${icon('download')}Esporta backup ora</button>`,
+  },
   iphone: {
     title: 'Installa su iPhone',
     body: () => `${isStandalone() ? `<div class="banner info more-banner">${icon('check')}<p><b>Fatto!</b> Stai già usando Gruzzolo dall'icona sulla schermata Home.</p></div>` : ''}
