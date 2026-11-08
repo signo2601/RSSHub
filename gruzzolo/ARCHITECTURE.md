@@ -121,7 +121,13 @@ camelCase, English comments, Italian UI copy. Views return HTML strings; every u
   // ticker: short display code ('VWCE'); symbol: Yahoo symbol ('VWCE.DE'), '' for manual assets; ter: annual fraction (0.0022) or null
   txns: [Txn],
   prices: { [aid]: [[date, price], ...] },   // MANUAL price points only (local currency), sorted
+  plans: [Plan],                            // savings plans (plans.js); [] in data from older versions
 }
+// Plan: { id, acc, aid, amount (€ of the first purchase, fees included), every: 1|2|3|6|12 (months), day: 1-28,
+//         start (first purchase on `day` of that month, or of the next one), end?, step? (yearly increase, 0.02),
+//         fee?, sepa (true: paid by SEPA debit from outside), paused?, done? (last scheduled day handled), skipped?, demo? }
+// Txn extras: plan (id of its plan), gen (recorded by the plan itself), sepa (bought with money from outside:
+//             never touches the cash of a tracked account, counted as an inflow).
 // The watchlist of versions ≤ 2.1 ('watch') is dropped by migrate().
 ```
 
@@ -287,6 +293,13 @@ Mercati routes (one POST to `https://scanner.tradingview.com/{global|coin|econom
 - An answer with no rows is a 502 (never an empty 200 kept in the edge cache or on the phone).
 - `GET /api/eco/crypto` → the 15 largest non-stablecoin cryptocurrencies, prices in USD. 120 s.
 - `GET /api/eco/logo?id=apple` → SVG logo, `Content-Security-Policy: sandbox`, 30 days.
+- `GET /api/eco/calendar` → economic calendar of US, EU, IT, DE, FR, ES, GB, CH, JP, CN from 3 days ago to 15 days ahead
+  (TradingView economic-calendar): `{ at, from, to, cols, rows: [[id, date, country, title, period, actual, forecast, previous, unit, scale, high]] }`. 10 min.
+- `GET /api/eco/inflation` → monthly HICP of Italy and the euro area since 1996 (Eurostat `prc_hicp_minr`, 2025 = 100):
+  `{ at, base, start: '1996-01', series: { IT: [...], EA: [...] } }`. 12 h.
+- `GET /api/eco/etf?isin=` → composition of an ETF from its public justETF profile (page + the two "Mostra di più"
+  AJAX calls in the same session): `{ at, isin, name, date, count, top: [[name, pct, isin]], countries: [[name, pct]],
+  sectors: [[name, pct]], source }`; an unknown ISIN or a product without holdings answers `{ none: true }`. 7 days.
 
 ## Analytics modules (pure functions; no DOM, no `Date.now()`)
 
@@ -435,6 +448,23 @@ These modules are finished and tested; the notes list behavior beyond the contra
   A refused persistence can be asked again by tapping the row (`more-storage-persist`), except in Safari, where only the Home Screen app gets it.
   «Esporta backup» calls `saveFile` (share sheet) and records `'gruzzolo:lastBackup'`; `backupReminder()` flags no backup in 30 days.
   Guide topics: `iphone`, `offline`, `prices`.
+
+- **plans.js** (PAC): `runPlans({ data, today, only })` records the purchases due, at the FINAL close of the execution day
+  (first market day ≥ scheduled day; final once a later bar exists or the history was downloaded after that day; holes in
+  the data use the last close before; days before the data starts are skipped). Manual-price securities buy at their last
+  price on the scheduled weekday. A purchase already present around the day (imported or typed) is adopted instead of
+  duplicated; `replaceWithReal()` lets imported purchases replace simulated ones. main.js runs it at start and after every
+  price refresh. Engine: a `sepa` buy is treated like one of an 'auto' account (cash untouched, cost counted as inflow).
+- **lookthrough.js**: `lookThrough(positions, entryOf)` weights each ETF's justETF composition by the position's value and
+  adds shares (country from the ISIN) and bonds owned directly; lists end with "Altri" and "Non classificato" and add up
+  to 100% of the value given. `views/lookthrough-view.js` downloads with eco.js (`etf:ISIN`, a week) and draws bar rows.
+- **inflation.js**: `inflationBetween(data, from, to)` uses the index of the month before `from` and of the month of `to`
+  (or the last published); the Report's real return is (1 + TWR) / (1 + inflation) − 1.
+- **backupcrypt.js**: PBKDF2-SHA-256 (600 000 rounds) + AES-256-GCM, all in Web Crypto; the file never leaves the device unencrypted.
+- **Design review**: `.claude/agents/gruzzolo-design.md` + `node dev/screens.mjs` (screens of every tab and sheet on
+  iPhone 13 / SE / desktop, light and dark). Rules applied: thousands always grouped, sentence-case labels (uppercase only
+  for eyebrows, group labels and table headers), secondary table columns marked `opt` (hidden under 600px), one hero per
+  screen, pills with ▲/▼ and unsigned numbers vs signed inline amounts, ratios with 2 decimals.
 
 ## Calculation rules refined by the independent audit
 
