@@ -119,11 +119,11 @@ Object.assign(ACTIONS, {
   },
 });
 
-// Logos come from our API: when one is missing, show the initial behind it
+// Logos and flags come from our API: when one is missing, show the initial or the emoji behind it
 if (typeof document !== 'undefined') {
   document.addEventListener('error', (e) => {
     const t = e.target;
-    if (t && t.tagName === 'IMG' && t.closest && t.closest('.eco-logo, .hm-tile')) t.remove();
+    if (t && t.tagName === 'IMG' && t.closest && t.closest('.eco-logo, .flag, .hm-tile')) t.remove();
   }, true);
 }
 

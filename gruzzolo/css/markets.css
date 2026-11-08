@@ -60,12 +60,25 @@
 .eco-row { min-height: 58px; gap: 11px; }
 .eco-row .row-value small { font-size: 11px; font-weight: 700; color: var(--muted); }
 .eco-row .row-end { min-width: 72px; }
-.flag { display: inline-block; flex-shrink: 0; width: 30px; font-size: 24px; line-height: 1; text-align: center; }
-.flag.lg { width: 40px; font-size: 32px; }
-.chip .flag { width: auto; font-size: 16px; }
-.eco-flags { position: relative; display: inline-flex; flex-shrink: 0; width: 34px; height: 30px; }
-.eco-flags .flag { width: auto; font-size: 20px; }
-.eco-flags .flag:nth-child(2) { position: absolute; right: 0; bottom: 0; font-size: 16px; }
+/* Flags: round images from our API, like the logos; the emoji behind shows while one loads or is missing */
+.flag {
+  --flag: 30px;
+  position: relative; display: inline-grid; place-items: center; flex-shrink: 0; overflow: hidden;
+  width: var(--flag); height: var(--flag); border-radius: 50%; background: var(--surface-2);
+  font-size: calc(var(--flag) * .6); line-height: 1;
+}
+.flag b { font-weight: 400; }
+.flag img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+/* a hairline ring keeps the white flags (Japan, Korea) round on a white card */
+.flag::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1px var(--line); pointer-events: none; }
+.row > .flag { --flag: 34px; }
+.flag.lg { --flag: 44px; }
+.chip .flag { --flag: 18px; }
+.eco-flags { position: relative; flex-shrink: 0; width: 34px; height: 34px; }
+.eco-flags .flag { --flag: 34px; position: absolute; top: 0; left: 0; }
+/* two flags (exchange rates): the second over the first, bottom right, ringed in the card colour */
+.eco-flags .flag:first-child:not(:only-child) { --flag: 24px; }
+.eco-flags .flag + .flag { --flag: 24px; top: auto; left: auto; right: 0; bottom: 0; box-shadow: 0 0 0 2px var(--surface); }
 .eco-flags:empty { display: none; }
 .pill.bp { letter-spacing: -.01em; }
 
@@ -116,7 +129,7 @@
 /* ---------- Heatmap ---------- */
 .hm-toolbar { flex-wrap: nowrap; gap: 6px; }
 .hm-toolbar .hm-index-btn { flex: 0 1 auto; padding-left: 8px; }
-.hm-toolbar .hm-index-btn .flag { width: 22px; font-size: 17px; }
+.hm-toolbar .hm-index-btn .flag { --flag: 20px; }
 .hm-toolbar-gap { flex: 1 1 0; }
 .hm-chip { min-height: 38px; padding: 0 11px; border-color: var(--line); }
 .hm-chip[aria-pressed="false"] { background: var(--surface); }
@@ -173,7 +186,7 @@
   border: 1px solid var(--line); border-radius: 16px; background: var(--surface);
 }
 .eco-yc-card-head { display: flex; align-items: center; gap: 7px; font-size: 15px; }
-.eco-yc-card-head .flag { width: auto; font-size: 18px; }
+.eco-yc-card-head .flag { --flag: 20px; }
 .eco-yc-card-head b { font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .eco-yc-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(70px, 1fr)); gap: 8px; }
 .eco-yc-kpi { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; }
@@ -196,7 +209,7 @@
   position: relative; display: inline-flex; align-items: center; gap: 6px; min-height: 30px; margin: 0; padding: 0;
   border: 0; background: none; color: var(--ink-2); font: inherit; font-weight: 700; white-space: nowrap; text-align: left;
 }
-.eco-yc-country .flag { width: auto; font-size: 16px; }
+.eco-yc-country .flag { --flag: 18px; }
 /* a 44px tall target on a 30px row */
 .eco-yc-country::after { content: ""; position: absolute; inset: -7px 0; }
 .eco-yc-table tr[data-act] { cursor: pointer; }
@@ -215,7 +228,7 @@
 .cal-seg button { flex: 1 1 0; min-height: 34px; font-size: 13px; }
 .cal-row { gap: 9px; }
 .cal-time { flex: 0 0 38px; font-size: 12.5px; font-weight: 800; color: var(--ink-2); text-align: left; white-space: nowrap; }
-.cal-row .flag { width: 24px; font-size: 20px; }
+.cal-row > .flag { --flag: 28px; }
 .cal-row .row-title { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.25; }
 .cal-hi { color: var(--accent-line); font-size: 9px; vertical-align: 2px; }
 .cal-exp { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }

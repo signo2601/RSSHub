@@ -6,7 +6,7 @@ import { S } from '../js/state.js';
 import { eco } from '../js/eco.js';
 import { chartData } from '../js/charts.js';
 import { curveChart } from '../js/charts.js';
-import { fmtNum, fmtBp, fmtBig, fmtPctSigned, flag, prefs, DEFAULTS } from '../js/views/eco-common.js';
+import { fmtNum, fmtBp, fmtBig, fmtPctSigned, flag, flagSpan, prefs, DEFAULTS } from '../js/views/eco-common.js';
 import { renderOverview, yieldAt, _test as ov } from '../js/views/eco-overview.js';
 import { renderHeatmap, bucket, weightedChange, weightShare, sectorName } from '../js/views/eco-heatmap.js';
 import { renderCurves, tenorShort, tenorLong, slopeOf } from '../js/views/eco-curves.js';
@@ -170,6 +170,17 @@ test('formats: grouping on 4 digits, basis points, big amounts, signed percents,
   assert.equal(flag('IT'), '🇮🇹');
   assert.equal(flag('EU'), '🇪🇺');
   assert.equal(flag('x'), '');
+  // round image from our API, the emoji behind it for when the image cannot load
+  const f = flagSpan('it', 'lg');
+  assert.match(f, /^<span class="flag lg" aria-hidden="true"><b>🇮🇹<\/b><img src="\/api\/eco\/logo\?id=country%2FIT" alt="" loading="lazy" decoding="async"><\/span>$/);
+  assert.equal(flagSpan('x'), '');
+});
+
+test('overview: every commodity has an icon id our logo API accepts', () => {
+  const LOGO_RE = /^(?:(?:crypto|country|provider|metal|commodity)\/)?[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/;
+  const all = ov.COMMODITIES.flatMap(([, list]) => list);
+  assert.equal(all.length, 19);
+  for (const [t, name, , logo] of all) assert.match(logo || '', LOGO_RE, `${t} ${name}`);
 });
 
 /* ---------- Maths ---------- */

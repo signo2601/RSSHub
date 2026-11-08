@@ -115,7 +115,13 @@ export function flag(cc) {
   if (!/^[A-Z]{2}$/.test(c)) return '';
   return String.fromCodePoint(...[...c].map((ch) => 0x1f1e6 + ch.charCodeAt(0) - 65));
 }
-export const flagSpan = (cc, cls = '') => `<span class="flag${cls ? ' ' + cls : ''}" aria-hidden="true">${flag(cc)}</span>`;
+// Round flag image from our API (TradingView's set, like the logos), with the emoji behind it: it
+// shows while the image loads or when it cannot (offline); Windows draws emoji flags as letters
+export function flagSpan(cc, cls = '') {
+  const c = String(cc || '').toUpperCase();
+  if (!/^[A-Z]{2}$/.test(c)) return '';
+  return `<span class="flag${cls ? ' ' + cls : ''}" aria-hidden="true"><b>${flag(c)}</b><img src="${esc(eco.logoUrl(`country/${c}`))}" alt="" loading="lazy" decoding="async"></span>`;
+}
 
 /* ---------- Data status ---------- */
 // Seconds (TradingView 'time') → local date

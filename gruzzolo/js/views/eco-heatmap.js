@@ -258,7 +258,7 @@ SHEETS.hmIndexPicker = () => {
   return {
     title: 'Scegli l\'indice',
     body: groups.map((g) => `<p class="eco-group-label">${esc(g)}</p><div class="list">${INDEXES.filter((x) => x[3] === g).map(([key, name, cc]) => `<button class="row" type="button" data-act="hm-index" data-v="${key}" aria-pressed="${p.hmIndex === key}">
-      ${flagSpan(cc, 'lg')}<span class="row-main"><span class="row-title">${esc(name)}</span></span>
+      ${flagSpan(cc)}<span class="row-main"><span class="row-title">${esc(name)}</span></span>
       ${p.hmIndex === key ? `<span class="check-ico">${icon('check')}</span>` : ''}</button>`).join('')}</div>`).join(''),
   };
 };

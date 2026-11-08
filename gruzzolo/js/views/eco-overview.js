@@ -44,34 +44,34 @@ const INDICES = [
   ]],
 ];
 
-// [ticker, name, unit]
+// [ticker, name, unit, icon] (icons: TradingView's logo ids of the same tickers, through our API)
 const COMMODITIES = [
   ['Energia', [
-    ['NYMEX:CL1!', 'Petrolio WTI', '$/barile'],
-    ['ICEEUR:BRN1!', 'Petrolio Brent', '$/barile'],
-    ['EEX:G3BM1!', 'Gas naturale TTF (Europa)', '€/MWh'],
-    ['NYMEX:NG1!', 'Gas naturale (USA)', '$/MMBtu'],
-    ['NYMEX:RB1!', 'Benzina RBOB', '$/gallone'],
-    ['COMEX:UX1!', 'Uranio', '$/libbra'],
+    ['NYMEX:CL1!', 'Petrolio WTI', '$/barile', 'crude-oil'],
+    ['ICEEUR:BRN1!', 'Petrolio Brent', '$/barile', 'crude-oil'],
+    ['EEX:G3BM1!', 'Gas naturale TTF (Europa)', '€/MWh', 'natural-gas'],
+    ['NYMEX:NG1!', 'Gas naturale (USA)', '$/MMBtu', 'natural-gas'],
+    ['NYMEX:RB1!', 'Benzina RBOB', '$/gallone', 'gasoline'],
+    ['COMEX:UX1!', 'Uranio', '$/libbra', 'metal/uranium'],
   ]],
   ['Metalli preziosi', [
-    ['TVC:GOLD', 'Oro', '$/oncia'],
-    ['TVC:SILVER', 'Argento', '$/oncia'],
-    ['TVC:PLATINUM', 'Platino', '$/oncia'],
-    ['TVC:PALLADIUM', 'Palladio', '$/oncia'],
+    ['TVC:GOLD', 'Oro', '$/oncia', 'metal/gold'],
+    ['TVC:SILVER', 'Argento', '$/oncia', 'metal/silver'],
+    ['TVC:PLATINUM', 'Platino', '$/oncia', 'metal/platinum'],
+    ['TVC:PALLADIUM', 'Palladio', '$/oncia', 'metal/palladium'],
   ]],
   ['Metalli industriali', [
-    ['COMEX:HG1!', 'Rame', '$/libbra'],
-    ['COMEX:ALI1!', 'Alluminio', '$/tonnellata'],
+    ['COMEX:HG1!', 'Rame', '$/libbra', 'metal/copper'],
+    ['COMEX:ALI1!', 'Alluminio', '$/tonnellata', 'metal/aluminum'],
   ]],
   ['Agricoltura', [
-    ['CBOT:ZW1!', 'Grano', '$/bushel'],
-    ['CBOT:ZC1!', 'Mais', '$/bushel'],
-    ['CBOT:ZS1!', 'Soia', '$/bushel'],
-    ['ICEUS:KC1!', 'Caffè', '$/libbra'],
-    ['ICEUS:CC1!', 'Cacao', '$/tonnellata'],
-    ['ICEUS:SB1!', 'Zucchero', '$/libbra'],
-    ['ICEUS:CT1!', 'Cotone', '$/libbra'],
+    ['CBOT:ZW1!', 'Grano', '$/bushel', 'commodity/wheat'],
+    ['CBOT:ZC1!', 'Mais', '$/bushel', 'commodity/corn'],
+    ['CBOT:ZS1!', 'Soia', '$/bushel', 'commodity/soybean'],
+    ['ICEUS:KC1!', 'Caffè', '$/libbra', 'commodity/coffee'],
+    ['ICEUS:CC1!', 'Cacao', '$/tonnellata', 'cocoa'],
+    ['ICEUS:SB1!', 'Zucchero', '$/libbra', 'commodity/sugar'],
+    ['ICEUS:CT1!', 'Cotone', '$/libbra', 'commodity/cotton'],
   ]],
 ];
 
@@ -300,7 +300,7 @@ function bondsSection(period) {
 function commoditiesSection(period) {
   return `<section class="section eco-sec" aria-label="Materie prime">
     <div class="sec-head"><h2>Materie prime</h2><span class="hint">Contratti futures</span></div>
-    ${COMMODITIES.map(([g, list]) => groupBlock(g, list.map(([t, name, unit]) => quoteRow(t, name, unit, { flags: '' }, period)))).join('')}
+    ${COMMODITIES.map(([g, list]) => groupBlock(g, list.map(([t, name, unit, logo]) => quoteRow(t, name, unit, { logo: logoImg(logo, name, 'round') }, period)))).join('')}
   </section>`;
 }
 
@@ -450,4 +450,4 @@ SHEETS.ecoCrypto = (args = {}) => {
   };
 };
 
-export const _test = { yieldChange, yieldBefore, inEuro, OVERVIEW_TICKERS, GOV_COUNTRIES, PERIODS, periodLabel, fmtBp, fmtPctSigned };
+export const _test = { yieldChange, yieldBefore, inEuro, OVERVIEW_TICKERS, GOV_COUNTRIES, COMMODITIES, PERIODS, periodLabel, fmtBp, fmtPctSigned };

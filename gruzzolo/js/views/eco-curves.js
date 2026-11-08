@@ -49,8 +49,9 @@ function chartBlock(list, p) {
       series.push({ name: `${countryName(cc)} · ${label}`, color, dash: true, width: 1.6, values: months.map((m) => (at.has(m) ? yieldBefore(at.get(m), p.ycCompare) : null)) });
     }
   });
-  const w = Math.min(contentWidth(), isDesktop() ? 860 : 9999) - 32;
-  const h = isDesktop() ? 320 : Math.round(Math.min(300, Math.max(220, w * 0.72)));
+  // the whole width of the card (15 px padding and 1 px border each side), as the page is wide
+  const w = contentWidth() - 32;
+  const h = isDesktop() ? Math.round(Math.min(380, Math.max(300, w * 0.3))) : Math.round(Math.min(300, Math.max(220, w * 0.72)));
   // The chips above carry the country colors: the only key needed is solid (today) vs dashed (then)
   const compareLabel = (COMPARE.find((x) => x[0] === p.ycCompare) || ['', ''])[1].toLowerCase();
   const key = p.ycCompare !== 'none'

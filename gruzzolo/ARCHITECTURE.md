@@ -18,7 +18,8 @@ if you own a module, implement exactly these exports; if you consume one, use on
 - **The only network traffic is public market data from the app's own `/api`**: `health`, `search`, `chart`,
   `quotes`, `eco/*`. Requests carry only security names, tickers or ISINs (search, CSV import matching, prices) or
   fixed lists of public tickers (Mercati), never amounts, quantities, accounts or transactions. Company and crypto
-  logos also come through our API (`/api/eco/logo`), so the app contacts no other site.
+  logos, country flags and commodity icons also come through our API (`/api/eco/logo`), so the app contacts no
+  other site.
 - **No third-party requests**: fonts are self-hosted in `fonts/` (Manrope and Bricolage Grotesque, OFL, `@font-face`
   in `css/app.css`); no CDN, analytics or Google Fonts. `dev/build-artifact.mjs` refuses to build a bundle that
   contains sync code, Claude storage (`use('db')`/`use('user')`) or Google Fonts.
@@ -292,7 +293,11 @@ Mercati routes (one POST to `https://scanner.tradingview.com/{global|coin|econom
   Also contains aggregates (WW = world, EU = euro area): the view keeps only codes with a `NAMES` and `CONTINENT` entry.
 - An answer with no rows is a 502 (never an empty 200 kept in the edge cache or on the phone).
 - `GET /api/eco/crypto` → the 15 largest non-stablecoin cryptocurrencies, prices in USD. 120 s.
-- `GET /api/eco/logo?id=apple` → SVG logo, `Content-Security-Policy: sandbox`, 30 days.
+- `GET /api/eco/logo?id=apple` → SVG logo, `Content-Security-Policy: sandbox`, 30 days. Also flags (`country/IT`) and
+  commodity icons (`metal/gold`, `commodity/wheat`, `crude-oil`: TradingView's logo ids of the futures). TradingView
+  draws Hong Kong, Macao and Taiwan as a grey square: those three are drawn by the API (flag-icons, MIT); any other
+  grey square is a 404. In the app, `flagSpan(cc)` (eco-common.js) is the round flag image with the emoji behind
+  it: the emoji shows while offline or when the image fails (market.js removes a broken `.flag img`).
 - `GET /api/eco/calendar` → economic calendar of US, EU, IT, DE, FR, ES, GB, CH, JP, CN from 3 days ago to 15 days ahead
   (TradingView economic-calendar): `{ at, from, to, cols, rows: [[id, date, country, title, period, actual, forecast, previous, unit, scale, high]] }`. 10 min.
 - `GET /api/eco/inflation` → monthly HICP of Italy and the euro area since 1996 (Eurostat `prc_hicp_minr`, 2025 = 100):

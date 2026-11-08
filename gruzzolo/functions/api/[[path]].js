@@ -18,7 +18,7 @@
 //   GET  /api/eco/yields                          → { at, cols, curves: { [country]: [[months, ...], ...] } }
 //   GET  /api/eco/macro                           → { at, cols, data: { [indicator]: { [country]: [...] } } }
 //   GET  /api/eco/crypto                          → { at, cols, rows: [[...], ...] }
-//   GET  /api/eco/logo?id=apple                   → SVG logo (image/svg+xml)
+//   GET  /api/eco/logo?id=apple                   → SVG logo, flag (country/IT) or commodity icon (metal/gold)
 //   GET  /api/eco/calendar                        → { at, from, to, cols, rows: [[id, date, country, title, ...]] }
 //   GET  /api/eco/inflation                       → { at, base, start, series: { IT: [...], EA: [...] } } (monthly HICP)
 
@@ -389,7 +389,7 @@ const TV_HEADERS = {
   Referer: 'https://www.tradingview.com/',
 };
 const TV_TICKER_RE = /^[A-Z0-9_]{1,20}:[A-Z0-9_.!&-]{1,40}$/;
-const LOGO_RE = /^(?:(?:crypto|country|provider)\/)?[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/;
+const LOGO_RE = /^(?:(?:crypto|country|provider|metal|commodity)\/)?[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/;
 const MAX_ECO_TICKERS = 200;
 const LOGO_MAX_BYTES = 128 * 1024;
 const TTL_ECO_QUOTES = 60;
@@ -603,11 +603,47 @@ async function handleEcoCrypto(context, url) {
   });
 }
 
-// GET /api/eco/logo?id=apple → company or crypto logo (SVG), served from our origin so the app
-// contacts no other site. Sandboxed: the SVG cannot run scripts even when opened directly.
+// Flags TradingView leaves as a grey square: Hong Kong, Macao and Taiwan. Drawings of flag-icons
+// (github.com/lipis/flag-icons, MIT License, (c) 2013 Panayiotis Lipiridis); Taiwan's sun redrawn as
+// its 12 rays (tips 96 and bases 49.7 units from the centre, as on the official flag).
+function taiwanFlag() {
+  const pts = [];
+  for (let k = 0; k < 24; k++) {
+    const r = k % 2 ? 49.7 : 96;
+    const a = ((k * 15 - 90) * Math.PI) / 180;
+    pts.push(`${(192 + r * Math.cos(a)).toFixed(1)} ${(128 + r * Math.sin(a)).toFixed(1)}`);
+  }
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path fill="#fe0000" d="M0 0h512v512H0z"/><path fill="#000095" d="M0 0h384v256H0z"/><path fill="#fff" d="M${pts.join('L')}z"/><circle cx="192" cy="128" r="54.4" fill="#000095"/><circle cx="192" cy="128" r="48" fill="#fff"/></svg>`;
+}
+const OWN_LOGOS = {
+  'country/HK': '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 512 512"><path fill="#EC1B2E" d="M0 0h512v512H0"/><path id="hk-a" fill="#fff" d="M282.3 119.2C203 114 166.6 218 241.6 256.4 215.6 234 221 201 231.5 184l1.9 1c-13.8 23.6-11.2 52.8 11 71-12.6-12.2-9.4-39 12.2-48.8s23.6-39.3 16.4-49.1q-14.7-25.6 9.3-39zM243.9 180l-4.7 7.4-1.8-8.6-8.6-2.3 7.8-4.3-.6-9 6.5 6.2 8.3-3.3-3.7 8 5.6 6.9z"/><use xlink:href="#hk-a" transform="rotate(72 248.5 259.5)"/><use xlink:href="#hk-a" transform="rotate(144 248.5 259.5)"/><use xlink:href="#hk-a" transform="rotate(216 248.5 259.5)"/><use xlink:href="#hk-a" transform="rotate(288 248.5 259.5)"/></svg>',
+  'country/MO': '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 512 512"><path fill="#00785e" d="M0 0h512v512H0z"/><path fill="#fbd116" d="M272.5 147.4 256 96.5l-16.5 51 43.3-31.5h-53.6z"/><g id="mo-a"><path fill="#fff" d="M256 353.7H146.7a156 156 0 0 1-4-4.2H256a2.3 2.3 0 0 1 1.5 2c0 1-.6 1.9-1.5 2.2m0-33.4c.6-1.3 1.9-4.3 1.3-8a13.2 13.2 0 0 0-1.3-4.1 87.4 87.4 0 0 1-34.7 20.2 86.4 86.4 0 0 1-25 3.7h-67.4a154 154 0 0 0 6.3 8.6h65a86.2 86.2 0 0 0 55.8-20.4M139.1 294a34.4 34.4 0 0 1-10.3 2.2 86.3 86.3 0 0 0 64.8 29.3 86.3 86.3 0 0 0 62.4-26.6 470.3 470.3 0 0 0 4.8-62.9 470.3 470.3 0 0 0-4.8-72.2c-7 6.3-20.2 20-26.4 40.9a86.5 86.5 0 0 0-3.6 24.6 86.1 86.1 0 0 0 14.6 48.1 86.1 86.1 0 0 1-18-52.9 86.1 86.1 0 0 1 8.2-37 34.7 34.7 0 0 1-8-13.8 86 86 0 0 0-11.2 42.6 86.1 86.1 0 0 0 17 51.4 101.4 101.4 0 0 0-78.3-31.5 34.8 34.8 0 0 1 7.2 9.5 101.4 101.4 0 0 1 73.3 31.4 101.3 101.3 0 0 0-65.2-23.6c-13.8 0-27 2.7-39 7.8a86.6 86.6 0 0 0 88 55.6 87 87 0 0 1-15.4 1.4 86.2 86.2 0 0 1-60.1-24.3M256 388.7h-56.6a153 153 0 0 0 56.6 10.8 11.6 11.6 0 0 0 1.3-5.3 11.7 11.7 0 0 0-1.3-5.5m0-26.2h-99.9a154 154 0 0 0 8.4 6.7H256a4.9 4.9 0 0 0 1.4-3.3c0-2-1.2-3.1-1.4-3.4m0 13.4h-81.8a153.2 153.2 0 0 0 15.4 8.5H256a8 8 0 0 0 1.2-4.5 8 8 0 0 0-1.2-4"/><path fill="#fbd116" d="m155.6 211.7-7-36.4-15.7 33.6 32.4-18-36.8-4.5zm49.3-58.8-29.6-22.3 10.8 35.4 12.1-35-30.3 21.3z"/></g><use xlink:href="#mo-a" width="100%" height="100%" transform="matrix(-1 0 0 1 512 0)"/></svg>',
+  'country/TW': taiwanFlag(),
+};
+// TradingView's grey square for a flag it does not draw: answered as "not found", so the app keeps
+// the emoji flag it shows underneath
+const TV_BLANK_RE = /^(?:<!--[^>]*-->)?\s*<svg[^>]*>\s*<path fill="#DBDBDB" d="M0 0h18v18H0z"\/>\s*<\/svg>\s*$/i;
+
+function svgResponse(svg) {
+  return new Response(svg, {
+    status: 200,
+    headers: {
+      ...CORS,
+      'Content-Type': 'image/svg+xml; charset=utf-8',
+      'Cache-Control': `public, max-age=${TTL_LOGO}, immutable`,
+      'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+      'X-Content-Type-Options': 'nosniff',
+    },
+  });
+}
+
+// GET /api/eco/logo?id=apple → company or crypto logo, country flag (country/IT) or commodity icon
+// (metal/gold, crude-oil), as SVG, served from our origin so the app contacts no other site.
+// Sandboxed: the SVG cannot run scripts even when opened directly.
 async function handleEcoLogo(context, url) {
   const id = url.searchParams.get('id') || '';
   if (!LOGO_RE.test(id) || id.includes('..')) throw new HttpError(400, 'Logo non valido.');
+  if (Object.hasOwn(OWN_LOGOS, id)) return svgResponse(OWN_LOGOS[id]);
   const cache = typeof caches !== 'undefined' && caches && caches.default ? caches.default : null;
   const key = cache ? new Request(`${url.origin}/api/eco/logo?id=${encodeURIComponent(id)}`, { method: 'GET' }) : null;
   if (cache) {
@@ -625,17 +661,8 @@ async function handleEcoLogo(context, url) {
   const type = res.headers.get('content-type') || '';
   if (!res.ok || !type.includes('image/svg+xml')) throw new HttpError(404, 'Logo non trovato.');
   const svg = await res.text();
-  if (svg.length > LOGO_MAX_BYTES || !svg.includes('<svg')) throw new HttpError(404, 'Logo non trovato.');
-  const out = new Response(svg, {
-    status: 200,
-    headers: {
-      ...CORS,
-      'Content-Type': 'image/svg+xml; charset=utf-8',
-      'Cache-Control': `public, max-age=${TTL_LOGO}, immutable`,
-      'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox",
-      'X-Content-Type-Options': 'nosniff',
-    },
-  });
+  if (svg.length > LOGO_MAX_BYTES || !svg.includes('<svg') || TV_BLANK_RE.test(svg)) throw new HttpError(404, 'Logo non trovato.');
+  const out = svgResponse(svg);
   if (cache) {
     const put = cache.put(key, out.clone()).catch(() => {});
     if (typeof context.waitUntil === 'function') context.waitUntil(put);

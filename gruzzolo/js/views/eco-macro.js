@@ -5,7 +5,7 @@ import { ACTIONS } from '../registry.js';
 import { app } from '../app.js';
 import { eco } from '../eco.js';
 import { MAP_W, MAP_H, PATHS, POINTS, NAMES, CONTINENT, VIEWS } from '../world.js';
-import { esc, icon, contentWidth, isDesktop, MONTHS } from '../util.js';
+import { esc, icon, contentWidth, MONTHS } from '../util.js';
 import { prefs, fmtNum, fmtPct, fmtBig, flagSpan, stampLine, emptyState, finiteNum } from './eco-common.js';
 
 // [code, chip label, title, explanation, format, 6 thresholds between the 7 color steps]
@@ -107,7 +107,7 @@ export function periodText(sec, code) {
 function mapHtml(vals, ind, reg, sel) {
   const view = VIEWS[reg[2]] || VIEWS.world || [0, 0, MAP_W, MAP_H];
   const [vx, vy, vw, vh] = view;
-  const pxW = Math.max(260, Math.min(contentWidth(), isDesktop() ? 900 : 9999) - 2);
+  const pxW = Math.max(260, contentWidth() - 2); // the map is as wide as the page
   const pxH = Math.round(pxW * (vh / vw));
   const thresholds = ind[5];
   let paths = '';

@@ -521,7 +521,9 @@ test('eco logo: SVG from our origin, sandboxed, long cache; non-SVG answers are 
     globalThis.fetch = async (url) => {
       seen.push(String(url));
       if (String(url).includes('apple')) return new Response('<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0h1v1z"/></svg>', { headers: { 'Content-Type': 'image/svg+xml' } });
-      if (String(url).includes('crypto/XTVCBTC')) return new Response('<svg xmlns="http://www.w3.org/2000/svg"/>', { headers: { 'Content-Type': 'image/svg+xml' } });
+      if (String(url).includes('crypto/XTVCBTC') || String(url).includes('metal/gold')) return new Response('<svg xmlns="http://www.w3.org/2000/svg"/>', { headers: { 'Content-Type': 'image/svg+xml' } });
+      // the grey square TradingView answers for a flag it does not draw
+      if (String(url).includes('country/XK')) return new Response('<!-- by TradingView --><svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg"><path fill="#DBDBDB" d="M0 0h18v18H0z"/></svg>', { headers: { 'Content-Type': 'image/svg+xml' } });
       return new Response('<Error>AccessDenied</Error>', { status: 403, headers: { 'Content-Type': 'application/xml' } });
     };
     const r = await call('/api/eco/logo?id=apple');
@@ -534,6 +536,20 @@ test('eco logo: SVG from our origin, sandboxed, long cache; non-SVG answers are 
     assert.equal((await call('/api/eco/logo?id=crypto/XTVCBTC')).status, 200);
     assert.equal(seen[1], 'https://s3-symbol-logo.tradingview.com/crypto/XTVCBTC.svg');
     assert.equal((await call('/api/eco/logo?id=nothing-here')).status, 404);
+    // commodity icons and flags
+    assert.equal((await call('/api/eco/logo?id=metal/gold')).status, 200);
+    assert.equal(seen.at(-1), 'https://s3-symbol-logo.tradingview.com/metal/gold.svg');
+    assert.equal((await call('/api/eco/logo?id=country/XK')).status, 404, 'a grey placeholder is no flag: the app keeps its emoji');
+    // Hong Kong, Macao and Taiwan: drawn by us (TradingView has only the grey square), no upstream call
+    const before = seen.length;
+    for (const cc of ['HK', 'MO', 'TW']) {
+      const f = await call(`/api/eco/logo?id=country/${cc}`);
+      assert.equal(f.status, 200);
+      assert.match(f.headers.get('content-security-policy'), /sandbox/);
+      assert.match(f.text, /^<svg [^>]*viewBox="0 0 512 512"[\s\S]*<\/svg>$/);
+    }
+    assert.equal(seen.length, before);
+    assert.equal((await call('/api/eco/logo?id=' + encodeURIComponent('weird/gold'))).status, 400);
   } finally {
     globalThis.fetch = realFetch;
   }

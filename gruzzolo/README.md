@@ -20,7 +20,7 @@ Ogni indicatore ha il pulsante **i** con una spiegazione semplice.
 ## Dove sono i tuoi dati
 
 - **Solo sul tuo iPhone.** Conti, operazioni, titoli, impostazioni e prezzi manuali sono salvati nella memoria dell'app, sul telefono. Non c'è un account, non c'è un cloud, non c'è nessuna copia su un server.
-- **Cosa passa da internet**: solo il nome, il ticker o l'ISIN dei titoli (per esempio `VWCE.DE`), quando l'app chiede i prezzi pubblici al **suo** piccolo server, che li prende da Yahoo Finance, e la composizione degli ETF, che il server legge da justETF; per la scheda Mercati, solo le liste fisse di indici, valute e Paesi, che il server legge da TradingView (anche i loghi delle aziende passano dal server dell'app); l'inflazione italiana arriva da Eurostat. Importi, quantità, conti e operazioni non escono mai dal telefono.
+- **Cosa passa da internet**: solo il nome, il ticker o l'ISIN dei titoli (per esempio `VWCE.DE`), quando l'app chiede i prezzi pubblici al **suo** piccolo server, che li prende da Yahoo Finance, e la composizione degli ETF, che il server legge da justETF; per la scheda Mercati, solo le liste fisse di indici, valute e Paesi, che il server legge da TradingView (anche i loghi delle aziende, le bandiere e le icone delle materie prime passano dal server dell'app); l'inflazione italiana arriva da Eurostat. Importi, quantità, conti e operazioni non escono mai dal telefono.
 - **I caratteri e tutti i file dell'app** sono dentro l'app: non vengono scaricati da altri siti.
 - In **Altro → Dove sono i tuoi dati** vedi se iOS ha concesso la «memoria permanente» (i dati non vengono cancellati per fare spazio) e quanto spazio usa l'app.
 
@@ -91,7 +91,7 @@ Quando il codice dell'app cambia e Cloudflare lo ripubblica, apri Gruzzolo **con
 
 Il file viene letto sul telefono; le operazioni già presenti non vengono duplicate.
 
-I prezzi arrivano con circa 15 minuti di ritardo e servono a scopo informativo: i calcoli di rischio, frontiera e zaino fiscale sono stime, non consigli d'investimento né consulenza fiscale. I dati della scheda Mercati sono di TradingView (stesso ritardo); la mappa usa Natural Earth e i nomi dei Paesi di mledoze/countries (licenza ODbL).
+I prezzi arrivano con circa 15 minuti di ritardo e servono a scopo informativo: i calcoli di rischio, frontiera e zaino fiscale sono stime, non consigli d'investimento né consulenza fiscale. I dati della scheda Mercati sono di TradingView (stesso ritardo); la mappa usa Natural Earth e i nomi dei Paesi di mledoze/countries (licenza ODbL); le bandiere di Hong Kong, Macao e Taiwan sono di flag-icons (licenza MIT).
 
 ## Per sviluppatori
 

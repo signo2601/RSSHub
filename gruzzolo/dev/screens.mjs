@@ -91,7 +91,12 @@ for (const device of DEVICES) {
         }
       }
       const sheetOpen = await page.evaluate(() => !document.getElementById('sheet-layer').hidden);
-      if (FULL && !sheetOpen) await page.addStyleTag({ content: FULL_CSS });
+      if (FULL && !sheetOpen) {
+        await page.addStyleTag({ content: FULL_CSS });
+        // lazy logos and flags below the first screen would never load without scrolling: load them now
+        await page.evaluate(() => document.querySelectorAll('img[loading="lazy"]').forEach((i) => { i.loading = 'eager'; }));
+        await page.waitForFunction(() => [...document.images].every((i) => i.complete), null, { timeout: 10000 }).catch(() => {});
+      }
       const file = path.join(OUT, `${device}-${theme}-${name}.png`);
       await page.screenshot({ path: file, fullPage: FULL && !sheetOpen });
       count++;
