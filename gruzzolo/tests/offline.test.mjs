@@ -111,7 +111,8 @@ test('the app loads nothing from other sites (no Google Fonts, no CDN)', () => {
   // no status bar style (Apple's advice for iOS 26, WebKit bug 317153): the status bar is opaque, in the
   // colour of the page (theme-color follows the app's theme), and the iOS 26 short layout does not happen
   assert.doesNotMatch(html, /apple-mobile-web-app-status-bar-style/);
-  assert.match(html, /name="theme-color" content="#eef1f5" media="\(prefers-color-scheme: light\)"/);
+  assert.equal((html.match(/<meta name="theme-color"/g) || []).length, 1, 'one theme colour, set to the theme in use');
+  assert.match(html, /m\.setAttribute\('content', dark \? '#0c0e12' : '#eef1f5'\)/, 'set before the first paint');
   assert.match(html, /rel="apple-touch-icon" href="icon-180.png"/);
   const man = JSON.parse(read('manifest.webmanifest'));
   assert.equal(man.display, 'standalone');

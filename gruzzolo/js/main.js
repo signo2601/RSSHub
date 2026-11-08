@@ -160,6 +160,17 @@ function restoreFocus(root, key) {
 
 /* ---------- Theme ---------- */
 let lastTheme = null;
+// The theme colour is the one of the theme in use: iOS paints the status bar of the installed app with
+// it (and would take the dark one of a light/dark pair), Chrome the title bar of the installed app
+function syncThemeColor() {
+  const t = THEMES.includes(D().settings.theme) ? D().settings.theme : 'auto';
+  const sysDark = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const color = THEME_COLOR[t === 'auto' ? (sysDark ? 'dark' : 'light') : t];
+  for (const m of document.querySelectorAll('meta[name="theme-color"]')) {
+    if (m.getAttribute('content') !== color) m.setAttribute('content', color);
+  }
+}
+
 function applyTheme() {
   const t = THEMES.includes(D().settings.theme) ? D().settings.theme : 'auto';
   if (t === lastTheme) return;
@@ -167,10 +178,7 @@ function applyTheme() {
   const root = document.documentElement;
   if (t === 'auto') root.removeAttribute('data-theme');
   else root.setAttribute('data-theme', t);
-  for (const m of document.querySelectorAll('meta[name="theme-color"]')) {
-    const own = (m.getAttribute('media') || '').includes('dark') ? 'dark' : 'light';
-    m.setAttribute('content', THEME_COLOR[t === 'auto' ? own : t]);
-  }
+  syncThemeColor();
   try {
     localStorage.setItem(THEME_KEY, t);
   } catch { /* storage unavailable */ }
@@ -947,6 +955,12 @@ function onVisibility() {
 function listen() {
   measureStandaloneFrame();
   setTimeout(measureStandaloneFrame, 500);
+  // the iPhone switching between light and dark (theme 'auto'): the status bar colour follows
+  if (typeof window.matchMedia === 'function') {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    if (typeof mq.addEventListener === 'function') mq.addEventListener('change', syncThemeColor);
+    else if (typeof mq.addListener === 'function') mq.addListener(syncThemeColor);
+  }
   window.addEventListener('resize', debounce(measureStandaloneFrame, 100));
   window.addEventListener('orientationchange', () => setTimeout(measureStandaloneFrame, 300));
   window.addEventListener('pageshow', measureStandaloneFrame);

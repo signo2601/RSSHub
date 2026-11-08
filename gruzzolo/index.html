@@ -5,8 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Gruzzolo</title>
 <meta name="description" content="Il tuo portafoglio di investimenti sull'iPhone: valore, rendimenti, dividendi, costi e rischio. I dati restano solo sul telefono.">
-<meta name="theme-color" content="#eef1f5" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0c0e12" media="(prefers-color-scheme: dark)">
+<!-- One theme colour, the one of the theme in use (set below before the first paint and by main.js):
+     iOS colours the status bar of the installed app with it and does not follow a light/dark pair -->
+<meta name="theme-color" content="#eef1f5">
 <meta name="color-scheme" content="light dark">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -28,12 +29,16 @@
 <body>
 <!-- APP:BODY:START -->
 <script>
-  // Apply the saved theme before the first paint (no light/dark flash)
+  // Apply the saved theme before the first paint (no light/dark flash), status bar colour included
   (function () {
+    var t = null;
     try {
-      var t = localStorage.getItem('gruzzolo:theme');
+      t = localStorage.getItem('gruzzolo:theme');
       if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
     } catch (e) { /* storage unavailable */ }
+    var dark = t === 'dark' || (t !== 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    var m = document.querySelector('meta[name="theme-color"]');
+    if (m) m.setAttribute('content', dark ? '#0c0e12' : '#eef1f5');
   })();
 </script>
 <div class="app" id="app">
