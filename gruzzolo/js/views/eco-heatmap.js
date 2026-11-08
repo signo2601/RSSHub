@@ -132,9 +132,10 @@ function tileInner(st, x, w, h, v) {
   if (w < 30 || h < 22) return '';
   const label = st.ticker.length > 8 ? st.ticker.slice(0, 7) + '…' : st.ticker;
   let fs = Math.min(Math.sqrt(w * h) / 5.2, 30, (w - 8) / (label.length * 0.64));
-  if (fs < 8.5) return '';
-  const pctFs = Math.max(8, fs * 0.72);
-  const withPct = h >= fs * 2.3 && w >= 34;
+  // text under 10px cannot be read on a phone: such tiles show only their colour (tap for details)
+  if (fs < 10) return '';
+  const pctFs = fs * 0.72;
+  const withPct = pctFs >= 10 && h >= fs * 2.3 && w >= 34;
   const logo = st.logo && w >= 62 && h >= 74 && fs >= 12 ? `<img class="hm-logo" src="${esc(eco.logoUrl(st.logo))}" alt="" loading="lazy" decoding="async" style="width:${Math.round(Math.min(w, h) * 0.3)}px;height:${Math.round(Math.min(w, h) * 0.3)}px">` : '';
   return `${logo}<span class="hm-t" style="font-size:${fs.toFixed(1)}px">${esc(label)}</span>${withPct ? `<span class="hm-p" style="font-size:${pctFs.toFixed(1)}px">${esc(fmtPctSigned(v))}</span>` : ''}`;
 }

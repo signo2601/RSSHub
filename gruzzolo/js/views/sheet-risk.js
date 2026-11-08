@@ -9,16 +9,16 @@ import { assetHistory, historyFor, positions } from '../engine.js';
 import { backProjected, riskStats, regression } from '../metrics.js';
 import { portfolioFrontier, frontierCsv } from '../markowitz.js';
 import { scatterChart } from '../charts.js';
-import { esc, icon, money, moneySigned, pct, pctSigned, num, fmtDate, tone, sum, saveFile } from '../util.js';
+import { esc, icon, money, moneySigned, pct, pctSigned, num, fmtDate, tone, sum, saveFile, ratio } from '../util.js';
 import { infoBtn } from '../info.js';
-import { registerSheet, chartCard, tableCard, emptyCard, benchShort } from './report.js';
+import { registerSheet, chartCard, tableCard, emptyCard, benchShort, rowsCard } from './report.js';
 import { avatar } from './home.js';
 
 const BACK_YEARS = 5;
 const FRONTIER_YEARS = 10;
 const MIN_REG_DAYS = 20;
 const CSV_NAME = 'gruzzolo-frontiera.csv';
-const FRONTIER_SUB = '(solo posizioni aperte correnti, storico comune fino a 10 anni, titolo privo di rischio, rendimenti settimanali, covarianza shrinkata, solo posizioni lunghe senza leva, peso minimo 0,1%, peso massimo 20% per strumento)';
+const FRONTIER_SUB = 'I portafogli possibili con i titoli che hai oggi, su fino a 10 anni di prezzi settimanali.';
 const COLORS = {
   frontier: 'var(--accent-line)', cml: 'var(--muted)', asset: 'var(--c-other)',
   current: 'var(--c1)', maxSharpe: 'var(--c2)', minVar: 'var(--c3)',
@@ -32,7 +32,6 @@ export function pctAxis(v) {
   return (v < -1e-12 ? '−' : '') + s + '%';
 }
 const addYearsISO = (d, n) => `${+d.slice(0, 4) + n}${d.slice(4)}`;
-const ratio = (v) => (Number.isFinite(v) ? num(v, 2) : '—');
 const dash = '<span class="muted">—</span>';
 
 // Small stable hash (FNV-1a) for DOM tokens
@@ -97,16 +96,6 @@ export function riskData(ctx) {
   });
 }
 
-function groupBox(title, sub, rows) {
-  const items = rows.map((r) => `<div class="rg-row">
-      <dt><span>${esc(r.label)}</span>${r.info ? infoBtn(r.info) : ''}</dt>
-      <dd><b class="num ${r.cls || ''}">${r.value}</b>${r.sub ? `<small>${r.sub}</small>` : ''}</dd>
-    </div>`).join('');
-  return `<section class="card rcard risk-group">
-    <header class="rg-head"><h3 class="rcard-title">${esc(title)}</h3>${sub ? `<p class="rcard-sub">${sub}</p>` : ''}</header>
-    <dl class="rg-list">${items}</dl>
-  </section>`;
-}
 
 function benchUnavailable(ctx) {
   const b = ctx.bench;
@@ -126,24 +115,24 @@ function riskGroups(ctx, d) {
     : esc(benchUnavailable(ctx));
   const eur = (x) => (Number.isFinite(x) && total > 0 ? `≈ ${moneySigned(-x * total)} al giorno su ${money(total)}` : '');
   return `<div class="risk-grid">
-    ${groupBox('Core', 'rendimento e oscillazioni, su base annua', [
+    ${rowsCard('Rendimento e rischio', 'rendimento e oscillazioni, su base annua', [
     { label: 'Rendimento annualizzato', value: Number.isFinite(rs.annReturn) ? pctSigned(rs.annReturn) : '—', cls: tone(rs.annReturn, 0.00005), info: 'cagr' },
     { label: 'Volatilità', value: Number.isFinite(rs.vol) ? pct(rs.vol) : '—', info: 'volatilita' },
     { label: 'Max drawdown', value: Number.isFinite(rs.maxDD) ? pctSigned(rs.maxDD) : '—', cls: rs.maxDD < -0.00005 ? 'down' : '', sub: ddDates, info: 'maxDrawdown' },
     { label: 'Sharpe', value: ratio(rs.sharpe), info: 'sharpe' },
     { label: 'Sortino', value: ratio(rs.sortino), info: 'sortino' },
   ])}
-    ${groupBox('Benchmark & gestione attiva', benchSub, [
+    ${rowsCard('Benchmark & gestione attiva', benchSub, [
     { label: 'Beta', value: hasReg ? ratio(rs.beta) : dash, info: 'beta' },
     { label: 'Alpha annualizzato', value: Number.isFinite(rs.alpha) ? pctSigned(rs.alpha) : dash, cls: tone(rs.alpha, 0.00005), info: 'alpha' },
     { label: 'Correlazione con il benchmark', value: Number.isFinite(rs.corr) ? ratio(rs.corr) : dash, info: 'correlazione' },
     { label: 'Tracking error', value: Number.isFinite(rs.te) ? pct(rs.te) : dash, info: 'trackingError' },
   ])}
-    ${groupBox('Rischio perdita', 'perdita in un giorno di borsa, livello di confidenza 95%', [
+    ${rowsCard('Rischio perdita', 'perdita in un giorno di borsa, livello di confidenza 95%', [
     { label: 'Value at Risk 95%', value: Number.isFinite(rs.var95) ? pctSigned(-rs.var95) : '—', cls: 'down', sub: eur(rs.var95), info: 'var95' },
     { label: 'Conditional VaR 95%', value: Number.isFinite(rs.cvar95) ? pctSigned(-rs.cvar95) : '—', cls: 'down', sub: eur(rs.cvar95), info: 'cvar95' },
   ])}
-    ${groupBox('Qualità performance', 'come si distribuiscono i giorni buoni e cattivi', [
+    ${rowsCard('Qualità performance', 'come si distribuiscono i giorni buoni e cattivi', [
     { label: 'Gain/Loss ratio', value: ratio(rs.gainLoss), info: 'gainLoss' },
     { label: 'Periodi positivi', value: Number.isFinite(rs.positiveShare) ? pct(rs.positiveShare, 1) : '—', sub: 'dei giorni di borsa', info: 'periodiPositivi' },
   ])}
@@ -242,7 +231,7 @@ function frontierInsufficient(res) {
 
 function legendCard(cls, color, title, p, rf) {
   if (!p) return '';
-  const sharpe = Number.isFinite(p.sharpe) ? num(p.sharpe, 2) : (p.vol > 0 ? num((p.ret - rf) / p.vol, 2) : '—');
+  const sharpe = Number.isFinite(p.sharpe) ? ratio(p.sharpe) : (p.vol > 0 ? ratio((p.ret - rf) / p.vol) : '—');
   return `<div class="fr-key ${cls}">
     <span class="fr-dot" style="background:${color}" aria-hidden="true"></span>
     <div><b>${esc(title)}</b>
@@ -255,12 +244,12 @@ export function frontierChart(res, view) {
   const points = res.assets.map((a) => ({ x: a.vol, y: a.ret, label: a.name, color: COLORS.asset, r: 4, group: 'Titoli' }));
   points.push({ x: 0, y: rf, label: 'Titolo privo di rischio', color: COLORS.cml, r: 4, group: 'Privo di rischio', sub: `tasso ${pct(rf, 2)}` });
   points.push({ x: res.minVar.vol, y: res.minVar.ret, label: 'Minima varianza', color: COLORS.minVar, r: 6, special: true, group: 'Minima varianza' });
-  points.push({ x: res.maxSharpe.vol, y: res.maxSharpe.ret, label: 'Massimo Sharpe', color: COLORS.maxSharpe, r: 6, special: true, group: 'Massimo Sharpe', sub: Number.isFinite(res.maxSharpe.sharpe) ? `Sharpe ${num(res.maxSharpe.sharpe, 2)}` : '' });
-  if (res.current) points.push({ x: res.current.vol, y: res.current.ret, label: 'Portafoglio attuale', color: COLORS.current, r: 7, special: true, group: 'Portafoglio attuale', sub: Number.isFinite(res.current.sharpe) ? `Sharpe ${num(res.current.sharpe, 2)}` : '' });
+  points.push({ x: res.maxSharpe.vol, y: res.maxSharpe.ret, label: 'Massimo Sharpe', color: COLORS.maxSharpe, r: 6, special: true, group: 'Massimo Sharpe', sub: Number.isFinite(res.maxSharpe.sharpe) ? `Sharpe ${ratio(res.maxSharpe.sharpe)}` : '' });
+  if (res.current) points.push({ x: res.current.vol, y: res.current.ret, label: 'Portafoglio attuale', color: COLORS.current, r: 7, special: true, group: 'Portafoglio attuale', sub: Number.isFinite(res.current.sharpe) ? `Sharpe ${ratio(res.current.sharpe)}` : '' });
   const lines = [{
     name: 'Frontiera efficiente',
     color: COLORS.frontier,
-    points: res.frontier.map((p) => ({ x: p.vol, y: p.ret, sub: Number.isFinite(p.sharpe) ? `Sharpe ${num(p.sharpe, 2)}` : '' })),
+    points: res.frontier.map((p) => ({ x: p.vol, y: p.ret, sub: Number.isFinite(p.sharpe) ? `Sharpe ${ratio(p.sharpe)}` : '' })),
   }];
   const ms = res.maxSharpe;
   if (ms && ms.vol > 0 && ms.ret > rf) {
@@ -280,6 +269,7 @@ export function frontierChart(res, view) {
     xLabel: 'Volatilità annua →',
     yLabel: '↑ Rendimento atteso annuo',
     legend: true,
+    directLabels: false, // the cards under the chart name the three portfolios
     ariaLabel: 'Frontiera efficiente: rendimento atteso e volatilità dei portafogli possibili con i tuoi titoli',
   });
 }
@@ -303,7 +293,7 @@ function weightsTable(res) {
   });
   return tableCard({
     title: 'Pesi a confronto',
-    columns: [{ label: 'Titolo', align: 'left' }, { label: 'Attuale', align: 'right' }, { label: 'Massimo Sharpe', align: 'right' }, { label: 'Minima varianza', align: 'right' }],
+    columns: [{ label: 'Titolo', align: 'left' }, { label: 'Attuale', align: 'right' }, { label: 'Max Sharpe', align: 'right' }, { label: 'Min varianza', align: 'right' }],
     rows,
     foot: ['Totale', pct(1, 0), pct(1, 0), pct(1, 0)],
     note: 'In verde i pesi più alti di almeno 5 punti rispetto a oggi, in rosso quelli più bassi.',

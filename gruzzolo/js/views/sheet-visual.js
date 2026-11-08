@@ -1,6 +1,8 @@
 // Report sheet 2 "Analisi visiva": equity curve (total, accounts, benchmark), monthly returns,
 // monthly active return, asset-allocation evolution, drawdown and rolling volatility over time.
-import { D, cached, TYPE_KEYS, TYPE_PLURAL } from '../state.js';
+import { S, D, cached, TYPE_KEYS, TYPE_PLURAL } from '../state.js';
+import { ACTIONS } from '../registry.js';
+import { app } from '../app.js';
 import { cumulative, drawdowns, monthlyReturns, activeMonthly, rollingVol, alignByDate, periodBounds } from '../metrics.js';
 import { lineChart, barChart, stackedArea } from '../charts.js';
 import { esc, num, pctSigned, fmtDate, fmtMonth } from '../util.js';
@@ -163,6 +165,14 @@ function rolling(ctx) {
 }
 
 /* ---------- Charts ---------- */
+// On phones the lines of the single accounts would cover each other: portfolio and benchmark only,
+// unless the accounts are asked for (desktop shows them all)
+const showAccs = (ctx) => ctx.desktop || Boolean(S.ui.visAccs);
+function accsToggle(ctx, accs) {
+  if (ctx.desktop || !accs || !accs.length) return '';
+  return `<button class="link-btn vis-accs" type="button" data-act="vis-accs" aria-pressed="${Boolean(S.ui.visAccs)}">${S.ui.visAccs ? 'Nascondi i conti' : `Mostra anche ${accs.length === 1 ? 'il conto' : `i ${accs.length} conti`}`}</button>`;
+}
+
 function equityChart(ctx, c, h) {
   const n = c.dates.length;
   if (n < 2) return noteBox('Il periodo è troppo breve per disegnare la curva: scegline uno più lungo.');
@@ -173,8 +183,9 @@ function equityChart(ctx, c, h) {
   const tf = base100 ? (v) => (v === null || v === undefined ? null : 100 * (1 + v))
     : log ? (v) => (v === null || v === undefined ? null : 1 + v)
       : (v) => (v === null || v === undefined ? null : v);
-  const series = [{ name: 'Portafoglio', color: TOTAL_COLOR, values: pick(c.total, idx).map(tf), width: 2.5, area: !c.accs.length && !c.bench }];
-  for (const a of c.accs) series.push({ name: a.name, color: a.color, values: pick(a.cum, idx).map(tf), width: 1.6 });
+  const accs = showAccs(ctx) ? c.accs : [];
+  const series = [{ name: 'Portafoglio', color: TOTAL_COLOR, values: pick(c.total, idx).map(tf), width: 2.5, area: !accs.length && !c.bench }];
+  for (const a of accs) series.push({ name: a.name, color: a.color, values: pick(a.cum, idx).map(tf), width: 1.6 });
   if (c.bench) series.push({ name: `Benchmark (${benchShort(ctx.bench)})`, color: BENCH_COLOR, values: pick(c.bench, idx).map(tf), width: 1.6, dash: true });
   const yFormat = base100 ? (v) => num(v, v < 10 ? 1 : 0) : log ? (v) => pctAxis(v - 1) : pctAxis;
   const tooltipValue = base100 ? (v) => num(v, 1) : log ? (v) => pctSigned(v - 1) : (v) => pctSigned(v);
@@ -187,7 +198,7 @@ function equityChart(ctx, c, h) {
     yFormat,
     tooltipValue,
     legend: series.length > 1,
-    ariaLabel: 'Curva equity: rendimento cumulato del portafoglio',
+    ariaLabel: 'Andamento del valore: rendimento cumulato del portafoglio',
   });
 }
 
@@ -197,7 +208,7 @@ function drawdownChart(ctx, c, w, h) {
   const idx = sampleIdx(n, MAX_POINTS, c.dd.total);
   const series = [{ name: 'Portafoglio', color: TOTAL_COLOR, values: pick(c.dd.total, idx), width: 2, area: true }];
   if (c.dd.bench) series.push({ name: `Benchmark (${benchShort(ctx.bench)})`, color: BENCH_COLOR, values: pick(c.dd.bench, idx), width: 1.5, dash: true });
-  c.accs.forEach((a, k) => series.push({ name: a.name, color: a.color, values: pick(c.dd.accs[k], idx), width: 1.4 }));
+  if (showAccs(ctx)) c.accs.forEach((a, k) => series.push({ name: a.name, color: a.color, values: pick(c.dd.accs[k], idx), width: 1.4 }));
   return lineChart('rep-dd', {
     dates: pick(c.dates, idx),
     series, w, h,
@@ -215,7 +226,7 @@ function monthlyChart(ctx, m, w, h, maxMonths) {
   const cut = start;
   const sl = (arr) => (arr ? arr.slice(start) : null);
   const series = [{ name: 'Totale', color: TOTAL_COLOR, values: sl(m.total) }];
-  for (const a of m.accs) series.push({ name: a.name, color: a.color, values: sl(a.values) });
+  if (showAccs(ctx)) for (const a of m.accs) series.push({ name: a.name, color: a.color, values: sl(a.values) });
   if (m.bench) series.push({ name: `Benchmark (${benchShort(ctx.bench)})`, color: BENCH_COLOR, values: sl(m.bench) });
   const body = barChart('rep-monthly', {
     labels: m.months.slice(start),
@@ -235,7 +246,8 @@ function activeChart(ctx, m, w, h, maxMonths) {
   if (!values.some((v) => Number.isFinite(v))) return noteBox(benchMissingText(ctx));
   return barChart('rep-active', {
     labels: m.months.slice(start),
-    series: [{ name: `Portafoglio − ${benchShort(ctx.bench)}`, color: 'var(--c1)', values }],
+    // above the benchmark in green, below in red
+    series: [{ name: `Portafoglio − ${benchShort(ctx.bench)}`, color: 'var(--up)', negColor: 'var(--down)', values }],
     w, h,
     yFormat: pctAxis,
     tooltipValue: (v) => pctSigned(v),
@@ -295,7 +307,7 @@ function renderVisual(ctx) {
     : 'Rendimento di ogni mese: barre sopra lo zero = mese positivo';
 
   return `<div class="chart-grid visual-grid">
-    ${chartCard({ title: 'Curva equity (portafoglio, conti e benchmark)', subtitle: equitySub, info: 'equityCurve', body: equityChart(ctx, c, hBig), cls: 'full' })}
+    ${chartCard({ title: 'Andamento del valore (portafoglio, conti e benchmark)', subtitle: equitySub, info: 'equityCurve', body: equityChart(ctx, c, hBig) + accsToggle(ctx, c.accs), cls: 'full' })}
     ${chartCard({ title: 'Rendimenti mensili (totale, conti e benchmark)', subtitle: monSub, info: 'rendimentiMensili', body: mon.body, cls: 'full' })}
     ${chartCard({ title: 'Rendimento attivo mensile (totale − benchmark)', subtitle: hasBench(ctx) ? `Sopra lo zero: quel mese hai battuto ${bName}` : esc(benchMissingText(ctx)), info: 'rendimentoAttivo', body: activeChart(ctx, m, ctx.wHalf, h, maxMonths) })}
     ${chartCard({ title: 'Evoluzione asset allocation (per classe)', subtitle: 'Peso di ogni classe sul totale, settimana per settimana', info: 'evoluzioneAllocazione', body: allocationChart(ctx, a, ctx.wHalf, h) })}
@@ -313,3 +325,10 @@ registerSheet({
 });
 
 export const _test = { sampleIdx, pctAxis, curves, monthly, allocation, rolling };
+
+Object.assign(ACTIONS, {
+  'vis-accs': () => {
+    S.ui.visAccs = !S.ui.visAccs;
+    app.render();
+  },
+});

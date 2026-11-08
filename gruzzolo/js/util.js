@@ -54,9 +54,11 @@ export function fmtTime(ms) {
 export const fmt = { hide: false };
 const MASK = '•••••';
 const nfCache = new Map();
+// Thousands are always grouped: 7.195,81 like 23.356,28 (the Italian rules group only from 5 digits,
+// so the two would sit unaligned in the same card); old engines read 'always' as true
 function nf(opts) {
   const k = JSON.stringify(opts);
-  if (!nfCache.has(k)) nfCache.set(k, new Intl.NumberFormat('it-IT', opts));
+  if (!nfCache.has(k)) nfCache.set(k, new Intl.NumberFormat('it-IT', { useGrouping: 'always', ...opts }));
   return nfCache.get(k);
 }
 const EUR = nf({ style: 'currency', currency: 'EUR' });
@@ -80,28 +82,32 @@ export function moneyLocal(v, ccy = 'EUR', { mask = true } = {}) {
 export const priceFmt = (v, ccy = 'EUR') => (Number.isFinite(v) ? moneyLocal(v, ccy, { mask: false }) : '—');
 export function pct(v, digits = 2) {
   if (!Number.isFinite(v)) return '—';
-  return (v * 100).toLocaleString('it-IT', { minimumFractionDigits: digits, maximumFractionDigits: digits }) + '%';
+  return nf({ minimumFractionDigits: digits, maximumFractionDigits: digits }).format(v * 100) + '%';
 }
 export function pctSigned(v, digits = 2) {
   if (!Number.isFinite(v)) return '—';
   const sign = v > 0.00005 ? '+' : v < -0.00005 ? '−' : '';
-  return sign + Math.abs(v * 100).toLocaleString('it-IT', { minimumFractionDigits: digits, maximumFractionDigits: digits }) + '%';
+  return sign + nf({ minimumFractionDigits: digits, maximumFractionDigits: digits }).format(Math.abs(v * 100)) + '%';
 }
 export const pctPlain = (v) => pct(v, 1);
+// Ratios (Sharpe, Sortino, beta…): always 2 decimals, so 1,00 sits well next to 0,67
+export const ratio = (v) => (Number.isFinite(v) ? nf({ minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v) : '—');
 export function num(v, digits = 2) {
   if (!Number.isFinite(v)) return '—';
-  return v.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: digits });
+  return nf({ minimumFractionDigits: 0, maximumFractionDigits: digits }).format(v);
 }
 export function compact(v) {
   if (!Number.isFinite(v)) return '';
   const a = Math.abs(v);
-  const f = (x, d) => x.toLocaleString('it-IT', { maximumFractionDigits: d });
+  const f = (x, d) => nf({ maximumFractionDigits: d }).format(x);
   if (a >= 1e6) return f(v / 1e6, 1) + ' Mln';
   if (a >= 1e4) return f(v / 1e3, 0) + 'k';
   if (a >= 1e3) return f(v / 1e3, 1) + 'k';
   return f(v, a < 10 ? 2 : 0);
 }
 export const qtyFmt = (v) => (fmt.hide ? '•••' : num(v, 6));
+// Quantity in a list: 2 decimals from 1 unit up (the detail sheet keeps all 6)
+export const qtyShort = (v) => (fmt.hide ? '•••' : num(v, Math.abs(v) >= 1 ? 2 : 4));
 export const tone = (v, eps = 0.004) => (v > eps ? 'up' : v < -eps ? 'down' : 'flat');
 
 // Accepts "1.234,56", "1234,56", "1234.56", "-3,5%"
@@ -153,6 +159,19 @@ export function debounce(fn, ms) {
 
 /* ---------- Layout ---------- */
 export const DESKTOP_MIN = 900;
+
+// Horizontal strips of chips: fade the edge where more chips are hidden (fade-l / fade-r), so a cut
+// chip reads as "there is more", not as a broken layout
+export function fadeStrip(el) {
+  if (!el || !el.classList) return;
+  const more = el.scrollWidth - el.clientWidth;
+  el.classList.toggle('fade-l', more > 2 && el.scrollLeft > 2);
+  el.classList.toggle('fade-r', more > 2 && el.scrollLeft < more - 2);
+}
+export function fadeStrips(root) {
+  if (!root || !root.querySelectorAll) return;
+  for (const el of root.querySelectorAll('.chips')) fadeStrip(el);
+}
 // The page never scrolls: the content (#view) does (see css/app.css). Back to its top.
 export function scrollToTop(smooth = false) {
   const v = typeof document !== 'undefined' ? document.getElementById('view') : null;

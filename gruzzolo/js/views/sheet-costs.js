@@ -8,7 +8,7 @@ import { costStats, fiscalBackpack } from '../costs.js';
 import { lineChart } from '../charts.js';
 import { esc, icon, money, moneySigned, pct, fmtDate, fmtMonth, numInput, parseNum, tone } from '../util.js';
 import { infoBtn } from '../info.js';
-import { registerSheet, kpiCard, chartCard, tableCard } from './report.js';
+import { registerSheet, kpiCard, chartCard, tableCard, rowsCard } from './report.js';
 
 const EVENTS_SHOWN = 50;
 const MONTHS_SHOWN = 12;
@@ -48,13 +48,16 @@ function statusNote(r) {
 }
 
 /* ---------- Broker costs ---------- */
+// The total first, then its parts as rows
 function costKpis(cs) {
   return `<div class="kpi-grid cost-kpis">
-    ${kpiCard({ label: 'Transaction fees', value: money(cs.transaction), sub: 'commissioni su acquisti e vendite', info: 'transactionFees' })}
-    ${kpiCard({ label: 'AutoFX fees', value: money(cs.autofx), sub: 'costi di cambio valuta', info: 'autofxFees' })}
-    ${kpiCard({ label: 'Connectivity fees', value: money(cs.connectivity), sub: 'canoni per le borse estere', info: 'connectivityFees' })}
     ${kpiCard({ label: 'Costi broker totali', value: money(cs.totalBroker), sub: cs.other > 0.005 ? `altri costi inclusi: ${money(cs.other)}` : `dal ${fmtDate(cs.from)} al ${fmtDate(cs.to)}`, info: 'costiBroker', cls: 'hero' })}
-  </div>`;
+  </div>
+  ${rowsCard('Di cui', '', [
+    { label: 'Commissioni', value: money(cs.transaction), sub: 'su acquisti e vendite', info: 'transactionFees' },
+    { label: 'Costi di cambio (AutoFX)', value: money(cs.autofx), sub: 'cambio valuta', info: 'autofxFees' },
+    { label: 'Canoni di connessione', value: money(cs.connectivity), sub: 'per le borse estere', info: 'connectivityFees' },
+  ])}`;
 }
 
 function terCard(cs, ctx) {
@@ -90,7 +93,7 @@ function terCard(cs, ctx) {
       </dl>
     </div>${chart}${missing}`;
   return chartCard({
-    title: 'Weighted portfolio TER',
+    title: 'TER medio del portafoglio',
     subtitle: 'Costo annuo di ETF e fondi pesato sul valore: è già nel prezzo, non lo paghi a parte',
     info: 'ter',
     body,
@@ -104,9 +107,9 @@ function breakdownTable(cs) {
     `<span class="cb-share"><span class="cb-bar" aria-hidden="true"><i style="width:${(Math.max(0, Math.min(1, b.share)) * 100).toFixed(1)}%;background:${KIND_COLOR[b.key] || 'var(--c-other)'}"></i></span>${pct(b.share, 1)}</span>`,
   ]);
   return tableCard({
-    title: 'Cost breakdown',
+    title: 'Dettaglio costi',
     info: 'costiBroker',
-    columns: [{ label: 'Categoria', align: 'left' }, { label: 'Importo', align: 'right' }, { label: 'Peso sul totale', align: 'right' }],
+    columns: [{ label: 'Categoria', align: 'left' }, { label: 'Importo', align: 'right' }, { label: 'Peso', align: 'right' }],
     rows: cs.totalBroker > 0.005 ? rows : [],
     empty: 'Nessun costo del broker nel periodo',
     foot: ['Totale', money(cs.totalBroker), pct(1, 0)],
@@ -118,7 +121,7 @@ function monthlyTable(cs) {
   const all = cs.monthly;
   const list = ui.allMonths ? all : all.slice(0, MONTHS_SHOWN);
   const rows = list.map((m) => [
-    esc(fmtMonth(m.month, true)),
+    `<span class="nowrap">${esc(fmtMonth(m.month, true).toLowerCase().replace(/^(\w{3})\w*/, '$1'))}</span>`,
     money(m.broker),
     money(m.incomeTaxes),
     `<b>${money(m.total)}</b>`,
@@ -129,12 +132,12 @@ function monthlyTable(cs) {
     ? `<button class="link-btn" type="button" data-act="cost-months">${ui.allMonths ? 'Mostra solo gli ultimi 12 mesi' : `Mostra tutti i mesi (${all.length})`}</button>`
     : '';
   return tableCard({
-    title: 'Monthly summary',
-    columns: [{ label: 'Mese', align: 'left' }, { label: 'Costi broker', align: 'right' }, { label: 'Imposte su redditi', align: 'right' }, { label: 'Totale', align: 'right' }],
+    title: 'Riepilogo mensile',
+    columns: [{ label: 'Mese', align: 'left' }, { label: 'Broker', align: 'right' }, { label: 'Imposte', align: 'right' }, { label: 'Totale', align: 'right' }],
     rows,
     empty: 'Nessun costo o imposta nel periodo',
     foot: [all.length > list.length ? `Totale (${all.length} mesi)` : 'Totale', money(tb), money(ti), money(tb + ti)],
-    note: `Solo i mesi con almeno un costo; «Imposte su redditi» sono le ritenute su dividendi e cedole.${toggle ? ' ' + toggle : ''}`,
+    note: `Solo i mesi con almeno un costo; «Broker» sono commissioni, cambio valuta e canoni, «Imposte» le ritenute su dividendi e cedole.${toggle ? ' ' + toggle : ''}`,
     cls: 'full cost-monthly',
   });
 }
@@ -158,8 +161,8 @@ function eventsTable(cs) {
   return tableCard({
     title: `Operazioni di costo${all.length ? ` (${all.length})` : ''}`,
     columns: [
-      { label: 'Data', align: 'left' }, { label: 'Conto', align: 'left' }, { label: 'Tipo', align: 'left' },
-      { label: 'Descrizione', align: 'left' }, { label: 'Ordine', align: 'left' }, { label: 'Importo', align: 'right' },
+      { label: 'Data', align: 'left' }, { label: 'Conto', align: 'left', opt: true }, { label: 'Tipo', align: 'left', opt: true },
+      { label: 'Descrizione', align: 'left' }, { label: 'Ordine', align: 'left', opt: true }, { label: 'Importo', align: 'right' },
     ],
     rows,
     empty: 'Nessuna commissione nel periodo',

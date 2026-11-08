@@ -1,4 +1,4 @@
-// Report sheet 4 "Dividendi & Fixed Income": income received in the period, 12-month yield,
+// Report sheet 4 "Dividendi e cedole": income received in the period, 12-month yield,
 // currency mix of dividends and bonds, 12-month payment calendar (with forecasts), cumulative
 // income, yields and return decomposition, next-12-months forecast per security and market
 // dividends not yet recorded (one tap to record them).
@@ -80,7 +80,7 @@ function topKpis(inc) {
     sub: `netti, nel periodo${inc.taxes > 0.005 ? ` · ritenute ${money(inc.taxes)}` : ''}`,
     info: 'dividendiTotali',
   })}${kpiCard({
-    label: 'Dividend yield (12M)',
+    label: 'Rendimento da dividendi (12 mesi)',
     value: pct(inc.yield12m),
     sub: inc.income12m > 0.005 ? `${money(inc.income12m)} negli ultimi 12 mesi` : 'nessun incasso negli ultimi 12 mesi',
     info: 'dividendYield12m',
@@ -90,6 +90,8 @@ function topKpis(inc) {
 function donutBlock(id, items, { emptyText, aria, centerLabel }) {
   const list = items.filter((it) => it.value > 0.005);
   if (!list.length) return `<div class="chart-note inc-note-sm">${esc(emptyText)}</div>`;
+  // a single currency is a sentence, not a full ring
+  if (list.length === 1) return `<p class="inc-one">Tutto in <b>${esc(list[0].label || list[0].key)}</b> · ${money(list[0].value)}</p>`;
   const total = sum(list, (it) => it.value);
   const colored = list.map((it) => ({ key: it.key, label: it.label, value: it.value, color: ccyColor(it.key) }));
   const donut = donutChart(id, {
@@ -222,10 +224,10 @@ function bottomKpis(inc) {
   const prv = `<span class="ipr"><span class="ipr-row"><small>Prezzo</small><b class="${tone(inc.priceReturn, 0.00005)}">${pctSigned(inc.priceReturn)}</b></span>`
     + `<span class="ipr-row"><small>Income</small><b class="${tone(inc.incomeReturn, 0.00005)}">${pctSigned(inc.incomeReturn)}</b></span></span>`;
   return `<div class="kpi-grid inc-bottom">
-    ${kpiCard({ label: 'Yield distribuzione', value: pct(inc.yieldPeriod), sub: 'incassi sul valore medio, su base annua', info: 'yieldDistribuzione' })}
-    ${kpiCard({ label: 'Income totale (€)', value: money(inc.total), sub: parts.length ? parts.join(' · ') : 'nessun incasso nel periodo', info: 'incomeTotale' })}
-    ${kpiCard({ label: 'Rendimento prezzo vs income', value: prv, valueClass: 'ipr-value', sub: `rendimento totale (TWR) ${pctSigned(inc.twr)}`, info: 'prezzoVsIncome' })}
-    ${kpiCard({ label: 'Income annuo stimato', value: money(inc.forecast12m), sub: inc.forecast12m > 0.005 ? `prossimi 12 mesi, netto · ≈ ${money(inc.forecast12m / 12)} al mese` : 'nessun pagamento atteso', info: 'incomeStimato' })}
+    ${kpiCard({ label: 'Rendimento delle distribuzioni', value: pct(inc.yieldPeriod), sub: 'incassi sul valore medio, su base annua', info: 'yieldDistribuzione' })}
+    ${kpiCard({ label: 'Entrate totali', value: money(inc.total), sub: parts.length ? parts.join(' · ') : 'nessun incasso nel periodo', info: 'incomeTotale' })}
+    ${kpiCard({ label: 'Prezzo e cedole a confronto', value: prv, valueClass: 'ipr-value', sub: `rendimento totale (TWR) ${pctSigned(inc.twr)}`, info: 'prezzoVsIncome' })}
+    ${kpiCard({ label: 'Entrate stimate in un anno', value: money(inc.forecast12m), sub: inc.forecast12m > 0.005 ? `prossimi 12 mesi, netto · ≈ ${money(inc.forecast12m / 12)} al mese` : 'nessun pagamento atteso', info: 'incomeStimato' })}
     ${kpiCard({ label: 'Frequenza distribuzione', value: esc(freq.label === 'Nessuna' ? '—' : freq.label), sub: esc(freqSub), info: 'frequenzaDistribuzione' })}
   </div>`;
 }
@@ -257,8 +259,8 @@ function forecastTable(inc, ctx) {
     title: 'Prossimi 12 mesi per titolo',
     info: 'incomeStimato',
     columns: [
-      { label: 'Titolo', align: 'left' }, { label: 'Tipo', align: 'left' }, { label: 'Frequenza', align: 'left' },
-      { label: 'Prossimo', align: 'right' }, { label: 'Per quota (12 mesi)', align: 'right' }, { label: 'Quantità', align: 'right' },
+      { label: 'Titolo', align: 'left' }, { label: 'Tipo', align: 'left', opt: true }, { label: 'Frequenza', align: 'left', opt: true },
+      { label: 'Prossimo', align: 'right' }, { label: 'Per quota (12 mesi)', align: 'right', opt: true }, { label: 'Quantità', align: 'right', opt: true },
       { label: 'Stima netta', align: 'right' },
     ],
     rows,
@@ -419,7 +421,7 @@ Object.assign(ACTIONS, {
 registerSheet({
   id: 'income',
   order: 4,
-  title: 'Dividendi & Fixed Income',
+  title: 'Dividendi e cedole',
   subtitle: 'Flussi da dividendi e cedole: calendario, cumulati e rendimento.',
   render: renderIncome,
 });

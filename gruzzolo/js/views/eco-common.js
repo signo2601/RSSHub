@@ -99,12 +99,13 @@ export function chgPill(v, dp = 2) {
   const tri = t === 'up' ? '▲' : t === 'down' ? '▼' : '';
   return `<span class="pill ${t}">${tri ? `<span class="tri" aria-hidden="true">${tri}</span>` : ''}${fmtPct(Math.abs(v), dp)}</span>`;
 }
-// Pill with a change in basis points (bond yields)
+// Pill with a change in basis points (bond yields): ▲ 8,8 pb, like the percentage pills
 export function bpPill(pp) {
   if (!finite(pp)) return '<span class="pill flat">—</span>';
   const bp = pp * 100;
   const t = bp > 0.05 ? 'up' : bp < -0.05 ? 'down' : 'flat';
-  return `<span class="pill ${t} bp">${fmtBp(pp)}</span>`;
+  const tri = t === 'up' ? '▲' : t === 'down' ? '▼' : '';
+  return `<span class="pill ${t} bp">${tri ? `<span class="tri" aria-hidden="true">${tri}</span>` : ''}${fmtBp(Math.abs(pp)).replace(/^\+/, '')}</span>`;
 }
 
 /* ---------- Flags ---------- */

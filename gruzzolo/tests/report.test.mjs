@@ -152,11 +152,16 @@ test('summary figures are consistent with the engine', () => {
   loadDemo();
   S.ui.sheet = sheetDefs().findIndex((d) => d.id === 'summary');
   const html = renderReport();
-  for (const label of ['Saldo finale', 'Dall&#39;inizio performance (TWR)', 'Saldo iniziale', 'Liquidità', 'P&amp;L realizzato', 'P&amp;L non realizzato',
-    'P&amp;L cambio (n.r.)', 'Attivo vs benchmark', 'Flussi netti', 'IRR investitore (ann.)', 'Volatilità (ann.)', 'Sharpe (ann.)', 'CAGR', 'Drawdown massimo']) {
+  // one hero and four tiles, the other figures as rows
+  for (const label of ['Saldo finale', 'Rendimento (TWR)', 'Rendimento reale', 'Flussi netti', 'Liquidità']) {
     assert.ok(html.includes(`<span class="kpi-label">${label}</span>`), `missing KPI ${label}`);
   }
-  assert.match(html, /kpi rkpi danger/);
+  for (const label of ['P&amp;L non realizzato', 'P&amp;L realizzato', 'P&amp;L cambio (n.r.)', 'Saldo iniziale', 'Attivo vs benchmark',
+    'IRR investitore (ann.)', 'CAGR', 'Volatilità (ann.)', 'Sharpe (ann.)', 'Drawdown massimo']) {
+    assert.ok(html.includes(`<dt><span>${label}</span>`), `missing row ${label}`);
+  }
+  assert.equal((html.match(/class="kpi rkpi hero"/g) || []).length, 1, 'a single focal point');
+  assert.doesNotMatch(html, /kpi rkpi danger/, 'an ordinary drawdown is not an alarm');
   assert.match(html, /Fotografia per conto/);
   // Liquidity: DEGIRO tracks cash, Scalable does not
   const snap = SUM.snapshot(null, T);

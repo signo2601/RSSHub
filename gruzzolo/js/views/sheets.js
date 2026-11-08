@@ -13,7 +13,7 @@ import { priceSeries, priceOn, fxOn, lastQuote, positions, sortTxns, assetHistor
 import { searchCatalog, findInCatalog } from '../catalog.js';
 import { lineChart } from '../charts.js';
 import {
-  esc, icon, fmt, money, moneySigned, moneyLocal, priceFmt, pct, pctSigned, pctPlain, num, qtyFmt, numInput, parseNum,
+  esc, icon, fmt, money, moneySigned, moneyLocal, priceFmt, pct, pctSigned, pctPlain, num, qtyFmt, qtyShort, numInput, parseNum,
   fmtDate, fmtTime, tone, todayISO, addDays, addMonths, newId, debounce, isDesktop, iso, compact,
 } from '../util.js';
 import { avatar, pctPill, txRow, unitFor, txLabel, txAmount, txFx, feeKindLabel, taxKindLabel } from './home.js';
@@ -206,10 +206,20 @@ function sourceLine(a, q, today) {
   return 'Nessun prezzo: inseriscilo a mano qui sotto';
 }
 
+// Three tags under the name (code, market, yearly cost); ISIN, sector and region go in the details
 function assetTags(a) {
-  const tags = [TYPE_LABEL[a.type] || 'Altro', assetCode(a), a.exchange, a.currency, a.sector, a.region, a.ter > 0 ? `TER ${pct(a.ter, 2)}` : '', a.isin]
-    .filter(Boolean);
+  const tags = [assetCode(a), a.exchange, a.ter > 0 ? `TER ${pct(a.ter, 2)}` : ''].filter(Boolean);
   return [...new Set(tags)].map((t) => `<span class="tag">${esc(t)}</span>`).join('');
+}
+function assetFacts(a) {
+  const facts = [
+    ['Tipo', TYPE_LABEL[a.type] || 'Altro'],
+    ['ISIN', a.isin],
+    ['Valuta', a.currency],
+    ['Settore', a.sector],
+    ['Regione', a.region],
+  ].filter(([, v]) => v);
+  return facts.length ? `<div class="stats asset-facts">${facts.map(([k, v]) => stat(k, esc(v))).join('')}</div>` : '';
 }
 
 function priceForm(a, q, today) {
@@ -244,7 +254,7 @@ SHEETS.asset = (args = {}) => {
   // Price block
   let priceBlock = '';
   if (!cash) {
-    const change = q && q.prev > 0 && q.date ? `${pctPill(q.changePct)} <span class="muted num">${q.change >= 0 ? '+' : '−'}${priceFmt(Math.abs(q.change), ccy)}</span>` : '';
+    const change = q && q.prev > 0 && q.date ? `${pctPill(q.changePct)} <span class="num ${tone(q.change, 0)}">${q.change >= 0 ? '+' : '−'}${priceFmt(Math.abs(q.change), ccy)}</span>` : '';
     priceBlock = `<div class="quote-price">
       <div class="price-big num">${q ? priceFmt(q.price, ccy) : '—'}</div>
       <div class="price-change">${change}</div>
@@ -267,7 +277,7 @@ SHEETS.asset = (args = {}) => {
     const avg = pos.qty > 0 ? `${moneyLocal(pos.avgLocal, ccy)}${nonEur ? ` · ${money(pos.avgEUR)}` : ''}` : '—';
     const unit = unitFor(a);
     stats = `<div class="stats pos-stats">
-      ${cash ? stat('Saldo', money(pos.value)) : stat('Quantità', `${qtyFmt(pos.qty)}${unit ? ' ' + esc(unit) : ''}`) + stat('Prezzo medio di carico', avg)}
+      ${cash ? stat('Saldo', money(pos.value)) : stat('Quantità', `${qtyShort(pos.qty)}${unit ? ' ' + esc(unit) : ''}`) + stat('Prezzo medio di carico', avg)}
       ${stat('Valore', money(pos.value))}
       ${stat('Capitale investito', money(pos.cost))}
       ${pos.qty > 0 ? stat('Plus/minus latente', `${moneySigned(pos.unreal)} (${pctSigned(pos.unrealPct)})`, tone(pos.unreal)) : ''}
@@ -307,7 +317,8 @@ SHEETS.asset = (args = {}) => {
     : '<p class="muted">Nessuna operazione registrata su questo titolo.</p>';
 
   return {
-    title: TYPE_LABEL[a.type] || 'Titolo',
+    // the type is in the details: the title names the security by its code
+    title: assetCode(a) || TYPE_LABEL[a.type] || 'Titolo',
     body: `<div class="detail-head">${avatar(a, 'lg')}<div class="detail-title"><h3>${esc(a.name)}</h3><div class="tags">${assetTags(a)}</div></div></div>
       ${priceBlock}
       ${chartBlock}
@@ -315,6 +326,8 @@ SHEETS.asset = (args = {}) => {
       ${actions}
       ${isFund(a) ? etfBlock(a, args) : ''}
       ${manual}
+      <div class="group-label">Dati del titolo</div>
+      ${assetFacts(a)}
       <div class="group-label">Operazioni</div>
       ${txList}
       <div class="btn-row sheet-foot-actions">

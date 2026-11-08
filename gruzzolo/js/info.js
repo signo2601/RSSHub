@@ -8,7 +8,7 @@ export const INFO = {
   /* ---------- Riepilogo ---------- */
   saldoFinale: {
     title: 'Saldo finale',
-    text: 'Quanto vale il patrimonio alla fine del periodo: i titoli ai prezzi di quel giorno più la liquidità dei conti in cui la registri.\n\nÈ la fotografia di «quanto ho» in quel momento. Il badge dice se nel periodo hai guadagnato (Up) o perso (Down), al netto dei soldi versati o ritirati.',
+    text: 'Quanto vale il patrimonio alla fine del periodo: i titoli ai prezzi di quel giorno più la liquidità dei conti in cui la registri.\n\nÈ la fotografia di «quanto ho» in quel momento. La freccia dice se nel periodo hai guadagnato (verde, in su) o perso (rossa, in giù), al netto dei soldi versati o ritirati.',
     formula: 'Σ (quantità × prezzo ÷ cambio) + liquidità sul conto',
   },
   saldoIniziale: {
@@ -141,12 +141,12 @@ export const INFO = {
   frontiera: {
     title: 'Frontiera efficiente',
     text: 'Per ogni livello di rischio, la combinazione dei tuoi titoli che nel passato avrebbe reso di più. Se il tuo portafoglio sta sotto la curva, con gli stessi titoli esisteva un mix più efficiente.\n\nSi basa solo sul passato (fino a 10 anni di dati settimanali): non è una previsione né un consiglio.',
-    formula: 'Ottimizzazione media-varianza (Markowitz), covarianza stimata con shrinkage, pesi tra 0,1% e 20%',
+    formula: 'Ottimizzazione media-varianza (Markowitz) sulle posizioni aperte oggi: storico comune fino a 10 anni, rendimenti settimanali, covarianza stimata con shrinkage, titolo privo di rischio, solo posizioni lunghe senza leva, peso di ogni titolo tra 0,1% e 20%.',
   },
 
   /* ---------- Analisi visiva ---------- */
   equityCurve: {
-    title: 'Curva equity',
+    title: 'Andamento del valore',
     text: 'L\'andamento del rendimento nel tempo per tutto il portafoglio, per ogni conto e per il benchmark, tutti da zero all\'inizio del periodo.\n\nCon «Base 100» ogni linea parte da 100: 120 vuol dire +20%. Versamenti e prelievi non spostano le linee, perché è un rendimento TWR.',
     formula: 'Rendimento cumulato TWR giorno per giorno',
   },
@@ -197,7 +197,7 @@ export const INFO = {
     text: 'Gli stessi numeri del riepilogo, divisi per conto (per esempio DEGIRO e Scalable Capital), per vedere quale sta andando meglio e quanto pesa ciascuno.',
   },
 
-  /* ---------- Dividendi & Fixed Income ---------- */
+  /* ---------- Dividendi e cedole ---------- */
   dividendiTotali: {
     title: 'Dividendi totali',
     text: 'La somma di dividendi, cedole e interessi incassati nel periodo, al netto delle ritenute fiscali.',
@@ -261,7 +261,7 @@ export const INFO = {
     text: 'Il costo di conversione della valuta (AutoFX su DEGIRO): lo paghi quando compri o vendi titoli in valuta estera e quando incassi dividendi in valuta.',
   },
   connectivityFees: {
-    title: 'Connectivity fee',
+    title: 'Canoni di connessione (connectivity fee)',
     text: 'Il canone annuale che alcuni broker (come DEGIRO) chiedono per ogni borsa estera su cui operi.',
   },
   costiBroker: {

@@ -8,7 +8,7 @@ import { market } from '../market.js';
 import { getSeries, positions, txnsFor, lastQuote, incomeEvents, cashAt, fxOn, qtyAt } from '../engine.js';
 import { lineChart, chartScrubHandlers } from '../charts.js';
 import {
-  esc, icon, money, moneySigned, pct, pctSigned, pctPlain, qtyFmt, priceFmt, fmtDate, fmtTime, tone, todayISO,
+  esc, icon, money, moneySigned, pct, pctSigned, pctPlain, qtyFmt, qtyShort, priceFmt, fmtDate, fmtTime, tone, todayISO,
   addDays, addMonths, dayDiff, contentWidth, isDesktop, hashHue, sum, compact, MONTHS_LONG, scrollToTop,
 } from '../util.js';
 
@@ -22,7 +22,7 @@ export function avatar(a, size = '') {
   const code = String(item.ticker || assetCode(item) || item.name || '?');
   const txt = code.replace(/[^A-Za-z0-9]/g, '').slice(0, code.length <= 4 ? 4 : 3).toUpperCase() || '?';
   const cash = item.type === 'cash';
-  const bg = cash ? 'var(--c-other)' : `hsl(${hashHue(item.ticker || item.symbol || item.name || '?')} 42% 44%)`;
+  const bg = cash ? 'var(--c-other)' : `hsl(${hashHue(item.ticker || item.symbol || item.name || '?')} 42% 36%)`;
   const cls = ['avatar', size, txt.length > 3 && size !== 'lg' ? 'l4' : ''].filter(Boolean).join(' ');
   return `<span class="${cls}" style="background:${bg}" aria-hidden="true">${cash ? icon('wallet') : esc(txt)}</span>`;
 }
@@ -36,10 +36,11 @@ export function pctPill(r, digits = 2) {
 }
 
 // Gain chip: "▲ +1.234,00 € (+5,20%)"
+// Result chip: a signed amount (+1.234,56 € (+5,20%)); the colour says the direction, no triangle
+// (triangles are for pills with unsigned numbers)
 export function deltaChip(gain, r, extra = '') {
   const t = Number.isFinite(r) ? tone(r, 0.00005) : tone(gain);
-  const tri = t === 'up' ? '▲' : t === 'down' ? '▼' : '•';
-  return `<span class="delta ${t}"><span class="tri" aria-hidden="true">${tri}</span>${moneySigned(gain)}${Number.isFinite(r) ? ` (${pctSigned(r)})` : ''}</span>${extra}`;
+  return `<span class="delta ${t}">${moneySigned(gain)}${Number.isFinite(r) ? ` (${pctSigned(r)})` : ''}</span>${extra}`;
 }
 
 // Unit shown after a quantity ("12 quote", "5 az.")
@@ -104,11 +105,13 @@ export function txRow(t, { showAsset = true, showYear = true, showAcc = multiAcc
   const label = txLabel(t);
   const date = fmtDate(t.date, showYear);
   let detail = '';
-  if ((t.type === 'buy' || t.type === 'sell') && a) detail = `${qtyFmt(t.qty)} × ${priceFmt(t.price, a.currency || 'EUR')}`;
+  if ((t.type === 'buy' || t.type === 'sell') && a) detail = `${qtyShort(t.qty)} × ${priceFmt(t.price, a.currency || 'EUR')}`;
   const title = showAsset && a ? a.name : label;
   // The date comes before quantity × price: on a phone the end of the line gets cut
   const subParts = showAsset && a ? [label, date, detail] : [date, detail];
   if (!a && t.note) subParts.unshift(t.note);
+  // the account goes under the name: the right column keeps only the amount
+  if (showAcc) subParts.push(accName(t.acc));
   const amt = txAmount(t);
   let cls = '';
   let text = money(Math.abs(amt));
@@ -123,7 +126,7 @@ export function txRow(t, { showAsset = true, showYear = true, showAcc = multiAcc
   return `<button class="row tx-row" type="button" data-act="open-tx" data-id="${esc(t.id)}">
     <span class="tx-ico ${esc(t.type)}">${icon(t.plan && t.type === 'buy' ? 'repeat' : TX_ICON[t.type] || 'receipt')}</span>
     <span class="row-main"><span class="row-title">${esc(title)}</span><span class="row-sub">${subParts.filter(Boolean).map(esc).join(' · ')}</span></span>
-    <span class="row-end"><span class="row-value ${cls}">${text}</span>${showAcc ? `<span class="row-sub">${esc(accName(t.acc))}</span>` : ''}</span>
+    <span class="row-end"><span class="row-value ${cls}">${text}</span></span>
   </button>`;
 }
 
@@ -131,7 +134,7 @@ export function txRow(t, { showAsset = true, showYear = true, showAcc = multiAcc
 export function demoBanner() {
   if (!hasDemo()) return '';
   return `<div class="banner demo-banner" role="note">${icon('info')}
-    <p><strong>Dati di esempio.</strong> Operazioni e prezzi sono simulati per mostrarti l'app. Quando vuoi, parti dal tuo portafoglio.</p>
+    <p><strong>Dati di esempio</strong> · operazioni e prezzi simulati</p>
     <button class="btn sm primary" type="button" data-act="demo-remove">Inizia da zero</button>
   </div>`;
 }
@@ -298,8 +301,9 @@ function heroDefaultHtml(R, range, today, todayInfo) {
   // A range longer than the portfolio's life is simply "since the start"
   const when = R && R.base < 0 ? RANGE_TEXT.MAX : RANGE_TEXT[range];
   const delta = R ? deltaChip(R.gainTotal, R.perfTotal, `<span class="muted">${when}</span>`) : '';
+  // the label stays grey: only the figure takes the colour of the day
   const day = todayInfo
-    ? `<span class="hero-today ${tone(todayInfo.change)}">${todayInfo.isToday ? 'Oggi' : 'Ultima seduta'} ${moneySigned(todayInfo.change)} (${pctSigned(todayInfo.pct)})</span>`
+    ? `<span class="hero-today">${todayInfo.isToday ? 'Oggi' : 'Ultima seduta'} <b class="${tone(todayInfo.change)}">${moneySigned(todayInfo.change)} (${pctSigned(todayInfo.pct)})</b></span>`
     : '';
   return { label: 'Valore totale', value: money(R ? R.valueEnd : 0), delta, day };
 }
@@ -331,18 +335,17 @@ function positionRow(p, today) {
   let sub;
   if (closed) sub = 'Posizione chiusa';
   else if (a.type === 'cash' || a.type === 'realestate') sub = `${TYPE_LABEL[a.type]} · ${pctPlain(p.weight)}`;
-  else sub = `${qtyFmt(p.qty)}${unit ? ' ' + esc(unit) : ''} · ${pctPlain(p.weight)}`;
+  else sub = `${qtyShort(p.qty)}${unit ? ' ' + esc(unit) : ''} · ${pctPlain(p.weight)}`;
   let end;
   if (closed) {
     const result = p.realized + p.income;
     end = `<span class="row-value ${tone(result)}">${moneySigned(result)}</span><span class="row-sub">risultato</span>`;
   } else {
+    // the change of the day joins the line under the name: the right column keeps value and result
     const q = isLinked(a) ? lastQuote(p.aid) : null;
     const fresh = q && q.source === 'market' && q.date && dayDiff(q.date, today) <= 4 && !(a.priceSource === 'auto' && market.status === 'offline');
-    const day = fresh && Math.abs(p.dayChangePct) > 0.000005
-      ? `<span class="row-today ${tone(p.dayChangePct, 0.00005)}">${q.date === today ? 'oggi' : 'ultima seduta'} ${pctSigned(p.dayChangePct)}</span>`
-      : '';
-    end = `<span class="row-value">${money(p.value)}</span>${a.type === 'cash' ? '' : pctPill(p.unrealPct)}${day}`;
+    if (fresh && Math.abs(p.dayChangePct) > 0.000005) sub += ` · <span class="row-today ${tone(p.dayChangePct, 0.00005)}">${q.date === today ? 'oggi' : fmtDate(q.date, false)} ${pctSigned(p.dayChangePct)}</span>`;
+    end = `<span class="row-value">${money(p.value)}</span>${a.type === 'cash' ? '' : pctPill(p.unrealPct)}`;
   }
   return `<button class="row pos-row${closed ? ' closed' : ''}" type="button" data-act="open-asset" data-aid="${esc(p.aid)}">
     ${avatar(a)}
@@ -435,7 +438,7 @@ export function renderHome() {
     ${demoBanner()}
     <section class="home-top" aria-label="Valore del portafoglio">
       <div class="hero">
-        <p class="eyebrow hero-scope">${esc(scopeTitle())}</p>
+        ${scopeIds() ? `<p class="eyebrow hero-scope">${esc(scopeTitle())}</p>` : ''}
         <div class="hero-label" id="hero-label">${def.label}</div>
         <div class="hero-value num" id="hero-value">${def.value}</div>
         <div class="hero-delta" id="hero-delta" aria-live="polite">${def.delta}</div>

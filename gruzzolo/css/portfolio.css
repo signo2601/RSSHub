@@ -46,8 +46,8 @@
 .home .hero-delta .delta { padding: 4px 9px; }
 .home .hero-delta .muted { font-size: 13.5px; font-weight: 600; }
 .home .hero-day { min-height: 22px; margin-top: 6px; font-size: 13.5px; }
-.home .hero-today { font-weight: 700; font-variant-numeric: tabular-nums; }
-.home .hero-today.flat { color: var(--muted); }
+.home .hero-today { font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+.home .hero-today b { font-weight: 800; }
 
 /* One line about prices loading or the server being offline */
 .price-status {
@@ -68,6 +68,10 @@
 /* Range chips (equal widths on phones) and the value/return switch */
 .home-controls { display: flex; flex-direction: column; align-items: stretch; gap: 10px; min-width: 0; }
 .home-controls .range-chips .chip, .price-chart .range-chips .chip { flex: 1 1 0; justify-content: center; min-width: 0; padding: 0 4px; font-variant-numeric: tabular-nums; }
+/* time ranges look like the segmented controls: a grey track with the chosen one in white */
+.home-controls .range-chips, .price-chart .range-chips { gap: 2px; padding: 3px; margin: 0; border-radius: 12px; background: var(--surface-2); }
+.home-controls .range-chips .chip, .price-chart .range-chips .chip { min-height: 34px; border-radius: 9px; }
+.home-controls .range-chips .chip[aria-pressed="true"], .price-chart .range-chips .chip[aria-pressed="true"] { background: var(--surface); border-color: transparent; }
 .home-controls .seg { align-self: flex-start; }
 .home-chart-note { margin: 0; max-width: 72ch; }
 
@@ -266,7 +270,7 @@
 .combo-list .tag { flex-shrink: 0; }
 .manual-row .tx-ico { width: 34px; height: 34px; border-radius: 10px; }
 .manual-row .tx-ico .ico { width: 17px; height: 17px; }
-.manual-row .row-title { color: var(--accent-line); }
+.manual-row .row-title { color: var(--accent-text); }
 
 /* The chosen asset */
 .picked {
@@ -372,3 +376,4 @@
 .plan-form .plan-when { margin: -6px 2px 0; color: var(--ink-2); }
 .plan-actions > .btn { flex: 1 1 0; min-width: 0; padding: 0 8px; white-space: nowrap; }
 .more-row.plan-paused .row-value { color: var(--muted); }
+.pf-sheet .asset-facts { margin: 0 0 6px; }

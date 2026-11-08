@@ -50,7 +50,8 @@ const BADGE = {
 export function badgeHtml(kind) {
   const b = BADGE[kind];
   if (!b) return '';
-  return `<span class="badge ${kind}" title="${b.aria}"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true">${b.path}</svg>${b.text}<span class="sr-only"> (${b.aria})</span></span>`;
+  // an arrow in a circle: colour and sign of the value already say the rest
+  return `<span class="badge ${kind}" title="${b.aria}"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true">${b.path}</svg><span class="sr-only">${b.aria}</span></span>`;
 }
 
 // KPI card. value and sub are HTML (escape user strings before passing them); label is plain text.
@@ -67,7 +68,20 @@ export function kpiCard({ label, value, valueClass = '', badge = null, sub = '',
   </div>`;
 }
 
-// "Curva equity (portafoglio, conti e benchmark)" → uppercase title + muted parenthetical
+// Card of figures as rows: label + (i) on the left, value (and a small note) on the right.
+// rows: [{ label, value (HTML), cls?, sub? (HTML), info? }]
+export function rowsCard(title, sub, rows) {
+  const items = rows.map((r) => `<div class="rg-row">
+      <dt><span>${esc(r.label)}</span>${r.info ? infoBtn(r.info) : ''}</dt>
+      <dd><b class="num ${r.cls || ''}">${r.value}</b>${r.sub ? `<small>${r.sub}</small>` : ''}</dd>
+    </div>`).join('');
+  return `<section class="card rcard risk-group">
+    <header class="rg-head"><h3 class="rcard-title">${esc(title)}</h3>${sub ? `<p class="rcard-sub">${sub}</p>` : ''}</header>
+    <dl class="rg-list">${items}</dl>
+  </section>`;
+}
+
+// "Curva equity (portafoglio, conti e benchmark)" → title + muted parenthetical
 function titleHtml(title) {
   const t = String(title ?? '');
   const m = t.match(/^(.*?)\s*(\(.*\))\s*$/);
@@ -87,8 +101,12 @@ export function chartCard({ title, subtitle = '', info = '', body = '', cls = ''
 }
 
 // Table card. Cells are HTML. Extra (optional): foot = [cellHtml, ...] → bold total row; note = HTML under the table.
+// columns: [{ label, align, opt }] — opt columns are hidden on phones, where the amounts matter most
 export function tableCard({ title, info = '', columns = [], rows = [], empty = 'Nessun dato nel periodo', cls = '', foot = null, note = '' } = {}) {
-  const alignCls = (c) => (c && c.align === 'right' ? ' class="num"' : '');
+  const alignCls = (c) => {
+    const k = [c && c.align === 'right' ? 'num' : '', c && c.opt ? 'opt' : ''].filter(Boolean).join(' ');
+    return k ? ` class="${k}"` : '';
+  };
   const head = columns.map((c) => `<th scope="col"${alignCls(c)}>${esc(c.label)}</th>`).join('');
   const body = rows.length
     ? rows.map((r) => `<tr>${r.map((cell, i) => `<td${alignCls(columns[i])}>${cell ?? ''}</td>`).join('')}</tr>`).join('')
@@ -129,6 +147,8 @@ export function reportPeriod(series, today, ui = S.ui) {
   return { period, from, to };
 }
 export const periodLabel = (period, from, to) => `${PERIOD_NAME[validPeriod(period)]} · ${fmtDate(from)} → ${fmtDate(to)}`;
+// Shorter, for the period button on phones: "Dall'inizio · 13 mag 2024 → oggi"
+const periodShort = (period, from, to, today) => `${PERIOD_NAME[validPeriod(period)]} · ${fmtDate(from)} → ${to === today ? 'oggi' : fmtDate(to)}`;
 
 /* ======================================================================
    Benchmark
@@ -218,7 +238,7 @@ function effectiveTheme() {
 }
 
 function statusChip() {
-  if (hasDemo()) return '<span class="r-chip muted"><span class="dot demo"></span>Dati di esempio</span>';
+  if (hasDemo()) return ''; // the example banner already says it
   if (market.status === 'offline') {
     return `<span class="r-chip muted"><span class="dot offline"></span>Dati offline${market.lastRefresh ? ` · prezzi delle ${fmtTime(market.lastRefresh)}` : ''}</span>`;
   }
@@ -237,17 +257,19 @@ function priceStatusLine(ctx) {
   return `<p class="report-status" aria-live="polite"><span class="dot busy"></span><span>Carico i prezzi di ${missing} ${missing === 1 ? 'titolo' : 'titoli'}…</span></p>`;
 }
 
+// On phones the period lives in the bar under the title (a button that opens the filters) and the
+// price status in the top bar: the header keeps only the title, so the first numbers show sooner
 function headHtml(ctx) {
-  const scope = ctx && ctx.accIds ? (account(ctx.accIds[0]) || {}).name : (D().accounts.length > 1 ? 'Tutti i conti' : '');
+  const scope = ctx && ctx.accIds ? (account(ctx.accIds[0]) || {}).name : '';
+  const chips = ctx && ctx.desktop
+    ? `<div class="report-chips"><span class="r-chip">${icon('calendar')}<span>${esc(periodLabel(ctx.period, ctx.from, ctx.to))}</span></span>${statusChip()}</div>`
+    : '';
   return `<header class="report-head">
     <div class="report-titles">
-      <p class="eyebrow">Analisi del patrimonio${scope ? ` · ${esc(scope)}` : ''}</p>
+      ${scope ? `<p class="eyebrow">Solo ${esc(scope)}</p>` : ''}
       <h1 class="page-title">Analisi della performance</h1>
     </div>
-    <div class="report-chips">
-      ${ctx ? `<span class="r-chip">${icon('calendar')}<span>${esc(periodLabel(ctx.period, ctx.from, ctx.to))}</span></span>` : ''}
-      ${statusChip()}
-    </div>
+    ${chips}
   </header>`;
 }
 
@@ -342,8 +364,8 @@ function controlsPhone(ctx) {
   const n = (ctx.base100 ? 1 : 0) + (ctx.logScale ? 1 : 0);
   return `<div class="report-controls-phone">
     <div class="report-bar">
-      <div class="chips period-chips" role="group" aria-label="Periodo">${periodChips(ctx)}</div>
-      <button class="btn sm rb-filters" type="button" data-act="report-filters" aria-haspopup="dialog">${icon('sliders')}<span>Filtri</span>${n ? `<span class="rb-count" aria-label="${n} attivi">${n}</span>` : ''}</button>
+      <button class="r-chip rb-period" type="button" data-act="report-filters" aria-haspopup="dialog" aria-label="Periodo: ${esc(periodLabel(ctx.period, ctx.from, ctx.to))}. Cambia">${icon('calendar')}<span>${esc(periodShort(ctx.period, ctx.from, ctx.to, ctx.today))}</span>${icon('chevDown')}</button>
+      <button class="btn sm rb-filters" type="button" data-act="report-filters" aria-haspopup="dialog" aria-label="Filtri del report">${icon('sliders')}<span>Filtri</span>${n ? `<span class="rb-count" aria-label="${n} attivi">${n}</span>` : ''}</button>
     </div>
     <p class="rb-summary">Confronto con <b>${esc(benchShort(ctx.bench))}</b>${ctx.bench.status === 'loading' ? ' <span class="muted">(carico…)</span>' : ''} · tasso senza rischio ${pct(ctx.rf)}${ctx.base100 ? ' · base 100' : ''}${ctx.logScale ? ' · scala log' : ''}</p>
   </div>`;
@@ -441,7 +463,6 @@ export function renderReport() {
     ${navHtml(defs, cur, ctx.desktop)}
     <section class="report-sheet" aria-labelledby="rs-title" data-sheet="${esc(def.id)}">
       <div class="rs-head">
-        <p class="eyebrow">Foglio ${cur + 1} di ${defs.length}</p>
         <h2 class="rs-title" id="rs-title">${esc(def.title)}</h2>
         ${def.subtitle ? `<p class="rs-sub">${esc(def.subtitle)}</p>` : ''}
       </div>

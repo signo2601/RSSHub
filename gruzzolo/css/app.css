@@ -46,19 +46,20 @@
   --grid: #e6e9ee;
   --ink: #0d1117;
   --ink-2: #465061;
-  --muted: #687180;
+  --muted: #606876;
   --accent: #f0b03a;
   --accent-ink: #1c1405;
   --accent-line: #b87a0e;
   --accent-soft: rgba(240, 176, 58, .18);
-  --up: #0b8a4f;
+  --accent-text: #94620b; /* links and accent words: 4.5:1 on the background */
+  --up: #097040;
   --up-soft: rgba(11, 138, 79, .12);
-  --down: #c93636;
+  --down: #b33030;
   --down-soft: rgba(201, 54, 54, .11);
   --warn: #9a6200;
   --warn-soft: rgba(240, 176, 58, .2);
-  --c1: #2a78d6; --c2: #eb6834; --c3: #1baf7a; --c4: #eda100;
-  --c5: #e87ba4; --c6: #008300; --c7: #4a3aa7; --c8: #e34948; --c-other: #9aa1ad;
+  --c1: #2a78d6; --c2: #eb6834; --c3: #1aa774; --c4: #c68700;
+  --c5: #e56a99; --c6: #008300; --c7: #4a3aa7; --c8: #e34948; --c-other: #8c94a2;
   --chip-on: #ffffff;
   --chip-on-line: #d8dee7;
   --scrim: rgba(8, 12, 20, .42);
@@ -77,7 +78,7 @@
   :root:not([data-theme="light"]) {
     --bg: #0c0e12; --surface: #15181e; --surface-2: #1f242c; --line: #272d37; --grid: #1d2128;
     --ink: #f2f4f7; --ink-2: #b4bcc8; --muted: #828b99;
-    --accent: #f2b63d; --accent-ink: #1c1405; --accent-line: #f2b63d; --accent-soft: rgba(242, 182, 61, .15);
+    --accent: #f2b63d; --accent-ink: #1c1405; --accent-line: #f2b63d; --accent-soft: rgba(242, 182, 61, .15); --accent-text: #f2b63d;
     --up: #3ccf86; --up-soft: rgba(60, 207, 134, .13); --down: #ff6b6b; --down-soft: rgba(255, 107, 107, .13);
     --warn: #f2b63d; --warn-soft: rgba(242, 182, 61, .14);
     --c1: #3987e5; --c2: #d95926; --c3: #199e70; --c4: #c98500;
@@ -90,7 +91,7 @@
 :root[data-theme="dark"] {
   --bg: #0c0e12; --surface: #15181e; --surface-2: #1f242c; --line: #272d37; --grid: #1d2128;
   --ink: #f2f4f7; --ink-2: #b4bcc8; --muted: #828b99;
-  --accent: #f2b63d; --accent-ink: #1c1405; --accent-line: #f2b63d; --accent-soft: rgba(242, 182, 61, .15);
+  --accent: #f2b63d; --accent-ink: #1c1405; --accent-line: #f2b63d; --accent-soft: rgba(242, 182, 61, .15); --accent-text: #f2b63d;
   --up: #3ccf86; --up-soft: rgba(60, 207, 134, .13); --down: #ff6b6b; --down-soft: rgba(255, 107, 107, .13);
   --warn: #f2b63d; --warn-soft: rgba(242, 182, 61, .14);
   --c1: #3987e5; --c2: #d95926; --c3: #199e70; --c4: #c98500;
@@ -132,7 +133,7 @@ body {
 h1, h2, h3, h4 { line-height: 1.2; }
 p { margin: 0 0 .6em; }
 p:last-child { margin-bottom: 0; }
-a { color: var(--accent-line); text-underline-offset: 2px; }
+a { color: var(--accent-text); text-underline-offset: 2px; }
 button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; -webkit-touch-callout: none; }
 button:disabled { cursor: default; }
@@ -235,9 +236,10 @@ html.locked #view { overflow: hidden; }
 .tabbar {
   position: absolute; left: 0; right: 0; bottom: 0; z-index: 35;
   background: var(--surface);
-  background: color-mix(in srgb, var(--surface) 92%, transparent);
-  -webkit-backdrop-filter: saturate(1.6) blur(16px);
-  backdrop-filter: saturate(1.6) blur(16px);
+  /* almost opaque: text scrolling underneath must not show through the labels */
+  background: color-mix(in srgb, var(--surface) 97%, transparent);
+  -webkit-backdrop-filter: saturate(1.6) blur(20px);
+  backdrop-filter: saturate(1.6) blur(20px);
   border-top: 1px solid var(--line);
   padding: 0 max(6px, env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px) max(6px, env(safe-area-inset-left, 0px));
 }
@@ -282,7 +284,7 @@ html.locked #view { overflow: hidden; }
 .loading { padding: 48px 0; text-align: center; color: var(--muted); font-weight: 600; }
 
 /* ---------- Page structure ---------- */
-.page { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.page { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
 .page-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 8px 16px; }
 .page-title {
   font-family: var(--font-display); font-size: 28px; font-weight: 700; line-height: 1.1;
@@ -305,7 +307,7 @@ html.locked #view { overflow: hidden; }
 .kpi-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .kpi {
   position: relative; display: flex; flex-direction: column; gap: 4px; min-width: 0;
-  background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 13px 15px;
 }
 .kpi.wide { grid-column: span 2; }
 .kpi > .badge, .kpi > .pill { align-self: flex-start; }
@@ -313,7 +315,8 @@ html.locked #view { overflow: hidden; }
   background: linear-gradient(160deg, var(--accent-soft), transparent 70%), var(--surface);
   border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
 }
-.kpi-label { font-size: 11.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+/* Labels are sentence case: uppercase stays for .eyebrow, .group-label and table headers */
+.kpi-label { font-size: 12.5px; font-weight: 700; color: var(--muted); }
 .kpi-value { font-size: 20px; font-weight: 800; line-height: 1.2; letter-spacing: -.01em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .kpi.hero .kpi-value { font-family: var(--font-display); font-size: 28px; font-weight: 700; letter-spacing: -.02em; }
 .kpi-sub { font-size: 12.5px; color: var(--muted); }
@@ -323,6 +326,8 @@ html.locked #view { overflow: hidden; }
   font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
   border-radius: 999px; padding: 2px 8px;
 }
+/* Direction of a KPI: an arrow in a circle (colour and sign already say the rest) */
+.kpi .badge { width: 22px; height: 22px; padding: 0; justify-content: center; gap: 0; }
 .badge.up { background: var(--up-soft); color: var(--up); }
 .badge.down { background: var(--down-soft); color: var(--down); }
 .badge.flat { background: var(--surface-2); color: var(--muted); }
@@ -342,7 +347,18 @@ html.locked #view { overflow: hidden; }
 .chart-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 15px; min-width: 0; }
 
 /* Tables (scroll sideways on phones) */
-.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; overscroll-behavior-x: contain; }
+.table-wrap {
+  overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; overscroll-behavior-x: contain;
+  /* a shadow on the side that still scrolls: covers move with the content, shadows stay at the edges */
+  background:
+    linear-gradient(90deg, var(--surface) 40%, transparent) left / 20px 100% no-repeat local,
+    linear-gradient(270deg, var(--surface) 40%, transparent) right / 20px 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, rgb(0 0 0 / .14), transparent) left / 8px 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, rgb(0 0 0 / .14), transparent) right / 8px 100% no-repeat scroll;
+}
+@media (max-width: 599px) {
+  .table .opt { display: none; }
+}
 .table { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; }
 .table th {
   text-align: left; white-space: nowrap; padding: 8px 10px;
@@ -359,6 +375,13 @@ html.locked #view { overflow: hidden; }
 /* ---------- Controls ---------- */
 .chips { display: flex; gap: 4px; max-width: 100%; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; padding: 1px; }
 .chips::-webkit-scrollbar { display: none; }
+/* More chips past the edge (util.fadeStrip) */
+.chips.fade-r { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); }
+.chips.fade-l { -webkit-mask-image: linear-gradient(90deg, transparent, #000 28px); mask-image: linear-gradient(90deg, transparent, #000 28px); }
+.chips.fade-l.fade-r {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 28px, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 28px, #000 calc(100% - 28px), transparent);
+}
 .chip {
   display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; white-space: nowrap;
   min-height: 36px; padding: 0 13px; border-radius: 999px;
@@ -425,7 +448,7 @@ html.locked #view { overflow: hidden; }
 .btn-row > .btn { flex: 1 1 0; }
 .link-btn {
   display: inline-flex; align-items: center; gap: 4px; min-height: 36px; padding: 0 2px;
-  border: 0; background: none; color: var(--accent-line); font-size: 13.5px; font-weight: 800;
+  border: 0; background: none; color: var(--accent-text); font-size: 13.5px; font-weight: 800;
 }
 .link-btn .ico { width: 16px; height: 16px; }
 
@@ -442,6 +465,10 @@ button.row:active, a.row:active { background: var(--surface-2); }
 .row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .row-title { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row-sub { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* Positions and transactions: names up to two lines, so two similar funds stay apart */
+.pos-row .row-title, .tx-row .row-title {
+  white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; line-height: 1.25;
+}
 .row-end { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex-shrink: 0; text-align: right; }
 .row-value { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .row .chev { width: 18px; height: 18px; color: var(--muted); }
@@ -508,6 +535,10 @@ button.row:active, a.row:active { background: var(--surface-2); }
 .banner.warn { background: var(--warn-soft); }
 .banner.danger { background: var(--down-soft); }
 .banner.info { background: var(--surface); border: 1px solid var(--line); }
+/* The example data: one line, so it does not push every tab down */
+.demo-banner { flex-wrap: nowrap; padding: 8px 8px 8px 12px; }
+.demo-banner p { flex: 1 1 auto; min-width: 0; line-height: 1.3; }
+.demo-banner .btn { flex-shrink: 0; }
 .empty {
   text-align: center; padding: 34px 20px;
   background: var(--surface); border: 1px dashed var(--line); border-radius: var(--radius);

@@ -81,7 +81,7 @@
 .more-steps li::before {
   content: counter(step); position: absolute; left: 0; top: -1px;
   display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%;
-  background: var(--accent-soft); color: var(--accent-line); font-size: 12.5px; font-weight: 800;
+  background: var(--accent-soft); color: var(--accent-text); font-size: 12.5px; font-weight: 800;
 }
 .more-steps b { color: var(--ink); font-weight: 800; }
 

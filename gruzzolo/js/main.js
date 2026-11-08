@@ -10,7 +10,7 @@ import { market } from './market.js';
 import { eco } from './eco.js';
 import { getSeries, trackedSymbols } from './engine.js';
 import { runPlans } from './plans.js';
-import { esc, fmt, icon, money, todayISO, debounce, isDesktop, fmtTime, newId, requestPersistentStorage, scrollToTop } from './util.js';
+import { esc, fmt, icon, money, todayISO, debounce, isDesktop, fmtTime, newId, requestPersistentStorage, scrollToTop, fadeStrip, fadeStrips } from './util.js';
 import { initCharts } from './charts.js';
 import { pickStore, localStore } from './store.js';
 import * as demoMod from './demo.js';
@@ -297,6 +297,7 @@ function renderPage() {
       console.error('[gruzzolo] mount', e);
     }
   }
+  fadeStrips(view);
   const top = topSheet();
   if (top && !FORM_SHEETS.has(top.name)) renderSheet();
   saveUi();
@@ -481,6 +482,7 @@ function renderSheet() {
       if (!afterAsked) afterChain = 0;
     }
   } else afterChain = 0;
+  fadeStrips(body);
   fitSheetToViewport();
 }
 
@@ -912,6 +914,12 @@ function onVisibility() {
 }
 
 function listen() {
+  // the fades of a chip strip follow its scroll (scroll events do not bubble: capture them)
+  document.addEventListener('scroll', (e) => {
+    const t = e.target;
+    if (t && t.classList && t.classList.contains('chips')) fadeStrip(t);
+  }, { capture: true, passive: true });
+  window.addEventListener('resize', debounce(() => fadeStrips(document), 150));
   document.addEventListener('click', onClick);
   document.addEventListener('submit', onSubmit);
   document.addEventListener('input', onInput);

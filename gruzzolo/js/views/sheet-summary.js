@@ -6,11 +6,10 @@ import { eco } from '../eco.js';
 import { inflationBetween, realReturn, annualize, addMonth } from '../inflation.js';
 import { positions, realizedEvents, cashAt } from '../engine.js';
 import { periodStats, businessDays, annualizedVolatility } from '../metrics.js';
-import { esc, icon, money, moneySigned, pct, pctSigned, num, fmtDate, fmtMonth, addDays, tone, sum } from '../util.js';
+import { esc, icon, money, moneySigned, pct, pctSigned, num, ratio, fmtDate, fmtMonth, addDays, tone, sum } from '../util.js';
 import { infoBtn } from '../info.js';
-import { registerSheet, kpiCard, tableCard, badgeFor, accColor, benchShort } from './report.js';
+import { registerSheet, kpiCard, tableCard, rowsCard, badgeFor, accColor, benchShort } from './report.js';
 
-const SHORT_NOTE = 'periodo breve: valore annualizzato indicativo';
 
 // Open positions and liquidity at the end of the period
 function snapshot(accIds, to) {
@@ -127,13 +126,14 @@ function realCard(data) {
   });
 }
 
+// The figures of the period: one hero (the balance), four tiles (return, real return, money in and
+// out, cash) and two cards of rows for the rest, so the screen has one focal point
 function kpis(ctx, data) {
   const { st, snap, realized, bvol } = data;
   const all = ctx.period === 'ALL';
   const dayBefore = addDays(st.from, -1);
-  const cards = [];
-
-  cards.push(kpiCard({
+  const tiles = [];
+  tiles.push(kpiCard({
     label: 'Saldo finale',
     value: money(st.endValue),
     badge: badgeFor(st.gain, 0.005),
@@ -141,108 +141,103 @@ function kpis(ctx, data) {
     info: 'saldoFinale',
     cls: 'hero',
   }));
-  cards.push(kpiCard({
-    label: all ? 'Dall\'inizio performance (TWR)' : 'TWR del periodo',
+  tiles.push(kpiCard({
+    label: 'Rendimento (TWR)',
     value: pctSigned(st.twr),
     valueClass: tone(st.twr, 0.00005),
     badge: badgeFor(st.twr),
-    sub: `${fmtDate(st.from)} → ${fmtDate(st.to)} · ${num(st.days, 0)} giorni`,
+    sub: all ? `dall'inizio · ${num(st.days, 0)} giorni` : `${num(st.days, 0)} giorni · dal ${fmtDate(st.from)}`,
     info: 'twr',
-    cls: 'hero',
   }));
-  cards.push(realCard(data));
-  cards.push(kpiCard({
-    label: 'Saldo iniziale',
-    value: money(st.startValue),
-    sub: st.startValue > 0 ? `alla chiusura del ${fmtDate(dayBefore)}` : 'prima della prima operazione',
-    info: 'saldoIniziale',
-  }));
-  cards.push(kpiCard({
-    label: 'Liquidità',
-    value: money(snap.liquidity),
-    sub: st.endValue > 0 && snap.liquidity > 0 ? `${pct(snap.liquidity / st.endValue, 1)} del saldo` : 'nessuna liquidità registrata',
-    info: 'liquidita',
-  }));
-  cards.push(kpiCard({
-    label: 'P&L realizzato',
-    value: moneySigned(realized.pl),
-    valueClass: tone(realized.pl),
-    badge: realized.count ? badgeFor(realized.pl, 0.005) : null,
-    sub: realized.count ? `${realized.count} ${realized.count === 1 ? 'vendita' : 'vendite'} nel periodo, prima delle tasse` : 'nessuna vendita nel periodo',
-    info: 'plRealizzato',
-  }));
-  cards.push(kpiCard({
-    label: 'P&L non realizzato',
-    value: moneySigned(snap.unreal),
-    valueClass: tone(snap.unreal),
-    badge: snap.cost > 0 ? badgeFor(snap.unreal, 0.005) : null,
-    sub: snap.cost > 0 ? `${pctSigned(snap.unreal / snap.cost)} sul costo, al ${fmtDate(st.to)}` : 'nessuna posizione aperta',
-    info: 'plNonRealizzato',
-  }));
-  cards.push(kpiCard({
-    label: 'P&L cambio (n.r.)',
-    value: moneySigned(snap.fxPL),
-    valueClass: snap.foreign ? tone(snap.fxPL) : '',
-    badge: snap.foreign ? badgeFor(snap.fxPL, 0.005) : null,
-    sub: snap.foreign ? `effetto del cambio su ${snap.foreign} ${snap.foreign === 1 ? 'titolo' : 'titoli'} in valuta` : 'nessun titolo in valuta estera',
-    info: 'plCambio',
-  }));
-  cards.push(kpiCard({
-    label: 'Attivo vs benchmark',
-    value: st.activeVsBench === null ? '—' : pctSigned(st.activeVsBench),
-    valueClass: st.activeVsBench === null ? 'muted' : tone(st.activeVsBench, 0.00005),
-    badge: badgeFor(st.activeVsBench),
-    sub: benchSub(ctx, st),
-    info: 'attivoVsBenchmark',
-  }));
-  cards.push(kpiCard({
+  tiles.push(realCard(data));
+  tiles.push(kpiCard({
     label: 'Flussi netti',
     value: moneySigned(st.netFlows),
     sub: `Versati ${money(st.inflows)} · ritirati ${money(st.outflows)}`,
     info: 'flussiNetti',
   }));
-  cards.push(kpiCard({
-    label: 'IRR investitore (ann.)',
-    value: st.irr === null ? '—' : pctSigned(st.irr),
-    valueClass: st.irr === null ? 'muted' : tone(st.irr, 0.00005),
-    badge: badgeFor(st.irr),
-    sub: st.irr === null ? 'non calcolabile con questi flussi' : st.shortPeriod ? SHORT_NOTE : 'rendimento dei tuoi soldi, versamenti inclusi',
-    info: 'irr',
+  tiles.push(kpiCard({
+    label: 'Liquidità',
+    value: money(snap.liquidity),
+    sub: st.endValue > 0 && snap.liquidity > 0 ? `${pct(snap.liquidity / st.endValue, 1)} del saldo` : 'nessuna liquidità registrata',
+    info: 'liquidita',
   }));
-  cards.push(kpiCard({
-    label: 'Volatilità (ann.)',
-    value: st.vol === null ? '—' : pct(st.vol),
-    sub: bvol !== null && bvol !== undefined ? `${esc(benchShort(ctx.bench))} ${pct(bvol)}` : st.vol === null ? 'servono più giorni di dati' : 'oscillazione tipica in un anno',
-    info: 'volatilita',
-  }));
-  cards.push(kpiCard({
-    label: 'Sharpe (ann.)',
-    value: st.sharpe === null ? '—' : num(st.sharpe, 2),
-    valueClass: st.sharpe === null ? 'muted' : tone(st.sharpe, 0.005),
-    badge: badgeFor(st.sharpe, 0.005),
-    sub: st.sharpe === null ? 'servono più giorni di dati' : `${st.shortPeriod ? SHORT_NOTE + ' · ' : ''}tasso senza rischio ${pct(ctx.rf)}`,
-    info: 'sharpe',
-  }));
-  cards.push(kpiCard({
-    label: 'CAGR',
-    value: st.cagr === null ? '—' : pctSigned(st.cagr),
-    valueClass: st.cagr === null ? 'muted' : tone(st.cagr, 0.00005),
-    badge: badgeFor(st.cagr),
-    sub: st.shortPeriod ? SHORT_NOTE : 'crescita media composta all\'anno',
-    info: 'cagr',
-  }));
+
+  const pl = rowsCard('Guadagni e perdite', 'Nel periodo, prima delle tasse', [
+    {
+      label: 'P&L non realizzato',
+      value: moneySigned(snap.unreal),
+      cls: tone(snap.unreal),
+      sub: snap.cost > 0 ? `${pctSigned(snap.unreal / snap.cost)} sul costo` : 'nessuna posizione aperta',
+      info: 'plNonRealizzato',
+    },
+    {
+      label: 'P&L realizzato',
+      value: moneySigned(realized.pl),
+      cls: realized.count ? tone(realized.pl) : '',
+      sub: realized.count ? `${realized.count} ${realized.count === 1 ? 'vendita' : 'vendite'} nel periodo` : 'nessuna vendita nel periodo',
+      info: 'plRealizzato',
+    },
+    {
+      label: 'P&L cambio (n.r.)',
+      value: moneySigned(snap.fxPL),
+      cls: snap.foreign ? tone(snap.fxPL) : '',
+      sub: snap.foreign ? `${snap.foreign} ${snap.foreign === 1 ? 'titolo' : 'titoli'} in valuta` : 'nessun titolo in valuta',
+      info: 'plCambio',
+    },
+    {
+      label: 'Saldo iniziale',
+      value: money(st.startValue),
+      sub: st.startValue > 0 ? `alla chiusura del ${fmtDate(dayBefore)}` : 'prima della prima operazione',
+      info: 'saldoIniziale',
+    },
+  ]);
   const dd = Number.isFinite(st.maxDD) ? st.maxDD : 0;
-  cards.push(kpiCard({
-    label: 'Drawdown massimo',
-    value: dd < -0.00005 ? pctSigned(dd) : pct(0),
-    valueClass: dd < -0.00005 ? 'down' : '',
-    badge: dd < -0.00005 ? 'down' : 'flat',
-    sub: st.maxDDFrom && st.maxDDTo && dd < -0.00005 ? `dal ${fmtDate(st.maxDDFrom)} al ${fmtDate(st.maxDDTo)}` : 'nessun calo nel periodo',
-    info: 'maxDrawdown',
-    cls: 'danger',
-    bar: Math.abs(dd),
-  }));
-  return cards.join('');
+  const risk = rowsCard('Rendimento e rischio', st.shortPeriod ? 'Su base annua: con meno di un anno di dati sono solo indicativi' : 'Su base annua', [
+    {
+      label: 'Attivo vs benchmark',
+      value: st.activeVsBench === null ? '—' : pctSigned(st.activeVsBench),
+      cls: st.activeVsBench === null ? 'muted' : tone(st.activeVsBench, 0.00005),
+      sub: benchSub(ctx, st),
+      info: 'attivoVsBenchmark',
+    },
+    {
+      label: 'IRR investitore (ann.)',
+      value: st.irr === null ? '—' : pctSigned(st.irr),
+      cls: st.irr === null ? 'muted' : tone(st.irr, 0.00005),
+      sub: st.irr === null ? 'non calcolabile con questi flussi' : 'versamenti inclusi',
+      info: 'irr',
+    },
+    {
+      label: 'CAGR',
+      value: st.cagr === null ? '—' : pctSigned(st.cagr),
+      cls: st.cagr === null ? 'muted' : tone(st.cagr, 0.00005),
+      sub: 'crescita media all\'anno',
+      info: 'cagr',
+    },
+    {
+      label: 'Volatilità (ann.)',
+      value: st.vol === null ? '—' : pct(st.vol),
+      sub: bvol !== null && bvol !== undefined ? `${esc(benchShort(ctx.bench))} ${pct(bvol)}` : st.vol === null ? 'servono più giorni di dati' : '',
+      info: 'volatilita',
+    },
+    {
+      label: 'Sharpe (ann.)',
+      value: st.sharpe === null ? '—' : ratio(st.sharpe),
+      cls: st.sharpe === null ? 'muted' : '',
+      sub: st.sharpe === null ? 'servono più giorni di dati' : `tasso senza rischio ${pct(ctx.rf)}`,
+      info: 'sharpe',
+    },
+    {
+      label: 'Drawdown massimo',
+      value: dd < -0.00005 ? pctSigned(dd) : pct(0),
+      cls: dd < -0.00005 ? 'down' : '',
+      sub: st.maxDDFrom && st.maxDDTo && dd < -0.00005 ? `${fmtDate(st.maxDDFrom, st.maxDDFrom.slice(0, 4) !== st.maxDDTo.slice(0, 4))} → ${fmtDate(st.maxDDTo)}` : 'nessun calo nel periodo',
+      info: 'maxDrawdown',
+    },
+  ]);
+  return `<div class="kpi-grid summary-kpis">${tiles.join('')}</div>
+    <div class="chart-grid summary-rows">${pl}${risk}</div>`;
 }
 
 /* ---------- Per-account snapshot ---------- */
@@ -311,10 +306,7 @@ function accountsBlock(ctx, data) {
 function renderSummary(ctx) {
   const data = summaryData(ctx);
   if (!data.st) return '<div class="empty"><p>Nessun dato nel periodo scelto.</p></div>';
-  const notes = [];
-  if (data.st.shortPeriod) notes.push('Periodo più breve di un anno: IRR, CAGR e Sharpe sono riportati su base annua e quindi solo indicativi.');
-  return `<div class="kpi-grid summary-kpis">${kpis(ctx, data)}</div>
-    ${notes.length ? `<p class="report-note">${icon('info')}${notes.map(esc).join(' ')}</p>` : ''}
+  return `${kpis(ctx, data)}
     ${accountsBlock(ctx, data)}`;
 }
 

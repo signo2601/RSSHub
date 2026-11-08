@@ -190,7 +190,7 @@ function accAvatar(a) {
   const src = String((a.broker && a.broker !== 'Altro' ? a.broker : a.name) || '?');
   const words = src.replace(/[^\p{L}\p{N} ]/gu, ' ').trim().split(/\s+/).filter(Boolean);
   const txt = (words.length > 1 ? words[0][0] + words[1][0] : (words[0] || '?').slice(0, 2)).toUpperCase();
-  return `<span class="avatar sm more-acc-av" style="background:hsl(${hashHue(src)} 42% 44%)" aria-hidden="true">${esc(txt)}</span>`;
+  return `<span class="avatar sm more-acc-av" style="background:hsl(${hashHue(src)} 42% 36%)" aria-hidden="true">${esc(txt)}</span>`;
 }
 
 function txCounts(data = D()) {
@@ -612,8 +612,8 @@ function accountsGroup() {
       act: 'more-account',
       attrs: ` data-id="${esc(a.id)}"`,
       avatarHtml: accAvatar(a),
-      title: esc(a.name),
-      sub: `${a.demo ? '<span class="tag">esempio</span> ' : ''}${esc(sub.join(' · '))}`,
+      title: `${esc(a.name)}${a.demo ? ' <span class="tag">esempio</span>' : ''}`,
+      sub: esc(sub.join(' · ')),
       end: `<span class="row-value">${v === null ? '—' : money(v)}</span>`,
     });
   });
@@ -845,11 +845,8 @@ function dataGroup() {
   const realTx = D().txns.some((t) => !t.demo);
   const demo = hasDemo();
   const dev = deviceName();
+  // the plain backup is the button of the group above ("Dove sono i tuoi dati"), with its reminder
   const rows = [
-    navRow({
-      act: 'more-backup-export', ico: 'download', title: 'Esporta backup', chev: false,
-      sub: esc(dev ? `Si apre Condividi: scegli «Salva su File» → «Sul mio ${dev}»` : 'Tutti i tuoi dati in un file .json da conservare'),
-    }),
     navRow({
       act: 'more-backup-lock', ico: 'lock', title: 'Esporta backup protetto',
       sub: 'Con password: puoi tenerlo su iCloud o mandarlo al computer',
@@ -864,7 +861,8 @@ function dataGroup() {
   if (demo) rows.push(navRow({ act: 'demo-remove', ico: 'close', title: 'Rimuovi i dati di esempio', sub: 'Tiene solo quello che hai inserito tu', chev: false }));
   else if (!realTx) rows.push(navRow({ act: 'demo-load', ico: 'chart', title: 'Carica un esempio', sub: 'Un portafoglio dimostrativo con prezzi simulati', chev: false }));
   rows.push(navRow({ act: 'more-wipe', ico: 'trash', tone: 'danger', title: '<span class="down">Cancella tutti i dati</span>', sub: 'Conti, operazioni, titoli e prezzi', chev: false }));
-  const foot = `Il backup è un file con tutti i tuoi dati: conservane sempre una copia recente. Con «Importa backup» li ripristini, anche su un nuovo ${dev || 'dispositivo'} o sul computer. Il backup protetto è cifrato sul ${dev || 'dispositivo'}: senza la password nessuno può leggerlo.`;
+  const share = dev ? ` Quando esporti si apre Condividi: scegli «Salva su File» → «Sul mio ${dev}».` : '';
+  const foot = `Il backup è un file con tutti i tuoi dati: conservane sempre una copia recente («Esporta backup», qui sopra). Con «Importa backup» li ripristini, anche su un nuovo ${dev || 'dispositivo'} o sul computer. Il backup protetto è cifrato sul ${dev || 'dispositivo'}: senza la password nessuno può leggerlo.${share}`;
   return group('data', 'shield', 'Backup e dati', `<div class="list">${rows.join('')}</div>`, esc(foot));
 }
 

@@ -544,7 +544,8 @@ export function barChart(id, opts = {}) {
   const w = width(opts.w);
   const h = height(opts.h, 220);
   const n = labels.length;
-  const ser = series.map((s, k) => ({ name: s.name ?? `Serie ${k + 1}`, color: s.color || seriesColor(k), values: s.values || [] }));
+  // negColor (optional): colour of the bars below zero, for signed series such as the active return
+  const ser = series.map((s, k) => ({ name: s.name ?? `Serie ${k + 1}`, color: s.color || seriesColor(k), negColor: s.negColor || '', values: s.values || [] }));
   let lo = 0;
   let hi = 0;
   let cnt = 0;
@@ -601,7 +602,7 @@ export function barChart(id, opts = {}) {
       const yv = Y(v);
       const bh = Math.max(1, Math.abs(yv - zy));
       const d = v > 0 ? barPath(x, zy - bh, bw, bh, true) : barPath(x, zy, bw, bh, false);
-      bars += `<path d="${d}" style="fill:${esc(ser[j].color)}"/>`;
+      bars += `<path d="${d}" style="fill:${esc(v < 0 && ser[j].negColor ? ser[j].negColor : ser[j].color)}"/>`;
     }
   }
   const zc = crisp(zy);
@@ -831,7 +832,7 @@ export function donutChart(id, opts = {}) {
    Scatter (with lines drawn under the points)
    ====================================================================== */
 export function scatterChart(id, opts = {}) {
-  const { points = [], lines = [], xFormat, yFormat, xLabel = '', yLabel = '', legend, ariaLabel = 'Grafico a dispersione' } = opts;
+  const { points = [], lines = [], xFormat, yFormat, xLabel = '', yLabel = '', legend, ariaLabel = 'Grafico a dispersione', directLabels = true } = opts;
   const w = width(opts.w);
   const h = height(opts.h, 300);
   const pts = points.filter((p) => p && isNum(p.x) && isNum(p.y));
@@ -904,7 +905,7 @@ export function scatterChart(id, opts = {}) {
   const boxes = geo.map((g) => ({ x0: g.x - g.r - 1, x1: g.x + g.r + 1, y0: g.y - g.r - 1, y1: g.y + g.r + 1 }));
   const hit = (b) => boxes.some((o) => b.x0 < o.x1 && b.x1 > o.x0 && b.y0 < o.y1 && b.y1 > o.y0);
   let labelsSvg = '';
-  for (const i of order.slice().reverse()) {
+  for (const i of (directLabels ? order.slice().reverse() : [])) {
     const p = pts[i];
     if (!p.special || !p.label) continue;
     const txt = String(p.label).length > 22 ? String(p.label).slice(0, 21) + '…' : String(p.label);

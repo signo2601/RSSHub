@@ -378,12 +378,12 @@ test('sheets: long forms keep the save button in a sticky bar; TER avatars use t
   assert.match(draft, /<option value="1" selected>Guadagno/);
 });
 
-test('renderMore: the example tag sits on the subtitle line, not next to the account name', () => {
+test('renderMore: the example tag sits next to the account name, the subtitle keeps its room', () => {
   useData(demoData({ today }));
   const html = renderMore();
   const deg = S.data.accounts.find((a) => a.demo);
   const row = html.slice(html.indexOf(`data-id="${deg.id}"`), html.indexOf('</button>', html.indexOf(`data-id="${deg.id}"`)));
-  assert.match(row, /<span class="row-title">[^<]+<\/span><span class="row-sub"><span class="tag">esempio<\/span> /);
+  assert.match(row, /<span class="row-title">[^<]+ <span class="tag">esempio<\/span><\/span><span class="row-sub">[^<]+<\/span>/);
 });
 
 test('renderMore: account subtitle skips the broker when it repeats the name', () => {
@@ -562,7 +562,8 @@ test('privacy group on iPhone: names the phone, install hint in Safari, iOS word
   assert.match(g, /data-act="more-guide" data-topic="iphone"/, 'opened in Safari: suggest the Home Screen icon');
   assert.match(g, /se elimini l&#39;icona di Gruzzolo, iOS cancella anche i suoi dati/);
   const data = groupHtml(html, 'data');
-  assert.match(data, /Si apre Condividi: scegli «Salva su File» → «Sul mio iPhone»/);
+  assert.match(data, /si apre Condividi: scegli «Salva su File» → «Sul mio iPhone»/);
+  assert.doesNotMatch(data, /data-act="more-backup-export"/, 'one backup button, in the group above');
   assert.match(data, /Scegli il file \.json nell&#39;app File/);
   // in Safari a refused storage points to the Home Screen icon instead of a tap that cannot help
   await refreshStorage({ force: true, read: async () => ({ persisted: false, usage: null, quota: null }) });
