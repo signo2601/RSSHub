@@ -341,3 +341,9 @@ tr.row-expired td { color: var(--muted); }
   .rb-filters { padding: 0 10px; }
   .rb-filters .ico { margin: 0; }
 }
+
+/* Desktop Riepilogo: the hero takes two rows, the four tiles fill the 2×2 next to it */
+@media (min-width: 900px) {
+  .summary-kpis > .rkpi.hero { grid-row: span 2; }
+  .summary-kpis > .rkpi.hero .kpi-value { font-size: 44px; margin-top: 6px; }
+}
