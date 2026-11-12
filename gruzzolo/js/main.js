@@ -532,8 +532,12 @@ function fitSheetToViewport() {
     clear();
     return;
   }
+  // Only with a text field focused: iOS 26 can report a visual viewport shorter than the screen
+  // without a keyboard, and the sheet was cut to half the screen
+  const a = document.activeElement;
+  const typing = a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT' || a.isContentEditable);
   const keyboard = window.innerHeight - vv.height;
-  if (keyboard > 120 && vv.scale <= 1.01) {
+  if (typing && keyboard > 120 && vv.scale <= 1.01) {
     layer.style.top = `${Math.max(0, vv.offsetTop)}px`;
     layer.style.height = `${vv.height}px`;
     layer.style.bottom = 'auto';
@@ -999,6 +1003,8 @@ function listen() {
   if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', fitSheetToViewport);
     window.visualViewport.addEventListener('scroll', fitSheetToViewport);
+    document.addEventListener('focusin', () => setTimeout(fitSheetToViewport, 50));
+    document.addEventListener('focusout', () => setTimeout(fitSheetToViewport, 50));
   }
   const toastEl = $('#toast');
   if (toastEl) toastEl.addEventListener('click', () => { toastEl.hidden = true; });
