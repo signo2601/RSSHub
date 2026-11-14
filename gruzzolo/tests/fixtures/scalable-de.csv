@@ -1,0 +1,4 @@
+Datum;Zeit;Status;Referenz;Beschreibung;Assettyp;Typ;ISIN;Stück;Kurs;Betrag;Gebühr;Steuer;Währung
+01.10.2024;10:12:44;Ausgeführt;"SCALsin555";"Vanguard FTSE All-World (Acc)";Wertpapier;Sparplan;IE00BK5BQT80;1,612;124,05;-200,00;0,00;0,00;EUR
+16.09.2024;08:00:00;Ausgeführt;"DIV777";"Allianz";Wertpapier;Ausschüttung;DE0008404005;;;20,42;0,00;7,58;EUR
+02.09.2024;09:00:00;Ausgeführt;"DEP555";"Einzahlung";Cash;Einzahlung;;;;500,00;0,00;0,00;EUR

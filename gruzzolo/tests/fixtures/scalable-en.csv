@@ -1,0 +1,15 @@
+date;time;status;reference;description;assetType;type;isin;shares;price;amount;fee;tax;currency
+2024-09-02;10:12:44;Executed;"SCALsin12345678";"Vanguard FTSE All-World (Acc)";Security;Savings plan;IE00BK5BQT80;1,672;119,60;-200,00;0,00;0,00;EUR
+2024-08-15;08:00:00;Executed;"WWEK 99887766";"iShares Core MSCI EM IMI (Acc)";Security;Buy;IE00BKM4GZ66;10;31,20;-312,99;0,99;0,00;EUR
+2024-08-05;09:00:00;Executed;"DEP 2024080500001";"Deposit";Cash;Deposit;;;;1.000,00;0,00;0,00;EUR
+2024-07-20;12:00:00;Executed;"DIV 2024072000001";"Allianz";Security;Distribution;DE0008404005;;;"10,21";0,00;"3,79";EUR
+2024-07-10;13:30:00;Executed;"WWEK 99887700";"Allianz";Security;Sell;DE0008404005;-2;265,40;529,81;0,99;0,00;EUR
+2024-07-01;00:00:00;Executed;"INT 2024070100001";"Interest";Cash;Interest;;;;4,12;0,00;0,00;EUR
+2024-06-28;00:00:00;Executed;"FEE 2024062800001";"PRIME+ Broker subscription";Cash;Fee;;;;-4,99;0,00;0,00;EUR
+2024-06-20;10:00:00;Cancelled;"WWEK 99880000";"Allianz";Security;Buy;DE0008404005;5;250,00;-1250,99;0,99;0,00;EUR
+2024-06-03;10:12:44;Executed;"SCALsin12345600";"Vanguard FTSE All-World (Acc)";Security;Savings plan;IE00BK5BQT80;1,780;112,35;-200,00;0,00;0,00;EUR
+2024-05-15;08:00:00;Executed;"WWEK 99880001";"Allianz";Security;Buy;DE0008404005;4;245,10;-981,39;0,99;0,00;EUR
+2024-05-02;09:00:00;Executed;"WDR 2024050200001";"Withdrawal";Cash;Withdrawal;;;;-150,00;0,00;0,00;EUR
+2024-04-30;00:00:00;Executed;"TAX 2024043000001";"Capital gains tax";Cash;Taxes;;;;-7,80;0,00;0,00;EUR
+2024-04-10;00:00:00;Executed;"CA 2024041000001";"Spin-off XYZ";Security;Corporate action;US0000000001;3;;0,00;0,00;0,00;EUR
+2024-04-01;09:00:00;Executed;"DEP 2024040100001";"Deposit";Cash;Deposit;;;;2.000,00;0,00;0,00;EUR
