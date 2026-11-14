@@ -27,6 +27,7 @@ import './views/sheet-costs.js';
 import './views/sheet-risk.js';
 import * as moreView from './views/more.js';
 import './views/plans.js';
+import { initLock } from './applock.js';
 
 // Tell the start-up guard in index.html that the code loaded
 if (typeof window !== 'undefined') window.__gruzzoloStarted = true;
@@ -1025,6 +1026,7 @@ function listen() {
 
 /* ---------- Boot ---------- */
 async function boot() {
+  initLock();
   restoreUi();
   lastWidth = document.documentElement.clientWidth;
   $('#sheet-back').innerHTML = icon('chevLeft');

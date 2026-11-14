@@ -763,3 +763,18 @@ button.row:active, a.row:active { background: var(--surface-2); }
   .brand-name { font-size: 17px; }
   .brand-mark { width: 26px; height: 26px; }
 }
+
+/* ---------- App lock (Face ID / Touch ID / Windows Hello) ---------- */
+html.app-locked .app, html.app-locked .sheet-layer, html.app-locked .toast { visibility: hidden; }
+html.app-locked .lock-screen { display: flex; }
+.lock-screen {
+  position: fixed; inset: 0; z-index: 200; display: none; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; padding: 24px max(24px, env(safe-area-inset-right, 0px)) calc(24px + env(safe-area-inset-bottom, 0px)) max(24px, env(safe-area-inset-left, 0px));
+  background: var(--bg); color: var(--ink); text-align: center;
+}
+.lock-mark { width: 64px; height: 64px; margin-bottom: 6px; }
+.lock-screen h1 { margin: 0; font-family: var(--font-display); font-size: 24px; font-weight: 700; letter-spacing: -.01em; }
+.lock-sub { margin: 0 0 10px; color: var(--ink-2); font-size: 15px; }
+.lock-screen .btn { min-width: 240px; }
+.lock-msg { min-height: 20px; margin: 0; color: var(--down); font-size: 13.5px; font-weight: 600; }
+.lock-lost { margin-top: 8px; font-size: 13.5px; color: var(--muted); }

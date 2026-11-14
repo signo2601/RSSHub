@@ -35,6 +35,8 @@
     try {
       t = localStorage.getItem('gruzzolo:theme');
       if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+      // App lock on: nothing of the portfolio is shown before Face ID / Windows Hello
+      if (localStorage.getItem('gruzzolo:lock')) document.documentElement.classList.add('app-locked');
     } catch (e) { /* storage unavailable */ }
     var dark = t === 'dark' || (t !== 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
     var m = document.querySelector('meta[name="theme-color"]');
@@ -95,6 +97,15 @@
     </div>
     <div class="sheet-body" id="sheet-body"></div>
   </section>
+</div>
+
+<div class="lock-screen" id="lock-screen" role="dialog" aria-modal="true" aria-labelledby="lock-title" hidden>
+  <svg class="lock-mark" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="15" fill="var(--accent)"/><path d="M21.2 11.2A6.6 6.6 0 1 0 21.2 20.8M8.6 14.4h9M8.6 17.6h9" fill="none" stroke="var(--accent-ink)" stroke-width="2.4" stroke-linecap="round"/></svg>
+  <h1 id="lock-title">Gruzzolo è bloccato</h1>
+  <p class="lock-sub">Sbloccalo per vedere il tuo portafoglio.</p>
+  <button class="btn primary" type="button" data-lock="unlock">Sblocca</button>
+  <p class="lock-msg" role="status" aria-live="polite"></p>
+  <button class="link-btn lock-lost" type="button" data-lock="lost">Non riesci a sbloccare?</button>
 </div>
 
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>

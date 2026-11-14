@@ -78,6 +78,7 @@ Quando il codice dell'app cambia e Cloudflare lo ripubblica, apri Gruzzolo **con
 ## Consigli di sicurezza
 
 - Proteggi l'iPhone con **codice e Face ID**: chi sblocca il telefono può aprire l'app.
+- Attiva **Altro → Blocca con Face ID** (sul computer: Windows Hello o Touch ID): Gruzzolo chiede lo sblocco all'apertura e dopo un minuto fuori dall'app. È un blocco dello schermo: i dati restano sul dispositivo come prima, non cifrati. Se lo sblocco non funziona più, «Non riesci a sbloccare?» cancella i dati dell'app su quel dispositivo: poi importi il backup.
 - In pubblico usa l'**occhio** in alto (o **Altro → Nascondi gli importi**): gli euro diventano •••••.
 - **Se elimini l'icona di Gruzzolo, iOS cancella anche i suoi dati.** Prima esporta un backup.
 - Il file di backup contiene tutti i tuoi dati: conservalo dove lo terresti per un estratto conto.

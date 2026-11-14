@@ -15,6 +15,7 @@ import { PRESETS, parseCsv, detectPreset, guessMapping, buildTxns } from '../imp
 import { CATALOG, findInCatalog } from '../catalog.js';
 import { fiscalBackpack } from '../costs.js';
 import { infoBtn } from '../info.js';
+import { lockOn, lockName, lockAvailable, enableLock, verifyLock, disableLock } from '../applock.js';
 import { encryptBackup, decryptBackup, isEncryptedBackup, MIN_PASSWORD } from '../backupcrypt.js';
 import { plans as allPlans, nextRun, pendingRuns, currentAmount, everyOf, EVERY_SHORT, replaceWithReal } from '../plans.js';
 import { avatar, demoBanner, txAmount, txFx } from './home.js';
@@ -830,6 +831,9 @@ function privacyGroup(today) {
       `Conti, operazioni, titoli e impostazioni sono salvati nella memoria di Gruzzolo, qui sul ${ios ? 'telefono' : 'dispositivo'}. Niente account e niente cloud: nessuno oltre a te può vederli.`, ' more-hero'),
     static2('globe', '', 'Cosa passa da internet',
       'Solo il nome, il ticker o l\'ISIN dei titoli, per cercarli e chiederne al server dell\'app i prezzi pubblici e la composizione degli ETF. Mai importi, quantità, conti o operazioni.'),
+    navRow({ act: 'more-lock', ico: 'shield', tone: lockOn() ? 'accent' : '', title: esc(`Blocca con ${lockName()}`),
+      sub: esc(lockOn() ? `Attivo: Gruzzolo chiede ${lockName()} all'apertura e dopo un minuto fuori dall'app` : `Chi usa il tuo ${ios ? 'iPhone' : 'computer'} sbloccato non vede i tuoi conti senza ${lockName()} (o il codice del dispositivo)`),
+      end: `<span class="tag">${lockOn() ? 'Attivo' : 'Spento'}</span>`, chev: false }),
     storageRow(),
     installRow(),
     navRow({ act: 'more-backup-export', ico: 'download', tone: rem.due ? 'warn' : 'accent', title: 'Esporta backup', sub: esc(rem.text), chev: false, cls: 'more-backup-now' }),
@@ -1862,6 +1866,24 @@ FORMS['more-backup-lock'] = async (form) => {
     }
     showErr(e && e.message ? e.message : 'Non sono riuscito a cifrare il backup.');
   }
+};
+
+ACTIONS['more-lock'] = async () => {
+  const name = lockName();
+  try {
+    if (lockOn()) {
+      if (!(await verifyLock())) return app.toast('Non riconosciuto: il blocco resta attivo');
+      disableLock();
+      app.toast('Blocco disattivato');
+    } else {
+      if (!(await lockAvailable())) return app.toast(`Questo dispositivo non offre ${name} al browser: attiva lo sblocco con volto, impronta o PIN nelle impostazioni del sistema`);
+      await enableLock();
+      app.toast(`Blocco attivo: Gruzzolo chiederà ${name}`);
+    }
+  } catch (e) {
+    app.toast(e && e.name === 'NotAllowedError' ? 'Operazione annullata' : `${name} non disponibile: ${(e && e.message) || 'errore'}`);
+  }
+  app.render();
 };
 
 ACTIONS['more-backup-lock'] = () => {
