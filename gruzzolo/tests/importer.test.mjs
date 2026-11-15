@@ -326,3 +326,11 @@ test('DEGIRO Transazioni with the price column called "Quotazione": detected and
   assert.ok(a.txns.length > 0);
   assert.deepEqual(a.txns.map((t) => [t.date, t.qty, t.price]), b.txns.map((t) => [t.date, t.qty, t.price]));
 });
+
+test('DEGIRO Estratto conto 2026 (tabs, "Variazioni", "Borsa", "Trasferisci…" rows): detected and imported', () => {
+  const csv = parseCsv(fixture('degiro-account-it-2026.csv'));
+  assert.equal(detectPreset(csv.headers), 'degiro-account');
+  const r = buildTxns(csv.rows, guessMapping(csv.headers, 'degiro-account'), { preset: 'degiro-account' });
+  assert.deepEqual(r.txns.map((t) => [t.date, t.type, t.amount]), [['2026-11-04', 'div', 3.2], ['2026-11-05', 'deposit', 500], ['2026-11-06', 'fee', 0.26]]);
+  assert.equal(r.skippedReasons['trasferimento interno'], 2);
+});

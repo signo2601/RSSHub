@@ -250,7 +250,7 @@ const A = {
   tax: ['tax', 'taxes', 'tasse', 'imposte', 'steuer', 'steuern', 'ritenuta', 'withholding'],
   total: ['totale eur', 'totale', 'total eur', 'total', 'gesamt eur', 'gesamt', 'totaal eur', 'totaal', 'controvalore totale'],
   amount: ['importo', 'amount', 'betrag', 'importo netto', 'netto'],
-  change: ['variazione', 'change', 'anderung', 'mutatie', 'variacion', 'mouvement'],
+  change: ['variazione', 'variazioni', 'change', 'anderung', 'mutatie', 'variacion', 'mouvement'],
   balance: ['saldo', 'balance', 'solde'],
   description: ['descrizione', 'description', 'beschreibung', 'omschrijving', 'descripcion', 'causale', 'note', 'memo', 'dettagli'],
   ref: ['id ordine', 'order id', 'order-id', 'orderid', 'id orden', 'reference', 'referenz', 'riferimento', 'numero ordine', 'id'],
@@ -401,7 +401,7 @@ export function degiroAccountKind(description) {
   if (matches(/cambio valuta|fx credit|fx debit|fx-gutschrift|fx-lastschrift|valuta creditering|valuta debitering|wahrungswechsel|cambio de divisa/, s)) return 'fx';
   if (matches(/costi di transazione|transaction (and\/or third party )?(fee|cost)|transaktionskosten|transactiekosten|costes de transaccion/, s)) return 'txfee';
   if (matches(/money market|mercato monetario|geldmarkt|fund price change|prezzo del fondo|liquidity fund|cash fund|conversione fond|fondi del mercato|fondo monetario/, s)) return 'mmf';
-  if (matches(/cash sweep|sweep transfer|transfer (from|to) your cash account|trasferimento .*(conto|cash)|overboeking|ubertrag/, s)) return 'internal';
+  if (matches(/cash sweep|sweep transfer|transfer (from|to) your cash account|trasferi(mento|sci) .*(conto|cash)|overboeking|ubertrag/, s)) return 'internal';
   if (matches(/\bbollo\b|stamp duty|stamp tax|stempel/, s)) return 'stamp';
   if (matches(/plusvalenz|capital gain|kapitalertrag|vermogenswinst/, s)) return 'capital';
   if (matches(/transazioni finanziarie|tobin|financial transaction tax|\bftt\b|\bttf\b/, s)) return 'ftt';
