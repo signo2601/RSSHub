@@ -315,3 +315,14 @@ test('buildTxns with a hand-made mapping', () => {
   const r = buildTxns(rows, mapping, { preset: 'generic', acc: 'x', src: 's' });
   assert.deepEqual(r.txns, [{ id: 's-1', acc: 'x', date: '2025-01-02', type: 'buy', assetKey: 'IE00BK5BQT80', qty: 3, price: 120.5, src: 's' }]);
 });
+
+test('DEGIRO Transazioni with the price column called "Quotazione": detected and imported like "Prezzo"', () => {
+  const text = fixture('degiro-transactions-it.csv').replace('Quantità,Prezzo,', 'Quantità,Quotazione,');
+  const csv = parseCsv(text);
+  assert.equal(detectPreset(csv.headers), 'degiro-transactions');
+  const ref = parseCsv(fixture('degiro-transactions-it.csv'));
+  const a = buildTxns(csv.rows, guessMapping(csv.headers, 'degiro-transactions'), { preset: 'degiro-transactions' });
+  const b = buildTxns(ref.rows, guessMapping(ref.headers, 'degiro-transactions'), { preset: 'degiro-transactions' });
+  assert.ok(a.txns.length > 0);
+  assert.deepEqual(a.txns.map((t) => [t.date, t.qty, t.price]), b.txns.map((t) => [t.date, t.qty, t.price]));
+});

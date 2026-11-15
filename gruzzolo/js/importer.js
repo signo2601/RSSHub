@@ -237,7 +237,7 @@ const A = {
   exchange: ['borsa di riferimento', 'reference exchange', 'referenzborse', 'beurs', 'bolsa de referencia', 'borsa', 'exchange', 'mercato'],
   venue: ['sede di esecuzione', 'venue', 'ausfuhrungsort', 'uitvoeringsplaats', 'centro de ejecucion'],
   qty: ['quantita', 'quantity', 'qty', 'anzahl', 'aantal', 'cantidad', 'quantite', 'shares', 'stuck', 'numero', 'pezzi', 'quote', 'units'],
-  price: ['prezzo', 'price', 'kurs', 'koers', 'precio', 'prix', 'prezzo unitario', 'unit price'],
+  price: ['prezzo', 'quotazione', 'price', 'kurs', 'koers', 'precio', 'prix', 'corso', 'prezzo unitario', 'unit price'],
   localValue: ['valore locale', 'local value', 'wert in lokalwahrung', 'lokale waarde', 'valor local', 'valeur locale'],
   value: ['valore eur', 'valore', 'value eur', 'value', 'wert eur', 'wert', 'waarde eur', 'waarde', 'valor', 'valeur', 'controvalore'],
   fx: ['tasso di cambio', 'exchange rate', 'wechselkurs', 'wisselkoers', 'tipo de cambio', 'taux de change', 'fx', 'cambio', 'fx rate'],
@@ -624,6 +624,14 @@ function degiroTransactions(rows, ctx) {
     if (!Number.isFinite(qtyRaw) || qtyRaw === 0) return skip(ctx, 'quantità mancante');
     const p = pair(ctx, row, m.price);
     let price = p.value;
+    // No price column (or an empty cell): the local value divided by the quantity
+    if (!(price > 0)) {
+      const lv = pair(ctx, row, m.localValue);
+      if (Math.abs(lv.value) > 0) {
+        price = Math.abs(lv.value) / Math.abs(qtyRaw);
+        if (!p.ccy && lv.ccy) p.ccy = lv.ccy;
+      }
+    }
     if (!(price > 0)) {
       warn(ctx, 'Righe senza prezzo (operazioni societarie, frazionamenti) non importate: registrale a mano se servono.');
       return skip(ctx, 'prezzo mancante');
