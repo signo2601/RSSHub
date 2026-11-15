@@ -398,7 +398,7 @@ export function degiroAccountKind(description) {
   if (matches(/dividend|ausschuttung|cedola|coupon|kupon/, s)) return 'div';
   if (matches(/connession|connection|connectivity|verbindung|aansluit|conexion/, s)) return 'connectivity';
   if (matches(/autofx|costi di cambio|commissione (di )?cambio|fx (debit |credit )?(fee|commission)|conversion fee|wahrungsumrechnungsgebuhr|valutakosten/, s)) return 'autofx';
-  if (matches(/cambio valuta|fx credit|fx debit|fx-gutschrift|fx-lastschrift|valuta creditering|valuta debitering|wahrungswechsel|cambio de divisa/, s)) return 'fx';
+  if (matches(/cambio valuta|credito fx|debito fx|fx credit|fx debit|fx-gutschrift|fx-lastschrift|valuta creditering|valuta debitering|wahrungswechsel|cambio de divisa/, s)) return 'fx';
   if (matches(/costi di transazione|transaction (and\/or third party )?(fee|cost)|transaktionskosten|transactiekosten|costes de transaccion/, s)) return 'txfee';
   if (matches(/money market|mercato monetario|geldmarkt|fund price change|prezzo del fondo|liquidity fund|cash fund|conversione fond|fondi del mercato|fondo monetario/, s)) return 'mmf';
   if (matches(/cash sweep|sweep transfer|transfer (from|to) your cash account|trasferi(mento|sci) .*(conto|cash)|overboeking|ubertrag/, s)) return 'internal';
