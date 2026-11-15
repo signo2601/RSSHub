@@ -85,7 +85,7 @@ const SEARCH_CONCURRENCY = 3;
 
 // Yahoo symbol suffixes: by broker venue code (DEGIRO "Borsa"), and preferred ones by currency
 const VENUE_SUFFIX = {
-  MIL: 'MI', MOT: 'MI', ETLX: 'MI', XET: 'DE', TDG: 'DE', FRA: 'F', EAM: 'AS', EPA: 'PA', EBR: 'BR', ELI: 'LS', MAD: 'MC',
+  MIL: 'MI', MOT: 'MI', ETLX: 'MI', XET: 'DE', TDG: ['DE', 'F'], FRA: 'F', GTX: ['MU', 'DE', 'F'], EAM: 'AS', EPA: 'PA', EBR: 'BR', ELI: 'LS', MAD: 'MC',
   LSE: 'L', SWX: 'SW', VIE: 'VI', HSE: 'HE', OMX: 'ST', OSL: 'OL', CSE: 'CO', TOR: 'TO', HKS: 'HK', ASX: 'AX', TSE: 'T',
   NDQ: '', NSY: '', NYSE: '', NASDAQ: '', ARCA: '', BATS: '',
 };
@@ -376,14 +376,16 @@ export function dropAccount(data, id) {
 export function rankListings(results, { currency = '', exchange = '' } = {}) {
   const want = normCcy(currency);
   const venue = String(exchange || '').toUpperCase();
-  const venueSfx = Object.prototype.hasOwnProperty.call(VENUE_SUFFIX, venue) ? VENUE_SUFFIX[venue] : null;
+  // Tradegate is not on Yahoo: its securities are listed on Xetra or, more often for foreign
+  // shares, Frankfurt. Several suffixes in order of preference.
+  const venueList = Object.prototype.hasOwnProperty.call(VENUE_SUFFIX, venue) ? [].concat(VENUE_SUFFIX[venue]) : null;
   const prefs = CCY_SUFFIXES[want] || null;
   return (Array.isArray(results) ? results : [])
     .filter((r) => r && r.symbol)
     .map((r, i) => {
       const sfx = suffixOf(r.symbol);
       let score = 0;
-      if (venueSfx !== null && sfx === venueSfx) score += 100;
+      if (venueList && venueList.includes(sfx)) score += 100 - venueList.indexOf(sfx);
       if (prefs) {
         const k = prefs.indexOf(sfx);
         if (k >= 0) score += 50 - k;
@@ -426,13 +428,24 @@ function catalogListing(item) {
 // quote lookup; the curated catalog when offline. null → manual prices.
 async function findListing(item, { online, search, lookup }) {
   const want = normCcy(item.currency);
-  const query = item.isin || item.symbol;
-  if (online && query && typeof search === 'function') {
+  const queries = [item.isin || item.symbol];
+  // By ISIN Yahoo often lists only the home market (e.g. New York or Sydney): for a security bought in
+  // euro, also look for its German listings by name
+  const nameQ = prettyName(item.name || '').replace(/\b(inc|corp|corporation|ltd|limited|plc|sa|ag|nv|se|co)\b\.?/gi, '').replace(/\s+/g, ' ').trim();
+  if (nameQ && nameQ !== queries[0]) queries.push(nameQ);
+  for (const query of queries) {
+    if (!(online && query && typeof search === 'function')) break;
     let results = [];
     try {
       results = await search(query);
     } catch {
       results = [];
+    }
+    if (query === nameQ) {
+      // only listings in the CSV currency whose name starts like ours (no lookalike companies)
+      const first = nameQ.split(' ')[0].toLowerCase();
+      results = results.filter((r) => r && (!want || (CCY_SUFFIXES[want] || []).includes(suffixOf(r.symbol)))
+        && String(r.name || '').toLowerCase().startsWith(first));
     }
     for (const c of rankListings(results, item).slice(0, LOOKUP_TRIES)) {
       let info = null;
@@ -490,7 +503,10 @@ export async function resolveImportAssets(items, { assets = {}, online = false, 
   let done = 0;
   const found = await mapLimit(list, SEARCH_CONCURRENCY, async (item) => {
     const aid = findExistingAsset(assets, item);
-    const info = aid ? null : await findListing(item, { online, search, lookup });
+    const cur = aid ? assets[aid] : null;
+    // A security already here with a manual price: importing the file again links it to the market
+    const unlinked = Boolean(cur && !cur.symbol && cur.type !== 'cash');
+    const info = aid && !unlinked ? null : await findListing(item, { online, search, lookup });
     done++;
     if (typeof onProgress === 'function') onProgress(done, list.length);
     return { item, aid, info };
@@ -498,10 +514,15 @@ export async function resolveImportAssets(items, { assets = {}, online = false, 
   const map = {};
   const created = [];
   const pence = new Set();
+  const linked = [];
   for (const { item, aid, info } of found) {
     if (isPence(item.currency)) pence.add(item.key);
     if (aid) {
       map[item.key] = aid;
+      const cur = assets[aid];
+      if (info && info.symbol && cur && !cur.symbol && normCcy(info.currency) === normCcy(cur.currency) && !linked.some((l) => l.id === aid)) {
+        linked.push({ id: aid, symbol: info.symbol, ticker: tickerOf(info.symbol), exchange: info.exchange || cur.exchange || '' });
+      }
       continue;
     }
     // Two rows of the file can point to the same listing (e.g. different product names)
@@ -514,7 +535,7 @@ export async function resolveImportAssets(items, { assets = {}, online = false, 
     created.push(a);
     map[item.key] = a.id;
   }
-  return { map, created, pence };
+  return { map, created, pence, linked };
 }
 
 // Importer transactions → app transactions (asset ids, account, batch id; pence prices to pounds)
@@ -650,6 +671,11 @@ function plansGroup(today) {
 /* ---------- 2. Import ---------- */
 function importGroup(today) {
   const rows = [navRow({ act: 'more-import', ico: 'upload', tone: 'accent', title: 'Importa un file CSV', sub: 'Da DEGIRO, Scalable Capital o un altro broker' })];
+  const manual = manualAssets();
+  if (manual.length) {
+    rows.push(navRow({ act: 'more-relink', ico: 'refresh', tone: 'warn', title: esc(`Collega ${plural(manual.length, 'titolo', 'titoli')} ai prezzi di mercato`),
+      sub: esc('Hanno il prezzo manuale (per esempio comprati su Tradegate): cerco la quotazione in euro su Xetra o Francoforte'), chev: false }));
+  }
   for (const b of importBatches().slice(0, 3)) {
     const when = b.time ? whenText(b.time, today) : '';
     const sub = [plural(b.count, 'operazione', 'operazioni'), (account(b.acc) || {}).name || '', when ? `importate ${when}` : `${fmtDate(b.first)} → ${fmtDate(b.last)}`].filter(Boolean);
@@ -1392,6 +1418,10 @@ async function runImport() {
       resolved.map[key] = a.id;
     }
     for (const a of resolved.created) d.assets[a.id] = a;
+    for (const l of resolved.linked || []) {
+      const a = d.assets[l.id];
+      if (a && !a.symbol) Object.assign(a, { symbol: l.symbol, ticker: a.ticker || l.ticker, exchange: l.exchange, priceSource: 'auto' });
+    }
     let acc = imp.acc !== NEW_ACC ? account(imp.acc) : null;
     if (!acc) {
       const broker = presetBroker(imp.preset);
@@ -1866,6 +1896,37 @@ FORMS['more-backup-lock'] = async (form) => {
     }
     showErr(e && e.message ? e.message : 'Non sono riuscito a cifrare il backup.');
   }
+};
+
+// Securities with a manual price that could have a market listing (they have an ISIN or a name)
+function manualAssets() {
+  const held = new Set(D().txns.filter((t) => t.aid && !t.demo).map((t) => t.aid));
+  return Object.values(D().assets).filter((a) => a && held.has(a.id) && !a.symbol && a.type !== 'cash' && (a.isin || a.name));
+}
+
+ACTIONS['more-relink'] = async (el) => {
+  if (market.status === 'offline') return app.toast('Serve internet per cercare le quotazioni');
+  const list = manualAssets();
+  if (!list.length) return;
+  el.disabled = true;
+  app.toast(`Cerco ${plural(list.length, 'titolo', 'titoli')} su Yahoo Finance…`);
+  const items = list.map((a) => ({ key: a.id, isin: a.isin, name: a.name, currency: a.currency, exchange: a.exchange, type: a.type }));
+  let linked = 0;
+  await mapLimit(items, SEARCH_CONCURRENCY, async (item) => {
+    let info = null;
+    try {
+      info = await findListing(item, { online: true, search: (q) => market.search(q), lookup: (sym) => market.lookup(sym) });
+    } catch {
+      info = null;
+    }
+    const a = D().assets[item.key];
+    if (!info || !info.symbol || !a || a.symbol || normCcy(info.currency) !== normCcy(a.currency)) return;
+    Object.assign(a, { symbol: info.symbol, ticker: a.ticker || tickerOf(info.symbol), exchange: info.exchange || a.exchange || '', priceSource: 'auto' });
+    linked++;
+  });
+  const left = list.length - linked;
+  commit(linked ? `Collegati ${plural(linked, 'titolo', 'titoli')} ai prezzi di mercato${left ? ` · ${left} da collegare a mano (scheda del titolo → Modifica)` : ''}` : 'Nessuna quotazione in euro trovata: collega i titoli a mano (scheda del titolo → Modifica)');
+  if (linked) app.refreshPrices();
 };
 
 ACTIONS['more-lock'] = async () => {
