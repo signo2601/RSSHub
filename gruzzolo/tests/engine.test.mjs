@@ -236,3 +236,20 @@ test('a future-dated trade is not today\'s price; the day change includes the FX
   close(pu.dayChange, 10 * (202 / 1.12 - 200 / 1.1)); // EUR: −15,58 €, although the stock rose 1%
   assert.ok(pu.dayChange < 0);
 });
+
+test('reverse split (1:20) in the market data: old shares count in new units, no jump in value', () => {
+  const data = blankData();
+  data.assets.p = { id: 'p', name: 'Peninsula', symbol: 'PEN.F', type: 'stock', currency: 'EUR', priceSource: 'auto' };
+  data.txns = [
+    { id: 'b1', acc: 'acc1', type: 'buy', aid: 'p', date: d(10), qty: 4599, price: 0.0368 },
+    { id: 's1', acc: 'acc1', type: 'sell', aid: 'p', date: d(2), qty: 229, price: 0.80 },
+  ];
+  load(data);
+  // Yahoo closes are adjusted: before the consolidation they are 20× the price paid
+  market.inject('PEN.F', { currency: 'EUR', dates: [d(10), d(6), d(4), d(2)], close: [0.736, 0.74, 0.75, 0.80], adj: [0.736, 0.74, 0.75, 0.80], divs: [], splits: [[d(5), 0.05]] });
+  const s = getSeries('all');
+  assert.ok(Math.abs(s.value[0] - 4599 * 0.0368) < 0.01, 'value on the day of purchase = amount paid');
+  assert.ok(Math.abs(s.value[s.index(d(4))] - 229.95 * 0.75) < 0.01);
+  const p = positions({}).find((x) => x.aid === 'p');
+  assert.ok(!p || p.qty === 0, 'the fraction paid in cash does not stay open');
+});

@@ -3,7 +3,7 @@
 // capital-loss carry-forward ("zaino fiscale").
 // Pure analytics: no DOM, no clock. "today" is always a parameter (results memoized via cached()).
 import { D, FEE_KINDS, accName, asset, cached } from './state.js';
-import { costEvents, fxOn, getSeries, positions, priceOn, realizedEvents, taxEvents, txnsFor } from './engine.js';
+import { costEvents, fxOn, getSeries, positions, priceOn, realizedEvents, taxEvents, txnsFor, tradeQty, tradePrice } from './engine.js';
 import { addDays, dayDiff, money, moneySigned } from './util.js';
 
 const EPS = 1e-9;
@@ -105,10 +105,10 @@ function holdingsWalker(accIds) {
       if ((t.type !== 'buy' && t.type !== 'sell') || !t.aid) continue;
       const k = t.acc + '|' + t.aid;
       const h = per.get(k) || { aid: t.aid, qty: 0, costLocal: 0 };
-      const tq = Math.max(0, num(t.qty));
+      const tq = tradeQty(t);
       if (t.type === 'buy') {
         h.qty += tq;
-        h.costLocal += tq * Math.max(0, num(t.price));
+        h.costLocal += tq * tradePrice(t);
       } else if (h.qty > 0) {
         const q = Math.min(tq, h.qty);
         h.costLocal -= h.costLocal * (q / h.qty);

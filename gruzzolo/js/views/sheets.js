@@ -9,7 +9,7 @@ import {
 import { ACTIONS, FORMS, INPUTS, SHEETS, FORM_SHEETS } from '../registry.js';
 import { app } from '../app.js';
 import { market } from '../market.js';
-import { priceSeries, priceOn, fxOn, lastQuote, positions, sortTxns, assetHistory, historyFor } from '../engine.js';
+import { priceSeries, priceOn, fxOn, lastQuote, positions, sortTxns, assetHistory, historyFor, tradeQty, splitFactor } from '../engine.js';
 import { searchCatalog, findInCatalog } from '../catalog.js';
 import { lineChart } from '../charts.js';
 import {
@@ -768,10 +768,11 @@ export function heldQty(acc, aid, date, excludeId = null) {
   let q = 0;
   for (const t of sortTxns(D().txns.filter((x) => x.acc === acc && x.aid === aid && x.id !== excludeId))) {
     if (t.date > date) break;
-    if (t.type === 'buy') q += +t.qty || 0;
-    else if (t.type === 'sell') q = Math.max(0, q - (+t.qty || 0));
+    if (t.type === 'buy') q += tradeQty(t);
+    else if (t.type === 'sell') q = Math.max(0, q - tradeQty(t));
   }
-  return q;
+  // in today's units after any split; back to the units of that date (what the broker showed then)
+  return q / splitFactor(aid, date);
 }
 
 function defaultAccount(args, editing) {

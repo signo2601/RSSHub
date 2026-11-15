@@ -19,8 +19,36 @@ const num = (x) => {
   const v = +x;
   return Number.isFinite(v) ? v : 0;
 };
-const qtyOf = (t) => Math.max(0, num(t.qty));
-const priceOf = (t) => Math.max(0, num(t.price));
+// Splits and reverse splits (consolidations): Yahoo's closes and dividends are adjusted for them, so a
+// trade made before a split counts in today's units: quantity × the ratios of the later splits, price ÷
+// them (the amount stays the same). A 1:20 consolidation turns 4.599 old shares into 229,95 new ones.
+// Broker files skip these corporate actions: the market data supplies them.
+function splitsOf(aid) {
+  return cached('sp:' + aid, () => {
+    const a = asset(aid);
+    const h = a && a.type !== 'cash' ? assetHistory(a) : null;
+    const list = h && Array.isArray(h.splits) ? h.splits : [];
+    return list.filter((p) => Array.isArray(p) && typeof p[0] === 'string' && Number.isFinite(+p[1]) && +p[1] > 0 && Math.abs(+p[1] - 1) > 1e-9)
+      .map((p) => [p[0], +p[1]]);
+  });
+}
+export function splitFactor(aid, date) {
+  if (!aid) return 1;
+  let f = 1;
+  for (const [d, r] of splitsOf(aid)) if (d > date) f *= r;
+  return f;
+}
+const qtyOf = (t) => Math.max(0, num(t.qty)) * splitFactor(t.aid, t.date);
+const priceOf = (t) => Math.max(0, num(t.price)) / splitFactor(t.aid, t.date);
+// Shares a sale takes off the holding. After a split the broker pays the fraction of a share in cash
+// (4.599 old shares → 229 new + 0,95 paid out): a sale that leaves less than one share closes it.
+function sellQty(t, tq, held) {
+  const q = Math.min(tq, held);
+  return held - q > 1e-9 && held - q < 1 && splitsOf(t.aid).length ? held : q;
+}
+// Quantity of a trade in today's units (after the splits that followed it), for other modules
+export const tradeQty = qtyOf;
+export const tradePrice = priceOf;
 
 export function sortTxns(list) {
   const sorted = list
@@ -280,7 +308,7 @@ function computeSeries(accIds, key) {
           investedTotal += -delta;
           bought += -delta;
         } else {
-          const q = Math.min(tq, h.qty);
+          const q = sellQty(t, tq, h.qty);
           if (tq - q > 1e-9) ext += ((tq - q) * priceOf(t)) / fx; // unrecorded shares, valued at the sale price
           if (h.qty > 0) {
             const ratio = q / h.qty;
@@ -386,7 +414,7 @@ function replay(accIds, date) {
       p.costNoFee += (tq * price) / fx;
       p.fees += fee + fxFee;
     } else if (t.type === 'sell') {
-      const q = Math.min(tq, p.qty);
+      const q = sellQty(t, tq, p.qty);
       const ratio = p.qty > 0 ? q / p.qty : 0;
       // Shares sold beyond those recorded (e.g. bought before the imported period): their cost is
       // unknown, so they count at the sale price and only the fees show up as a loss on them
