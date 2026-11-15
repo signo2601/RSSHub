@@ -1,0 +1,10 @@
+date,time,status,reference,description,assetType,type,isin,shares,price,amount,fee,tax,currency
+11-15-26,21:33,Pending,R1,Scalable Broker PRIME bis 14.12.2026,Cash,Deposit,,,,"4,99","0,00",,EUR
+12-08-25,1:00,Executed,R2,Migration Cash,Cash,Withdrawal,,,,"-150,25","0,00",,EUR
+12-06-25,1:00,Executed,R3,iShares MSCI World SRI (Acc),Security,Security transfer,IE00BYX2JD69,"10",,,,,EUR
+12-06-25,1:00,Executed,R4,,Cash,Deposit,,,,"150,25","0,00",,EUR
+12-05-25,1:00,Executed,R5,iShares MSCI World SRI (Acc),Security,Security transfer,IE00BYX2JD69,"-10",,,,,EUR
+05-29-26,1:00,Executed,R6,iShares Listed Private Equity (Dist),Security,Reinvestment_Distribution,IE00B1TXHL60,"0,1","30,00","-3,00","0,00","0,00",EUR
+05-28-26,1:00,Executed,R7,iShares Listed Private Equity (Dist),Cash,Distribution,IE00B1TXHL60,,,"3,00","0,00","0,00",EUR
+11-19-24,1:00,Executed,R8,Bonus Invita un Amico(a),Cash,Deposit,,,,"25,00","0,00",,EUR
+11-08-23,1:00,Executed,R9,giroconto giovanni,Cash,Deposit,,,,"1000,00","0,00",,EUR

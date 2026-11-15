@@ -334,3 +334,13 @@ test('DEGIRO Estratto conto 2026 (tabs, "Variazioni", "Borsa", "Trasferisci…" 
   assert.deepEqual(r.txns.map((t) => [t.date, t.type, t.amount]), [['2026-11-04', 'div', 3.2], ['2026-11-05', 'deposit', 500], ['2026-11-06', 'fee', 0.26]]);
   assert.equal(r.skippedReasons['trasferimento interno'], 2);
 });
+
+test('Scalable (Italian, 2026): depot migration left out, reinvested distribution is a buy, bonus is income', () => {
+  const r = importCsv(fixture('scalable-migration-it.csv'), { acc: 'sc' });
+  assert.equal(r.preset, 'scalable');
+  const got = r.txns.map((t) => [t.date, t.type, t.amount ?? t.qty]);
+  assert.deepEqual(got, [['2023-11-08', 'deposit', 1000], ['2024-11-19', 'interest', 25], ['2026-05-28', 'div', 3], ['2026-05-29', 'buy', 0.1]]);
+  assert.equal(r.skippedReasons['migrazione dei titoli (nessun effetto)'], 2);
+  assert.equal(r.skippedReasons['migrazione della liquidità (nessun effetto)'], 2);
+  assert.ok(!r.warnings.some((w) => /trasferiment/i.test(w)), r.warnings.join(' | '));
+});

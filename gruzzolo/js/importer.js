@@ -141,7 +141,7 @@ export function parseCsv(text, { delimiter = null } = {}) {
 /* ---------- Dates and numbers ---------- */
 const daysIn = (y, m) => new Date(y, m, 0).getDate();
 // dd-mm-yyyy, dd/mm/yyyy, dd.mm.yyyy, yyyy-mm-dd (a time after the date is ignored) → 'YYYY-MM-DD' or null
-export function parseDate(s) {
+export function parseDate(s, order = 'dmy') {
   const t = String(s ?? '').trim();
   let y;
   let mo;
@@ -154,9 +154,10 @@ export function parseDate(s) {
   } else if ((m = /^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4}|\d{2})(?![\d])/.exec(t))) {
     d = +m[1];
     mo = +m[2];
+    if (order === 'mdy') [d, mo] = [mo, d];
     y = +m[3];
     if (m[3].length === 2) y += y > 69 ? 1900 : 2000;
-    if (mo > 12 && d <= 12) [d, mo] = [mo, d]; // month/day order (US files)
+    if (mo > 12 && d <= 12) [d, mo] = [mo, d]; // the other order, when only it makes sense
   } else return null;
   if (!(mo >= 1 && mo <= 12) || !(d >= 1 && d <= daysIn(y, mo)) || y < 1900 || y > 2200) return null;
   return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
@@ -414,6 +415,8 @@ export function degiroAccountKind(description) {
 }
 
 const SCALABLE_TYPES = [
+  // shares bought with a distribution (the cash came in with the "Distribution" row)
+  [/^(reinvestment|wiederanlage|reinvestimento)/, 'buy'],
   [/^(buy|kauf|acquisto|savings plan|sparplan|piano di accumulo)/, 'buy'],
   [/^(sell|verkauf|vendita)/, 'sell'],
   [/^(distribution|dividend|ausschuttung|dividende|distribuzione|dividendo|coupon|cedola)/, 'div'],
@@ -457,6 +460,20 @@ function typeHint(name, isin, assetType = '') {
   return 'stock';
 }
 
+// Day/month or month/day for the whole file: Scalable's Italian export writes 11-08-23 for 8 November.
+// A first number above 12 means day first; a second one above 12, month first; otherwise day first.
+export function detectDateOrder(values) {
+  let dmy = 0;
+  let mdy = 0;
+  for (const v of values) {
+    const x = /^(\d{1,2})[-/.](\d{1,2})[-/.]\d{2,4}(?![\d])/.exec(String(v ?? '').trim());
+    if (!x) continue;
+    if (+x[1] > 12) dmy++;
+    else if (+x[2] > 12) mdy++;
+  }
+  return mdy > dmy ? 'mdy' : 'dmy';
+}
+
 /* ---------- Building transactions ---------- */
 const DEFAULT_SRC = (rows) => {
   let h = 0;
@@ -494,6 +511,7 @@ export function buildTxns(rows, mapping, options = {}) {
     m,
     fxOn: typeof options.fxOn === 'function' ? options.fxOn : null,
     decimal: options.decimal || detectDecimal(numericCells(list, m)),
+    dateOrder: detectDateOrder(list.map((r) => cell(r, m.date))),
     records: [],
     assets: new Map(),
     warnings: [],
@@ -616,7 +634,7 @@ function rateFor(ctx, ccy, date, explicit) {
 function degiroTransactions(rows, ctx) {
   const { m } = ctx;
   rows.forEach((row, line) => {
-    const date = parseDate(cell(row, m.date));
+    const date = parseDate(cell(row, m.date), ctx.dateOrder);
     if (!date) return skip(ctx, 'data non valida');
     const isin = cell(row, m.isin).toUpperCase();
     const name = cell(row, m.name);
@@ -692,7 +710,7 @@ function degiroAccount(rows, ctx) {
   const { m } = ctx;
   const items = [];
   rows.forEach((row, line) => {
-    const date = parseDate(cell(row, m.date));
+    const date = parseDate(cell(row, m.date), ctx.dateOrder);
     if (!date) return skip(ctx, 'data non valida');
     const desc = cell(row, m.description);
     const amt = pair(ctx, row, m.amount);
@@ -881,17 +899,24 @@ function skipReason(kind) {
 }
 
 /* ---------- Scalable Capital ---------- */
+const MIGRATION_DAYS = 10;
 function scalable(rows, ctx) {
   const { m } = ctx;
+  const transfers = [];
   rows.forEach((row, line) => {
     const status = normHeader(cell(row, m.status));
     if (m.status >= 0 && status && !/execut|ausgefuhrt|eseguit|ejecutad|settled|abgerechnet/.test(status)) return skip(ctx, 'non eseguita');
-    const date = parseDate(cell(row, m.date));
+    const date = parseDate(cell(row, m.date), ctx.dateOrder);
     if (!date) return skip(ctx, 'data non valida');
     const typeText = cell(row, m.type);
     const desc = cell(row, m.description);
     const type = scalableType(typeText) || typeFromText(typeText) || typeFromText(desc);
     if (type === 'skip') {
+      // Transfers come in pairs when Scalable moves the depot (Dec 2025: out and back in a day later)
+      if (/transfer|ubertrag|trasferiment/.test(normHeader(typeText))) {
+        transfers.push({ isin: cell(row, m.isin).toUpperCase(), date });
+        return;
+      }
       warn(ctx, 'Operazioni societarie e trasferimenti di titoli non importati: registrali a mano se servono.');
       return skip(ctx, 'operazione societaria o trasferimento');
     }
@@ -943,8 +968,13 @@ function scalable(rows, ctx) {
     } else if (type === 'interest') {
       if (amount > 0) ctx.records.push({ ...base, type: 'interest', amount: round(eur(abs), 2), note: desc || undefined });
       else ctx.records.push({ ...base, type: 'fee', kind: 'other', amount: round(eur(abs), 2), note: desc || 'Interessi passivi' });
+    } else if ((type === 'deposit' || type === 'withdraw') && amount > 0 && /bonus|invita un amico|referral|pramie|freunde/.test(normHeader(desc))) {
+      // a bonus from the broker is a gain, not money of yours coming in
+      ctx.records.push({ ...base, type: 'interest', amount: round(eur(abs), 2), note: desc });
     } else if (type === 'deposit' || type === 'withdraw') {
-      ctx.records.push({ ...base, type: type === 'withdraw' || amount < 0 ? 'withdraw' : 'deposit', amount: round(eur(abs), 2), note: desc || undefined });
+      const rec = { ...base, type: type === 'withdraw' || amount < 0 ? 'withdraw' : 'deposit', amount: round(eur(abs), 2), note: desc || undefined };
+      if (/migration|migrazione|migrat/.test(normHeader(desc))) rec._migration = true;
+      ctx.records.push(rec);
     } else if (type === 'fee') {
       if (amount > 0) {
         warn(ctx, 'Rimborsi di commissioni non importati: registrali a mano se servono.');
@@ -960,6 +990,36 @@ function scalable(rows, ctx) {
       ctx.records.push({ ...base, type: 'tax', kind: taxKindFrom(`${typeText} ${desc}`), assetKey: assetKey || undefined, amount: round(eur(abs), 2), note: desc || undefined });
     }
   });
+  scalableMigration(ctx, transfers);
+}
+
+// Scalable's move of the depot to its own bank (December 2025): every security goes out and comes back
+// in, the cash leaves ("Migration Cash") and arrives again (a deposit of the same amount). Nothing
+// changes for the portfolio: both sides are left out. Anything unpaired is reported.
+function scalableMigration(ctx, transfers) {
+  const near = (a, b) => Math.abs(Date.parse(a) - Date.parse(b)) / 864e5 <= MIGRATION_DAYS;
+  const byIsin = new Map();
+  for (const t of transfers) byIsin.set(t.isin, [...(byIsin.get(t.isin) || []), t]);
+  for (const list of byIsin.values()) {
+    const paired = list.length % 2 === 0 && list.every((t) => near(t.date, list[0].date));
+    for (let i = 0; i < list.length; i++) skip(ctx, paired ? 'migrazione dei titoli (nessun effetto)' : 'trasferimento di titoli');
+    if (!paired) warn(ctx, 'Trasferimenti di titoli da o verso un altro broker non importati: registrali a mano (acquisto al prezzo di carico) se servono.');
+  }
+  const drop = new Set();
+  for (const w of ctx.records) {
+    if (!w._migration || drop.has(w)) continue;
+    const other = ctx.records.find((x) => x !== w && !drop.has(x) && (x.type === 'deposit' || x.type === 'withdraw') && x.type !== w.type
+      && Math.abs(x.amount - w.amount) < 0.005 && near(x.date, w.date));
+    if (other) {
+      drop.add(w);
+      drop.add(other);
+    }
+  }
+  if (drop.size) {
+    ctx.records = ctx.records.filter((x) => !drop.has(x));
+    for (let i = 0; i < drop.size; i++) skip(ctx, 'migrazione della liquidità (nessun effetto)');
+  }
+  for (const x of ctx.records) delete x._migration;
 }
 
 /* ---------- Generic CSV ---------- */
@@ -967,7 +1027,7 @@ function generic(rows, ctx) {
   const { m } = ctx;
   if (m.date < 0) warn(ctx, 'Nessuna colonna con la data: indica quale colonna contiene la data.');
   rows.forEach((row, line) => {
-    const date = parseDate(cell(row, m.date));
+    const date = parseDate(cell(row, m.date), ctx.dateOrder);
     if (!date) return skip(ctx, 'data non valida');
     const typeText = cell(row, m.type);
     const desc = cell(row, m.description);
