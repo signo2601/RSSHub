@@ -9,7 +9,7 @@ import { ACTIONS, FORMS, INPUTS, SHEETS, FORM_SHEETS, MOUNTS } from '../registry
 import { app } from '../app.js';
 import { market } from '../market.js';
 import { eco } from '../eco.js';
-import { getSeries, fxOn, sortTxns } from '../engine.js';
+import { getSeries, fxOn, sortTxns, positions } from '../engine.js';
 import { demoData, installDemoMarket, removeDemo } from '../demo.js';
 import { PRESETS, parseCsv, detectPreset, guessMapping, buildTxns } from '../importer.js';
 import { CATALOG, findInCatalog } from '../catalog.js';
@@ -939,6 +939,7 @@ function guideGroup() {
       act: 'more-guide', attrs: ' data-topic="iphone"', ico: installed ? 'check' : 'download', title: 'Installa su iPhone',
       sub: esc(installed ? 'Fatto: stai usando l\'app installata' : 'Safari → Condividi → Aggiungi alla schermata Home'),
     }),
+    navRow({ act: 'more-twr-check', ico: 'search', title: 'Controlla il rendimento (TWR)', sub: 'I giorni che pesano di più sul rendimento, per trovare un dato sbagliato' }),
     navRow({ act: 'more-guide', attrs: ' data-topic="offline"', ico: 'cloud', title: 'Senza internet', sub: 'Cosa funziona offline e quando si aggiornano i prezzi' }),
     navRow({ act: 'more-guide', attrs: ' data-topic="prices"', ico: 'info', title: 'Da dove arrivano i prezzi', sub: 'Fonte, ritardo e prezzi manuali' }),
   );
@@ -1928,6 +1929,50 @@ ACTIONS['more-relink'] = async (el) => {
   commit(linked ? `Collegati ${plural(linked, 'titolo', 'titoli')} ai prezzi di mercato${left ? ` · ${left} da collegare a mano (scheda del titolo → Modifica)` : ''}` : 'Nessuna quotazione in euro trovata: collega i titoli a mano (scheda del titolo → Modifica)');
   if (linked) app.refreshPrices();
 };
+
+// The days that move the TWR most: a wrong price, a split, a missing deposit show up here
+function twrDays(key) {
+  const s = getSeries(key);
+  if (!s) return null;
+  let all = 1;
+  const days = [];
+  for (let k = 1; k < s.dates.length; k++) {
+    const r = s.ret[k] || 0;
+    all *= 1 + r;
+    if (Math.abs(r) > 1e-9) days.push({ k, r, w: Math.abs(Math.log(Math.max(1e-6, 1 + r))) });
+  }
+  days.sort((a, b) => b.w - a.w);
+  const top = days.slice(0, 12).map(({ k, r }) => {
+    const d = s.dates[k];
+    const prev = s.dates[k - 1];
+    const ids = s.accIds && s.accIds.length ? s.accIds : null;
+    const before = new Map(positions({ accIds: ids, date: prev }).map((p) => [p.aid, p.value]));
+    let cause = null;
+    for (const p of positions({ accIds: ids, date: d })) {
+      const dv = p.value - (before.get(p.aid) || 0);
+      if (!cause || Math.abs(dv) > Math.abs(cause.dv)) cause = { name: p.asset.name, dv };
+    }
+    return { d, r, before: s.value[k - 1], after: s.value[k], fin: s.flowIn[k], fout: s.flowOut[k], cause };
+  });
+  const without = top.reduce((x, t) => x / (1 + t.r), all);
+  return { all: all - 1, top, without: without - 1 };
+}
+
+SHEETS.twrCheck = () => {
+  const key = S.ui.scope && S.ui.scope !== 'all' ? S.ui.scope : 'all';
+  const t = twrDays(key);
+  if (!t) return { title: 'Controlla il rendimento', body: '<div class="empty compact"><p>Nessuna operazione.</p></div>' };
+  const pc = (v) => `${v >= 0 ? '+' : '−'}${num(Math.abs(v * 100), 2)}%`;
+  const rows = t.top.map((x) => `<div class="row more-static"><span class="row-main"><span class="row-title">${esc(fmtDate(x.d))} · <b class="${x.r >= 0 ? 'up' : 'down'}">${pc(x.r)}</b></span>
+    <span class="row-sub">${esc(`valore ${money(x.before)} → ${money(x.after)}${x.fin ? ` · entrati ${money(x.fin)}` : ''}${x.fout ? ` · usciti ${money(x.fout)}` : ''}`)}</span>
+    ${x.cause ? `<span class="row-sub">${esc(`causa principale: ${x.cause.name} (${x.cause.dv >= 0 ? '+' : '−'}${money(Math.abs(x.cause.dv))})`)}</span>` : ''}</span></div>`).join('');
+  return {
+    title: 'Controlla il rendimento',
+    body: `<p class="hint">TWR dall'inizio: <b>${pc(t.all)}</b>. Senza i 12 giorni qui sotto sarebbe ${pc(t.without)}. Un giorno con una variazione enorme e una causa strana (prezzo, frazionamento, versamento mancante) indica un dato da correggere: mandane uno screenshot.</p>
+      <div class="list">${rows}</div>`,
+  };
+};
+ACTIONS['more-twr-check'] = () => app.pushSheet('twrCheck');
 
 ACTIONS['more-lock'] = async () => {
   const name = lockName();
