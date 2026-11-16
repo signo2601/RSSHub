@@ -172,6 +172,7 @@ export function rangeStart(range, today) {
 
 // Points of a range. gain = value change − net external flows; perf = time-weighted return.
 // Pure: works on any Series-like object ({ start, dates, value, invested, cash, flowIn, flowOut, ret }).
+const MIN_SIMPLE_CAPITAL = 1; // EUR
 export function rangePoints(series, range, today) {
   const n = series && series.dates ? series.dates.length : 0;
   if (!n) return null;
@@ -185,8 +186,12 @@ export function rangePoints(series, range, today) {
   if (today >= series.dates[0]) end = Math.max(0, Math.min(idx(today), n - 1));
   let base = -1;
   if (s && s > series.dates[0]) base = Math.min(idx(s), end);
-  const out = { dates: [], value: [], invested: [], gain: [], perf: [], base, end };
+  const out = { dates: [], value: [], invested: [], gain: [], perf: [], simple: [], base, end };
+  // Simple return: gain over the money put in (value at the start of the range + deposits − withdrawals),
+  // the figure people check by hand. perf stays the time-weighted return (charts and Report).
+  let capital = base >= 0 ? series.value[base] : 0;
   const push = (k, g, p) => {
+    out.simple.push(capital > MIN_SIMPLE_CAPITAL ? g / capital : NaN);
     out.dates.push(series.dates[k]);
     out.value.push(series.value[k]);
     out.invested.push((series.invested ? series.invested[k] : 0) + (series.cash ? series.cash[k] : 0));
@@ -199,6 +204,7 @@ export function rangePoints(series, range, today) {
   if (base >= 0) push(base, 0, 0);
   for (let k = base + 1; k <= end; k++) {
     gain += series.value[k] - prev - (series.flowIn[k] || 0) + (series.flowOut[k] || 0);
+    capital += (series.flowIn[k] || 0) - (series.flowOut[k] || 0);
     growth *= 1 + (series.ret[k] || 0);
     prev = series.value[k];
     push(k, gain, growth - 1);
@@ -206,6 +212,7 @@ export function rangePoints(series, range, today) {
   const last = out.dates.length - 1;
   out.gainTotal = last >= 0 ? out.gain[last] : 0;
   out.perfTotal = last >= 0 ? out.perf[last] : 0;
+  out.simpleTotal = last >= 0 ? out.simple[last] : NaN;
   out.valueEnd = last >= 0 ? out.value[last] : 0;
   return out;
 }
@@ -300,7 +307,7 @@ function emptyHome() {
 function heroDefaultHtml(R, range, today, todayInfo) {
   // A range longer than the portfolio's life is simply "since the start"
   const when = R && R.base < 0 ? RANGE_TEXT.MAX : RANGE_TEXT[range];
-  const delta = R ? deltaChip(R.gainTotal, R.perfTotal, `<span class="muted">${when}</span>`) : '';
+  const delta = R ? deltaChip(R.gainTotal, R.simpleTotal, `<span class="muted">${when}</span>`) : '';
   // the label stays grey: only the figure takes the colour of the day
   const day = todayInfo
     ? `<span class="hero-today">${todayInfo.isToday ? 'Oggi' : 'Ultima seduta'} <b class="${tone(todayInfo.change)}">${moneySigned(todayInfo.change)} (${pctSigned(todayInfo.pct)})</b></span>`
@@ -319,7 +326,7 @@ function accountCards(range) {
       <span class="acc-name"><i aria-hidden="true"></i>${esc(a.name)}</span>
       <span class="acc-broker">${esc(broker)}</span>
       <span class="acc-value">${money(value)}</span>
-      ${R ? pctPill(R.perfTotal) : '<span class="pill flat">nessuna operazione</span>'}
+      ${R && Number.isFinite(R.simpleTotal) ? pctPill(R.simpleTotal) : R ? pctPill(R.perfTotal) : '<span class="pill flat">nessuna operazione</span>'}
     </button>`;
   }).join('');
   return `<section class="section" aria-label="Conti">
@@ -595,7 +602,7 @@ MOUNTS.push(() => {
       const day = $('hero-day');
       if (label) label.textContent = fmtDate(R.dates[i]);
       if (value) value.textContent = money(R.value[i]);
-      if (delta) delta.innerHTML = deltaChip(R.gain[i], R.perf[i], valueMode ? `<span class="muted">investito ${money(R.invested[i])}</span>` : '');
+      if (delta) delta.innerHTML = deltaChip(R.gain[i], valueMode ? R.simple[i] : R.perf[i], valueMode ? `<span class="muted">investito ${money(R.invested[i])}</span>` : '');
       if (day) day.innerHTML = '';
     },
     onEnd() {

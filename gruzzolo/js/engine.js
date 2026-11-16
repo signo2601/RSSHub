@@ -281,6 +281,7 @@ function computeSeries(accIds, key) {
 
   let ti = 0;
   let prevValue = 0;
+  let peakCapital = 0;
   let d = start;
   for (let k = 0; k < n; k++) {
     dates[k] = d;
@@ -373,7 +374,11 @@ function computeSeries(accIds, key) {
     flowOut[k] = fout;
     income[k] = inc;
     const denom = prevValue + fin;
-    if (denom > MIN_CAPITAL) ret[k] = (v + fout) / denom - 1;
+    // A day that starts with crumbs (a few euro left after selling everything) would turn cents into
+    // ±100% and distort the whole TWR: below 0,2% of the largest capital so far it counts as flat
+    peakCapital = Math.max(peakCapital, denom);
+    if (denom > MIN_CAPITAL && denom < peakCapital * 0.002 && !(bought > MIN_CAPITAL)) ret[k] = 0;
+    else if (denom > MIN_CAPITAL) ret[k] = (v + fout) / denom - 1;
     else if (bought > MIN_CAPITAL) ret[k] = (v - prevValue - ext) / bought; // bought and sold within a day that started empty
     else ret[k] = 0;
     prevValue = v;
