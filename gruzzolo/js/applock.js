@@ -2,7 +2,10 @@
 // of this device, created and checked only here: no server, no account). It is a screen lock: it keeps
 // people who pick up the unlocked phone or computer out of the app. The data itself is not encrypted.
 const KEY = 'gruzzolo:lock';
-const RELOCK_MS = 60e3; // away from the app longer than this: ask again
+const AFTER_KEY = 'gruzzolo:lock-after'; // minutes away from the app before it asks again
+const SEEN_KEY = 'gruzzolo:lock-seen'; // last moment the app was unlocked and in use
+export const LOCK_AFTER = [0, 1, 5, 15, 60];
+const DEFAULT_AFTER = 5;
 const UV = 0x04; // authenticatorData flag: the user was verified (face, finger, PIN or device code)
 
 const b64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -21,6 +24,37 @@ export function lockCred() {
   }
 }
 export const lockOn = () => Boolean(lockCred());
+
+export function lockAfter() {
+  try {
+    const v = Number(localStorage.getItem(AFTER_KEY));
+    return localStorage.getItem(AFTER_KEY) !== null && LOCK_AFTER.includes(v) ? v : DEFAULT_AFTER;
+  } catch {
+    return DEFAULT_AFTER;
+  }
+}
+export function setLockAfter(min) {
+  try {
+    localStorage.setItem(AFTER_KEY, String(LOCK_AFTER.includes(+min) ? +min : DEFAULT_AFTER));
+  } catch { /* storage unavailable */ }
+}
+const span = (m) => (m === 60 ? '1 ora' : `${m} ${m === 1 ? 'minuto' : 'minuti'}`);
+// 'ogni volta che lo riapri' / 'se torni dopo più di 5 minuti'
+export const lockAfterText = (m) => (m === 0 ? 'ogni volta che lo riapri' : `se torni dopo più di ${span(m)}`);
+export const lockAfterShort = (m) => (m === 0 ? 'subito' : m === 60 ? '1 ora' : `${m} min`);
+function markSeen() {
+  try {
+    localStorage.setItem(SEEN_KEY, String(Date.now()));
+  } catch { /* storage unavailable */ }
+}
+// Away longer than the chosen time (or never unlocked here): ask again
+function expired() {
+  let seen = 0;
+  try {
+    seen = Number(localStorage.getItem(SEEN_KEY)) || 0;
+  } catch { /* storage unavailable */ }
+  return !seen || Date.now() - seen > lockAfter() * 60e3 || Date.now() < seen;
+}
 
 // Name of the unlock on this device, for buttons and settings
 export function lockName() {
@@ -57,6 +91,7 @@ export async function enableLock() {
   });
   if (!cred || !cred.rawId) throw new Error('Nessuna chiave creata');
   localStorage.setItem(KEY, JSON.stringify({ id: b64(cred.rawId), at: Date.now() }));
+  markSeen();
 }
 
 // Asks for Face ID / Windows Hello; resolves true only when the owner was verified
@@ -119,7 +154,10 @@ export function initLock() {
     busy = true;
     msg.textContent = '';
     try {
-      if (await verifyLock()) setLocked(false);
+      if (await verifyLock()) {
+        markSeen();
+        setLocked(false);
+      }
       else msg.textContent = 'Non riconosciuto: riprova.';
     } catch (e) {
       msg.textContent = e && e.name === 'NotAllowedError' ? 'Sblocco annullato: tocca il pulsante per riprovare.' : 'Sblocco non riuscito: riprova.';
@@ -132,11 +170,18 @@ export function initLock() {
     // eslint-disable-next-line no-alert
     if (window.confirm(`Se ${lockName()} non sblocca più Gruzzolo, l'unica via è cancellare i dati dell'app su questo dispositivo e poi importare un backup (Altro → Importa backup).\n\nCancello i dati di Gruzzolo?`)) eraseAll();
   });
-  setLocked(lockOn());
-  // Away for more than a minute: locked again on return
-  let hiddenAt = 0;
+  setLocked(lockOn() && expired());
+  // The clock starts when the app goes to the background (or closes): back after the chosen time, locked
+  const away = () => {
+    if (lockOn() && !locked()) markSeen();
+  };
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') hiddenAt = Date.now();
-    else if (lockOn() && !locked() && hiddenAt && Date.now() - hiddenAt > RELOCK_MS) setLocked(true);
+    if (document.visibilityState === 'hidden') away();
+    else if (lockOn() && !locked() && expired()) setLocked(true);
   });
+  window.addEventListener('pagehide', away);
+  // in use: keep the clock fresh (a crash or a killed app must not count as hours away)
+  setInterval(() => {
+    if (document.visibilityState === 'visible') away();
+  }, 30e3);
 }

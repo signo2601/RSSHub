@@ -409,11 +409,15 @@ export function renderHome() {
       })
       : lineChart('home-chart', {
         dates: R.dates,
-        series: [{ name: 'Rendimento', color: 'var(--accent-line)', values: R.perf, area: true, width: 2.25 }],
-        w, h, zero: true, legend: false,
+        // first what you earned on the money you put in (what you check by hand), then the TWR
+        series: [
+          { name: 'Sui tuoi versamenti', color: 'var(--accent-line)', values: R.simple.map((v) => (Number.isFinite(v) ? v : null)), area: true, width: 2.25 },
+          { name: 'TWR (dei titoli)', color: 'var(--muted)', values: R.perf, dash: true, width: 1.5 },
+        ],
+        w, h, zero: true, legend: true,
         yFormat: (v) => `${(v * 100).toLocaleString('it-IT', { maximumFractionDigits: Math.abs(v) < 0.1 ? 1 : 0 })}%`,
         tooltipValue: (v) => pctSigned(v),
-        ariaLabel: 'Rendimento ponderato nel tempo',
+        ariaLabel: 'Rendimento sui versamenti e rendimento ponderato nel tempo',
       });
   }
   hero = R ? { R, def, valueMode } : null;
@@ -462,7 +466,7 @@ export function renderHome() {
       </div>
       <p class="hint home-chart-note">${valueMode
     ? 'La linea tratteggiata è quanto hai investito: la distanza tra le due linee è il tuo guadagno non ancora incassato.'
-    : 'Rendimento ponderato nel tempo: misura come sono andati i tuoi titoli, senza contare quando hai aggiunto o tolto soldi.'}</p>
+    : 'La linea piena è quanto hai guadagnato sui soldi versati fino a quel giorno. La tratteggiata (TWR) misura come sono andati i titoli, senza contare quando hai aggiunto o tolto soldi: serve per i confronti.'}</p>
     </section>
 
     <div class="kpi-grid home-kpis">${kpis}</div>
@@ -602,7 +606,7 @@ MOUNTS.push(() => {
       const day = $('hero-day');
       if (label) label.textContent = fmtDate(R.dates[i]);
       if (value) value.textContent = money(R.value[i]);
-      if (delta) delta.innerHTML = deltaChip(R.gain[i], valueMode ? R.simple[i] : R.perf[i], valueMode ? `<span class="muted">investito ${money(R.invested[i])}</span>` : '');
+      if (delta) delta.innerHTML = deltaChip(R.gain[i], R.simple[i], valueMode ? `<span class="muted">investito ${money(R.invested[i])}</span>` : `<span class="muted">TWR ${pctSigned(R.perf[i])}</span>`);
       if (day) day.innerHTML = '';
     },
     onEnd() {

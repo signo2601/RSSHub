@@ -15,7 +15,7 @@ import { PRESETS, parseCsv, detectPreset, guessMapping, buildTxns } from '../imp
 import { CATALOG, findInCatalog } from '../catalog.js';
 import { fiscalBackpack } from '../costs.js';
 import { infoBtn } from '../info.js';
-import { lockOn, lockName, lockAvailable, enableLock, verifyLock, disableLock } from '../applock.js';
+import { lockOn, lockName, lockAvailable, enableLock, verifyLock, disableLock, lockAfter, setLockAfter, lockAfterText, lockAfterShort, LOCK_AFTER } from '../applock.js';
 import { encryptBackup, decryptBackup, isEncryptedBackup, MIN_PASSWORD } from '../backupcrypt.js';
 import { plans as allPlans, nextRun, pendingRuns, currentAmount, everyOf, EVERY_SHORT, replaceWithReal } from '../plans.js';
 import { avatar, demoBanner, txAmount, txFx } from './home.js';
@@ -858,8 +858,9 @@ function privacyGroup(today) {
     static2('globe', '', 'Cosa passa da internet',
       'Solo il nome, il ticker o l\'ISIN dei titoli, per cercarli e chiederne al server dell\'app i prezzi pubblici e la composizione degli ETF. Mai importi, quantità, conti o operazioni.'),
     navRow({ act: 'more-lock', ico: 'shield', tone: lockOn() ? 'accent' : '', title: esc(`Blocca con ${lockName()}`),
-      sub: esc(lockOn() ? `Attivo: Gruzzolo chiede ${lockName()} all'apertura e dopo un minuto fuori dall'app` : `Chi usa il tuo ${ios ? 'iPhone' : 'computer'} sbloccato non vede i tuoi conti senza ${lockName()} (o il codice del dispositivo)`),
+      sub: esc(lockOn() ? `Attivo: Gruzzolo chiede ${lockName()} ${lockAfterText(lockAfter())}` : `Chi usa il tuo ${ios ? 'iPhone' : 'computer'} sbloccato non vede i tuoi conti senza ${lockName()} (o il codice del dispositivo)`),
       end: `<span class="tag">${lockOn() ? 'Attivo' : 'Spento'}</span>`, chev: false }),
+    ...(lockOn() ? [navRow({ act: 'more-lock-after', ico: 'calendar', title: 'Quando bloccare', sub: esc(`Chiede lo sblocco ${lockAfterText(lockAfter())}`), end: `<span class="tag">${esc(lockAfterShort(lockAfter()))}</span>` })] : []),
     storageRow(),
     installRow(),
     navRow({ act: 'more-backup-export', ico: 'download', tone: rem.due ? 'warn' : 'accent', title: 'Esporta backup', sub: esc(rem.text), chev: false, cls: 'more-backup-now' }),
@@ -1973,6 +1974,21 @@ SHEETS.twrCheck = () => {
   };
 };
 ACTIONS['more-twr-check'] = () => app.pushSheet('twrCheck');
+
+SHEETS.lockAfter = () => ({
+  title: 'Quando bloccare Gruzzolo',
+  body: `<div class="list">${LOCK_AFTER.map((m) => `<button class="row" type="button" data-act="more-lock-after-set" data-v="${m}" aria-pressed="${lockAfter() === m}">
+    <span class="row-main"><span class="row-title">${esc(m === 0 ? 'Subito, ogni volta che lo riapri' : `Dopo ${lockAfterShort(m)} fuori dall'app`)}</span></span>
+    ${lockAfter() === m ? `<span class="check-ico">${icon('check')}</span>` : ''}</button>`).join('')}</div>
+    <p class="hint">Il tempo parte quando passi a un'altra app o chiudi Gruzzolo. Più è breve, più è sicuro.</p>`,
+});
+ACTIONS['more-lock-after'] = () => app.pushSheet('lockAfter');
+ACTIONS['more-lock-after-set'] = (el) => {
+  setLockAfter(Number(el.dataset.v));
+  app.closeSheets();
+  app.toast(`Gruzzolo chiederà lo sblocco ${lockAfterText(lockAfter())}`);
+  app.render();
+};
 
 ACTIONS['more-lock'] = async () => {
   const name = lockName();

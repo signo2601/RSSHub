@@ -36,7 +36,12 @@
       t = localStorage.getItem('gruzzolo:theme');
       if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
       // App lock on: nothing of the portfolio is shown before Face ID / Windows Hello
-      if (localStorage.getItem('gruzzolo:lock')) document.documentElement.classList.add('app-locked');
+      if (localStorage.getItem('gruzzolo:lock')) {
+        var after = localStorage.getItem('gruzzolo:lock-after');
+        var min = after === null ? 5 : Number(after);
+        var seen = Number(localStorage.getItem('gruzzolo:lock-seen')) || 0;
+        if (!seen || Date.now() - seen > min * 60000 || Date.now() < seen) document.documentElement.classList.add('app-locked');
+      }
     } catch (e) { /* storage unavailable */ }
     var dark = t === 'dark' || (t !== 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
     var m = document.querySelector('meta[name="theme-color"]');
